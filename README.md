@@ -1,2 +1,2 @@
-# praxis
+# Praxis
 Scenario Planning Education App
