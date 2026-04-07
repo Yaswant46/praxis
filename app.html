@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Praxis — Catalyst Simulation Platform</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════
@@ -1508,7 +1507,17 @@ input, select, textarea { font-family: var(--sans); }
 // =================================================
 const SUPA_URL = 'https://towyztagdudjbxfevnus.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvd3l6dGFnZHVkamJ4ZmV2bnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NzA0NzQsImV4cCI6MjA5MTE0NjQ3NH0.57SNbO6ZtxxZOgd1OPlE3mT92F62-dTSavqVEWK2ENA';
-const supabase = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+// Safe Supabase init — waits for SDK to be available
+var supabase = null;
+function initSupabase() {
+  if (window.supabase && window.supabase.createClient) {
+    supabase = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+    return true;
+  }
+  return false;
+}
+// Try immediately; SDK script loaded at end of body will call this again
+initSupabase();
 
 // Session context (set after login)
 var currentSession = null;   // { id, code, case_id, current_round, round_open, cohort_name }
@@ -1530,26 +1539,36 @@ function setSessionInURL(code) {
 // =================================================
 //  DB LAYER — replaces localStorage
 // =================================================
+function getSupabase() {
+  if (!supabase) initSupabase();
+  return supabase;
+}
+
 async function dbGetSession(code) {
-  const { data, error } = await supabase
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb
     .from('sessions').select('*, cases(slug,name,subtitle,difficulty)')
     .eq('code', code.toUpperCase()).single();
   return error ? null : data;
 }
 
 async function dbGetTeams(sessionId) {
-  const { data } = await supabase.from('teams').select('*').eq('session_id', sessionId).order('slot');
+  const sb2 = getSupabase(); if (!sb2) return [];
+  const { data } = await sb2.from('teams').select('*').eq('session_id', sessionId).order('slot');
   return data || [];
 }
 
 async function dbGetTeam(sessionId, slot) {
-  const { data } = await supabase.from('teams').select('*')
+  const sb2 = getSupabase(); if (!sb2) return [];
+  const { data } = await sb2.from('teams').select('*')
     .eq('session_id', sessionId).eq('slot', slot).single();
   return data;
 }
 
 async function dbSaveDecision(sessionId, teamId, round, domainId, fieldId, value) {
-  const { error } = await supabase.from('decisions').upsert({
+  const sbx = getSupabase(); if (!sbx) return false;
+  const { error } = await sbx.from('decisions').upsert({
     session_id: sessionId, team_id: teamId, round, domain_id: domainId, field_id: fieldId, value,
     submitted_at: new Date().toISOString()
   }, { onConflict: 'session_id,team_id,round,field_id' });
@@ -1557,19 +1576,22 @@ async function dbSaveDecision(sessionId, teamId, round, domainId, fieldId, value
 }
 
 async function dbGetDecisions(sessionId, teamId, round) {
-  const { data } = await supabase.from('decisions').select('*')
+  const sb2 = getSupabase(); if (!sb2) return [];
+  const { data } = await sb2.from('decisions').select('*')
     .eq('session_id', sessionId).eq('team_id', teamId).eq('round', round);
   return data || [];
 }
 
 async function dbGetAllDecisions(sessionId) {
-  const { data } = await supabase.from('decisions').select('*, teams(slot,display_name)')
+  const sb2 = getSupabase(); if (!sb2) return [];
+  const { data } = await sb2.from('decisions').select('*, teams(slot,display_name)')
     .eq('session_id', sessionId).order('submitted_at');
   return data || [];
 }
 
 async function dbPublishOutcome(sessionId, teamId, round, metrics, score) {
-  const { error } = await supabase.from('outcomes').upsert({
+  const sbx = getSupabase(); if (!sbx) return false;
+  const { error } = await sbx.from('outcomes').upsert({
     session_id: sessionId, team_id: teamId, round,
     revenue: metrics.revenue, gross_margin: metrics.grossMargin,
     cash_runway: metrics.cashRunway, market_share: metrics.marketShare,
@@ -1580,13 +1602,15 @@ async function dbPublishOutcome(sessionId, teamId, round, metrics, score) {
 }
 
 async function dbGetOutcomes(sessionId) {
-  const { data } = await supabase.from('outcomes').select('*, teams(slot,display_name)')
+  const sb2 = getSupabase(); if (!sb2) return [];
+  const { data } = await sb2.from('outcomes').select('*, teams(slot,display_name)')
     .eq('session_id', sessionId).order('round');
   return data || [];
 }
 
 async function dbInjectCurveball(sessionId, round, title, body, adminEmail) {
-  const { error } = await supabase.from('curveballs').insert({
+  const sbx = getSupabase(); if (!sbx) return false;
+  const { error } = await sbx.from('curveballs').insert({
     session_id: sessionId, round, title, body,
     injected_by: adminEmail, injected_at: new Date().toISOString()
   });
@@ -1594,13 +1618,15 @@ async function dbInjectCurveball(sessionId, round, title, body, adminEmail) {
 }
 
 async function dbGetCurveballs(sessionId) {
-  const { data } = await supabase.from('curveballs').select('*')
+  const sb2 = getSupabase(); if (!sb2) return [];
+  const { data } = await sb2.from('curveballs').select('*')
     .eq('session_id', sessionId).order('injected_at');
   return data || [];
 }
 
 async function dbUpdateSession(sessionId, updates) {
-  const { error } = await supabase.from('sessions').update(updates).eq('id', sessionId);
+  const sbx = getSupabase(); if (!sbx) return false;
+  const { error } = await sbx.from('sessions').update(updates).eq('id', sessionId);
   return !error;
 }
 
@@ -1636,14 +1662,16 @@ async function dbCreateSession(caseSlug, cohortName, adminEmail) {
 var realtimeChannel = null;
 
 function subscribeToSession(sessionId) {
-  if (realtimeChannel) supabase.removeChannel(realtimeChannel);
-  realtimeChannel = supabase.channel('session:' + sessionId)
+  if (realtimeChannel && supabase) { supabase.removeChannel(realtimeChannel); }
+  var _sb = getSupabase();
+  if (!_sb) return;
+  realtimeChannel = _sb.channel('session:' + sessionId)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions', filter: 'id=eq.' + sessionId },
-      payload => { currentSession = { ...currentSession, ...payload.new }; onSessionUpdate(); })
+      function(payload) { if(payload && payload.new) { Object.assign(currentSession, payload.new); } onSessionUpdate(); })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'curveballs', filter: 'session_id=eq.' + sessionId },
-      payload => { onNewCurveball(payload.new); })
+      function(payload) { if(payload && payload.new) { onNewCurveball(payload.new); } })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'outcomes', filter: 'session_id=eq.' + sessionId },
-      () => { renderLeaderboard(); renderKPIs(); renderMetrics(); })
+      function() { renderLeaderboard(); renderKPIs(); renderMetrics(); })
     .subscribe();
 }
 
@@ -1672,18 +1700,7 @@ var CASE_CTX = {
     badgeText: 'Case A — VOLTA Motors',
     dashMetrics: 'VOLTA dashboard — current quarter',
     dashCtxSubtitle: 'VOLTA Motors — FY 2024–25',
-    dashCtxBody: 'You are VOLTA\'s collective leadership team. The company has just closed its <strong>&#8377;320 Cr Series C</strong> with a critical covenant: achieve <strong>positive gross margin (&ge;2%) on the VOLTA Edge</strong> within 18 months. Current burn: <strong style="color:var(--red)">&#8377;4.2 Cr/month</strong>. Runway: <strong>22 months</strong>. The second tranche of &#8377;140 Cr depends on hitting this milestone.',
-    caseRefSubtitle: 'VOLTA Motors: Navigating the Inflection',
-    caseRefBody: 'Refer to your Ather Catalyst Program case document for full BOM breakdowns, supply chain data, engineering bandwidth models, and financial scenario analysis. Annexures A–D contain decision-relevant quantitative data.',
-  },
-  B: {
-    company: 'ARC Motors',
-    board: 'ARC Leadership Board',
-    badgeClass: 'arc',
-    badgeText: 'Case B — ARC Motors',
-    dashMetrics: 'ARC dashboard — current quarter',
-    dashCtxSubtitle: 'ARC Motors — FY 2025–26',
-    dashCtxBody: 'You are ARC\'s collective leadership team. The Nimbus is 12 months from launch. Three competitors have launched with features it does not have. Cash on hand: <strong>&#8377;68 Cr</strong>. Burn: <strong style="color:var(--red)">&#8377;2.8 Cr/month</strong>. Runway: <strong>24 months</strong>. Your decisions on product direction, feature prioritisation, and cash allocation will determine whether Nimbus launches into relevance — or obsolescence.',
+    dashCtxBody: 'ARC Motors has the Nimbus 12 months from launch. Three competitors have launched with features it lacks. Cash: Rs 68 Cr. Burn: Rs 2.8 Cr/month. Runway: 24 months.',
     caseRefSubtitle: 'ARC Motors: The Velocity Trap',
     caseRefBody: 'Refer to your Ather Catalyst Program case document for the full feature trade-off matrix, cash flow scenarios, market evolution data, and decision frameworks. Annexures A–D contain all quantitative analysis.',
   }
@@ -1721,7 +1738,7 @@ function backToCase() {
   document.querySelectorAll('.case-card').forEach(function(c){c.classList.remove('selected')});
   var nb = document.getElementById('caseNextBtn'); if(nb){nb.disabled=true;nb.style.opacity='0.4';}
   currentSession = null; currentTeam = null;
-  if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+  if (realtimeChannel) if(supabase) supabase.removeChannel(realtimeChannel);
   document.getElementById('loginError').textContent = '';
 }
 
@@ -1976,7 +1993,7 @@ async function handleLogin() {
   // Mark activated if first login
   if (!team.activated_at) {
     const exp = new Date(); exp.setDate(exp.getDate() + 30);
-    await supabase.from('teams').update({
+    await getSupabase().from('teams').update({
       activated_at: new Date().toISOString(),
       expires_at: exp.toISOString()
     }).eq('id', team.id);
@@ -2828,7 +2845,7 @@ async function renderHistory() {
   cont.innerHTML = '';
   Object.keys(teamDec).sort((a,b) => b - a).forEach(round => {
     const fields = teamDec[round];
-    const entry = { data: Object.fromEntries(fields.map(d => [d.field_id, d.value])), timestamp: fields[0]?.submitted_at ? new Date(fields[0].submitted_at).toLocaleString('en-IN',{hour12:true}) : 'Unknown' };
+    const entry = { data: Object.fromEntries(fields.map(d => [d.field_id, d.value])), timestamp: fields[0] && fields[0].submitted_at ? new Date(fields[0].submitted_at).toLocaleString('en-IN',{hour12:true}) : 'Unknown' };
     const scoreData= state.scores[teamId];
     const roundScore = scoreData && scoreData.history[round-1] ? scoreData.history[round-1] : null;
     const qTheme   = QUARTERS[round-1] ? QUARTERS[round-1].theme : '';
@@ -3323,7 +3340,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const sess = await dbGetSession(code);
     if (sess) {
       currentSession = sess;
-      selectedCase = sess.cases?.slug || 'volta';
+      selectedCase = (sess.cases ? sess.cases.slug : null) || 'volta';
       if (selectedCase === 'volta') selectedCase = 'A';
       else if (selectedCase === 'arc') selectedCase = 'B';
       else if (selectedCase === 'demo') selectedCase = 'demo';
