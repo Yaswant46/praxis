@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Praxis — Scenario Planning Simulation</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0f0f10;--ink2:#1c1c1f;--ink3:#2e2e33;
+  --muted:#6b6b74;--faint:#a8a8b3;--wire:#e2e2e8;
+  --volt:#00c853;--volt-dim:#00a844;
+  --amber:#ff8f00;--red:#d32f2f;--white:#ffffff;
+  --serif:'DM Serif Display',serif;--mono:'DM Mono',monospace;--sans:'Outfit',sans-serif;
+}
+html{font-size:16px;scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--ink);color:var(--white);overflow-x:hidden}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--ink2)}::-webkit-scrollbar-thumb{background:#333}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:20px 48px;display:flex;align-items:center;justify-content:space-between;background:rgba(15,15,16,0.88);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.06)}
+.nav-brand{font-family:var(--serif);font-size:22px;color:var(--white);text-decoration:none}
+.nav-tag{font-family:var(--mono);font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--volt);display:block;margin-top:3px}
+.nav-links{display:flex;align-items:center;gap:32px}
+.nav-link{font-size:13px;font-weight:500;color:rgba(255,255,255,0.5);text-decoration:none;transition:color .2s}
+.nav-link:hover{color:var(--white)}
+.nav-cta{background:var(--volt);color:var(--ink);padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;transition:all .2s}
+.nav-cta:hover{background:#00e564;transform:translateY(-1px)}
+.hero{min-height:100vh;display:flex;align-items:center;position:relative;overflow:hidden;padding:0 48px}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,200,83,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,83,.04) 1px,transparent 1px);background-size:56px 56px}
+.hero-glow{position:absolute;left:-200px;top:50%;transform:translateY(-50%);width:800px;height:800px;background:radial-gradient(ellipse,rgba(0,200,83,.08) 0%,transparent 70%);pointer-events:none}
+.hero-content{position:relative;z-index:2;max-width:700px}
+.hero-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--volt);margin-bottom:24px;display:flex;align-items:center;gap:12px}
+.hero-eyebrow::before{content:'';display:inline-block;width:32px;height:1px;background:var(--volt)}
+h1{font-family:var(--serif);font-size:clamp(48px,7vw,82px);line-height:1.02;color:var(--white);margin-bottom:28px;letter-spacing:-1px}
+h1 em{color:var(--volt);font-style:italic}
+.hero-sub{font-size:17px;color:rgba(255,255,255,.55);line-height:1.75;max-width:520px;margin-bottom:48px}
+.hero-actions{display:flex;align-items:center;gap:20px}
+.btn-primary{background:var(--volt);color:var(--ink);padding:16px 36px;border-radius:10px;font-size:15px;font-weight:700;text-decoration:none;transition:all .2s}
+.btn-primary:hover{background:#00e564;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,200,83,.3)}
+.btn-ghost{color:rgba(255,255,255,.5);font-size:14px;font-weight:600;text-decoration:none;transition:color .2s}
+.btn-ghost:hover{color:var(--white)}
+.hero-stats{position:absolute;right:48px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:32px;z-index:2}
+.stat-num{font-family:var(--mono);font-size:36px;font-weight:500;color:var(--white);display:block;line-height:1;text-align:right}
+.stat-lbl{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-top:4px;text-align:right}
+.divider{width:100%;height:1px;background:rgba(255,255,255,.07)}
+section{padding:120px 48px}
+.stag{font-family:var(--mono);font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--volt);margin-bottom:16px;display:block}
+h2{font-family:var(--serif);font-size:clamp(32px,4vw,52px);line-height:1.1;margin-bottom:20px}
+.sbody{font-size:16px;color:rgba(255,255,255,.55);line-height:1.8;max-width:560px}
+
+/* SCENARIO PLANNING */
+.sp-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;max-width:1200px;margin:0 auto}
+.sc-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:32px;margin-bottom:16px;position:relative;overflow:hidden;transition:border-color .3s}
+.sc-card:hover{border-color:rgba(0,200,83,.3)}
+.sc-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--volt);border-radius:3px 0 0 3px}
+.sc-num{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--volt);text-transform:uppercase;margin-bottom:8px;display:block}
+.sc-title{font-size:15px;font-weight:700;color:var(--white);margin-bottom:6px}
+.sc-body{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6}
+.sc-quote{background:rgba(0,200,83,.08);border-left:3px solid var(--volt);padding:24px 28px;border-radius:0 12px 12px 0;margin-top:32px}
+.sc-quote p{font-family:var(--serif);font-size:18px;color:var(--white);line-height:1.6;font-style:italic}
+.sc-quote cite{display:block;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:12px}
+
+/* HOW IT WORKS */
+.how-bg{background:var(--ink2)}
+.how-inner{max-width:1200px;margin:0 auto}
+.how-hd{text-align:center;margin-bottom:80px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:rgba(255,255,255,.06);border-radius:16px;overflow:hidden}
+.step{background:var(--ink2);padding:40px 32px}
+.step:hover{background:rgba(255,255,255,.03)}
+.step-tag{display:inline-block;background:rgba(0,200,83,.1);border:1px solid rgba(0,200,83,.2);color:var(--volt);font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:20px;margin-bottom:16px}
+.step-n{font-family:var(--mono);font-size:48px;font-weight:300;color:rgba(0,200,83,.15);line-height:1;margin-bottom:20px;display:block}
+.step-t{font-size:18px;font-weight:700;color:var(--white);margin-bottom:12px}
+.step-b{font-size:13.5px;color:rgba(255,255,255,.45);line-height:1.7}
+
+/* CASES */
+.cases-inner{max-width:1200px;margin:0 auto}
+.cases-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:60px}
+.cc{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:32px;transition:all .25s;position:relative}
+.cc:hover{border-color:rgba(0,200,83,.25);background:rgba(0,200,83,.04);transform:translateY(-4px)}
+.cc.demo{border-color:rgba(255,143,0,.2);background:rgba(255,143,0,.03)}
+.cc.demo:hover{border-color:rgba(255,143,0,.4)}
+.cc-slug{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;display:block;color:var(--volt)}
+.cc.demo .cc-slug{color:var(--amber)}
+.cc-name{font-family:var(--serif);font-size:26px;color:var(--white);margin-bottom:6px}
+.cc-sub{font-size:13px;color:rgba(255,255,255,.4);margin-bottom:20px;font-style:italic}
+.cc-desc{font-size:13.5px;color:rgba(255,255,255,.45);line-height:1.65;margin-bottom:24px}
+.cc-meta{display:flex;gap:10px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:20px;border:1px solid;font-weight:600;color:var(--volt);border-color:rgba(0,200,83,.3);background:rgba(0,200,83,.08)}
+.cc.demo .chip{color:var(--amber);border-color:rgba(255,143,0,.3);background:rgba(255,143,0,.08)}
+.demo-badge{position:absolute;top:20px;right:20px;background:var(--amber);color:var(--ink);font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 10px;border-radius:20px}
+
+/* FOR WHOM */
+.for-bg{background:var(--ink2)}
+.for-inner{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start}
+.for-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px}
+.fc{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:24px}
+.fc-icon{font-size:24px;margin-bottom:12px;display:block}
+.fc-t{font-size:14px;font-weight:700;color:var(--white);margin-bottom:6px}
+.fc-b{font-size:12.5px;color:rgba(255,255,255,.4);line-height:1.6}
+.principle{display:flex;gap:16px;padding:20px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.principle:last-child{border-bottom:none}
+.p-num{font-family:var(--mono);font-size:11px;color:var(--volt);font-weight:600;width:28px;flex-shrink:0;padding-top:2px}
+.p-text strong{display:block;font-size:14px;color:var(--white);margin-bottom:4px}
+.p-text span{font-size:13px;color:rgba(255,255,255,.4);line-height:1.6}
+
+/* CTA */
+.cta-sec{background:var(--ink);text-align:center;padding:140px 48px}
+.cta-inner{max-width:640px;margin:0 auto}
+.cta-t{font-family:var(--serif);font-size:clamp(36px,5vw,60px);color:var(--white);margin-bottom:20px;line-height:1.1}
+.cta-b{font-size:16px;color:rgba(255,255,255,.45);line-height:1.8;margin-bottom:48px}
+
+footer{padding:40px 48px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between}
+.ft-brand{font-family:var(--serif);font-size:18px;color:rgba(255,255,255,.3)}
+.ft-note{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.2);letter-spacing:1px}
+
+@media(max-width:900px){
+  nav{padding:16px 24px}.nav-links{display:none}
+  .hero{padding:100px 24px 60px;min-height:auto}.hero-stats{display:none}
+  section{padding:80px 24px}
+  .sp-grid,.for-inner{grid-template-columns:1fr;gap:48px}
+  .steps,.cases-grid{grid-template-columns:1fr}.for-cards{grid-template-columns:1fr}
+  footer{flex-direction:column;gap:12px;text-align:center}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-brand">Praxis<span class="nav-tag">Catalyst Simulation</span></a>
+  <div class="nav-links">
+    <a href="#what" class="nav-link">What is Praxis</a>
+    <a href="#how" class="nav-link">How it Works</a>
+    <a href="#cases" class="nav-link">Cases</a>
+    <a href="app.html" class="nav-cta">Enter Platform &rarr;</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow">Ather Catalyst Program</div>
+    <h1>Decisions have<br><em>consequences.</em><br>Learn before they do.</h1>
+    <p class="hero-sub">Praxis is a live scenario planning simulation built for leadership development. Real business cases. Real trade-offs. Real ambiguity. Five quarters to find out what kind of leader you are.</p>
+    <div class="hero-actions">
+      <a href="app.html" class="btn-primary">Enter Simulation &rarr;</a>
+      <a href="#what" class="btn-ghost">Learn how it works &darr;</a>
+    </div>
+  </div>
+  <div class="hero-stats">
+    <div><span class="stat-num">5</span><span class="stat-lbl">Quarters</span></div>
+    <div><span class="stat-num">6</span><span class="stat-lbl">Parallel Boards</span></div>
+    <div><span class="stat-num">3</span><span class="stat-lbl">Cases</span></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="what">
+  <div class="sp-grid">
+    <div>
+      <span class="stag">The Methodology</span>
+      <h2>What is Scenario Planning?</h2>
+      <p class="sbody">Scenario planning is not forecasting. Forecasting assumes the future is a continuation of the present. Scenario planning assumes it is not.</p>
+      <p class="sbody" style="margin-top:16px">It is a discipline of structured imagination &mdash; building internally consistent pictures of possible futures, then making decisions that are robust across all of them. Originally developed at Shell Oil in the 1970s to navigate the energy crisis, it has since become a core tool of strategic leadership at the highest levels of business and government.</p>
+      <p class="sbody" style="margin-top:16px">The skill it builds is not prediction. It is the ability to hold multiple futures in your mind simultaneously, reason about their implications, and make commitments anyway.</p>
+      <div class="sc-quote">
+        <p>"The real purpose of scenario planning is not to predict the future but to free yourself from an over-attachment to one particular version of it."</p>
+        <cite>Pierre Wack &mdash; Shell Group Planning, 1985</cite>
+      </div>
+    </div>
+    <div>
+      <div class="sc-card"><span class="sc-num">Principle 01</span><div class="sc-title">Decisions compound across time</div><div class="sc-body">A choice made in Q1 does not resolve in Q1. It creates the conditions that constrain what is possible in Q4. Scenario planning makes these chains of consequence visible before they are irreversible.</div></div>
+      <div class="sc-card"><span class="sc-num">Principle 02</span><div class="sc-title">Ambiguity is the operating condition, not the exception</div><div class="sc-body">The question is never "what will happen?" It is "what do we do when we cannot know?" Leaders who mistake uncertainty for a solvable problem underperform those who make peace with it.</div></div>
+      <div class="sc-card"><span class="sc-num">Principle 03</span><div class="sc-title">The function boundary is a liability, not a feature</div><div class="sc-body">Every major business decision crosses at least three functions. Leaders who reason from inside a single domain make locally rational but globally destructive choices. Integration is the skill.</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section class="how-bg" id="how">
+  <div class="how-inner">
+    <div class="how-hd">
+      <span class="stag">The Platform</span>
+      <h2>How Praxis Works</h2>
+      <p class="sbody" style="margin:0 auto">Six leadership boards. The same company. Parallel realities. One day to find out whose decisions hold.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="step-tag">Before</span><span class="step-n">01</span><div class="step-t">The Case</div><div class="step-b">Each cohort receives a Harvard-style business case &mdash; a real EV startup or product company at a crossroads. Detailed financials, competitive landscape, and five strategic challenges. You read it the morning of.</div></div>
+      <div class="step"><span class="step-tag">During</span><span class="step-n">02</span><div class="step-t">Five Quarters</div><div class="step-b">Your team makes decisions across five domains every round &mdash; product, operations, finance, commercial, and people. Each decision is structured, every rationale is written. The Game Master injects live curveball events mid-round.</div></div>
+      <div class="step"><span class="step-tag">After</span><span class="step-n">03</span><div class="step-t">The Debrief</div><div class="step-b">All six boards' decisions are anonymised and compared. The debrief is not about who won &mdash; it is about which reasoning held up, which assumptions proved wrong, and what Q1 decisions created in Q4.</div></div>
+      <div class="step"><span class="step-tag">Scoring</span><span class="step-n">04</span><div class="step-t">Leadership Index</div><div class="step-b">Teams are scored across four dimensions: Financial Health (30%), Market Position (25%), Organisational Resilience (25%), and Innovation Pipeline (20%). The formula is never shown.</div></div>
+      <div class="step"><span class="step-tag">Reflection</span><span class="step-n">05</span><div class="step-t">Considerations</div><div class="step-b">After each round, every team receives probing questions based on their specific decisions. Not "you should have done this" &mdash; but "have you thought about x while making this decision?"</div></div>
+      <div class="step"><span class="step-tag">Memory</span><span class="step-n">06</span><div class="step-t">Persistent Record</div><div class="step-b">Every decision, rationale, and outcome is stored permanently. The Game Master can generate a full decision analysis report across all teams &mdash; a record of the cohort's reasoning that lives beyond the day.</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="cases">
+  <div class="cases-inner">
+    <span class="stag">Simulation Cases</span>
+    <h2>Three cases. Three contexts.</h2>
+    <p class="sbody">Each case is a distinct strategic scenario, calibrated for a different level of complexity and a different leadership muscle.</p>
+    <div class="cases-grid">
+      <div class="cc"><span class="cc-slug">Case A</span><div class="cc-name">VOLTA Motors</div><div class="cc-sub">Navigating the Inflection</div><div class="cc-desc">A Series C EV startup with 22 months of runway, negative unit economics, and an 18-month covenant to prove the business works. Five domains, five challenges, five quarters to find the path.</div><div class="cc-meta"><span class="chip">Series C</span><span class="chip">Complex</span><span class="chip">EV Mobility</span></div></div>
+      <div class="cc"><span class="cc-slug">Case B</span><div class="cc-name">ARC Motors</div><div class="cc-sub">The Velocity Trap</div><div class="cc-desc">A product 12 months from launch in a market that has shifted underneath it. Three competitors have already launched what you have not built. Do you continue, adapt, or pause?</div><div class="cc-meta"><span class="chip">Series B</span><span class="chip">Intermediate</span><span class="chip">Product Dev</span></div></div>
+      <div class="cc demo"><span class="demo-badge">Demo</span><span class="cc-slug">Demo Case</span><div class="cc-name">ShopPulse</div><div class="cc-sub">The Last Mile Problem</div><div class="cc-desc">A quick-commerce startup caught between growth and margin. Simpler decisions, faster rounds, immediate feedback. Built as a first taste of Praxis for new participants.</div><div class="cc-meta"><span class="chip">Seed Stage</span><span class="chip">Introductory</span><span class="chip">E-commerce</span></div></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section class="for-bg">
+  <div class="for-inner">
+    <div>
+      <span class="stag">Who It's Built For</span>
+      <h2>Leadership in the making.</h2>
+      <p class="sbody">Praxis is designed for people who are two to six years into their careers &mdash; technically excellent, functionally deep, but not yet required to see the whole system. That is exactly when the right intervention changes the trajectory.</p>
+      <div class="for-cards">
+        <div class="fc"><span class="fc-icon">&#9881;&#65039;</span><div class="fc-t">Engineers</div><div class="fc-b">Who optimise within a domain but need to see what their decisions cost three functions over.</div></div>
+        <div class="fc"><span class="fc-icon">&#128200;</span><div class="fc-t">Commercial</div><div class="fc-b">Who chase volume without modelling what volume at negative margin does to the business.</div></div>
+        <div class="fc"><span class="fc-icon">&#9711;</span><div class="fc-t">Finance</div><div class="fc-b">Who protect the number without understanding what the number is protecting against.</div></div>
+        <div class="fc"><span class="fc-icon">&#129504;</span><div class="fc-t">People &amp; Ops</div><div class="fc-b">Who manage the organisation but underweight how people decisions shape product outcomes.</div></div>
+      </div>
+    </div>
+    <div style="padding-top:20px">
+      <span class="stag">Design Principles</span>
+      <h2 style="font-size:32px">What Praxis is built on.</h2>
+      <div style="margin-top:32px">
+        <div class="principle"><span class="p-num">01</span><div class="p-text"><strong>Ambiguity lives in consequence, not in the question</strong><span>Every decision in Praxis feels clear. What participants cannot yet see is how their answer reverberates three quarters later.</span></div></div>
+        <div class="principle"><span class="p-num">02</span><div class="p-text"><strong>Rationale matters more than choice</strong><span>Every domain requires written reasoning. A wrong decision made for good reasons is more developable than a right decision made by instinct.</span></div></div>
+        <div class="principle"><span class="p-num">03</span><div class="p-text"><strong>Parallel realities, not competition</strong><span>Six teams run the same company. The debrief is not about who won &mdash; it is about what different reasoning produced from identical starting conditions.</span></div></div>
+        <div class="principle"><span class="p-num">04</span><div class="p-text"><strong>Feedback is probing, not prescriptive</strong><span>Post-round assessments ask "have you considered x?" not "you should have done y." The goal is reflection, not correction.</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section class="cta-sec">
+  <div class="cta-inner">
+    <h2 class="cta-t">Ready to run a simulation?</h2>
+    <p class="cta-b">If you are a facilitator from the Ather Catalyst Program, log in as Game Master to create a session for your cohort. If you are a participant, use the session link your facilitator shared with you.</p>
+    <a href="app.html" class="btn-primary">Enter Praxis &rarr;</a>
+  </div>
+</section>
+
+<footer>
+  <span class="ft-brand">Praxis</span>
+  <span class="ft-note">Ather Catalyst Program &middot; Confidential &middot; Not for distribution</span>
+</footer>
+
+</body>
+</html>

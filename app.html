@@ -1,0 +1,3365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Praxis — Catalyst Simulation Platform</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   TOKENS & RESET
+═══════════════════════════════════════════════ */
+:root {
+  --ink: #0f0f10;
+  --ink-2: #1c1c1f;
+  --ink-3: #2e2e33;
+  --muted: #6b6b74;
+  --faint: #a8a8b3;
+  --wire: #e2e2e8;
+  --wire-2: #f0f0f4;
+  --surface: #fafafa;
+  --white: #ffffff;
+
+  --volt: #00c853;
+  --volt-dim: #00a844;
+  --volt-glow: rgba(0,200,83,0.15);
+  --volt-pale: #e8faf0;
+
+  --amber: #ff8f00;
+  --amber-pale: #fff8e1;
+  --red: #d32f2f;
+  --red-pale: #ffebee;
+  --blue: #1565c0;
+  --blue-pale: #e3f2fd;
+  --purple: #6a1b9a;
+  --purple-pale: #f3e5f5;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
+
+  --mono: 'DM Mono', monospace;
+  --serif: 'DM Serif Display', serif;
+  --sans: 'Outfit', sans-serif;
+
+  --sidebar-w: 240px;
+  --topbar-h: 64px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; }
+body {
+  font-family: var(--sans);
+  background: var(--surface);
+  color: var(--ink);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+button { cursor: pointer; font-family: var(--sans); }
+input, select, textarea { font-family: var(--sans); }
+* { transition: background 0.15s, border-color 0.15s, opacity 0.15s; }
+
+/* ═══════════════════════════════════════════════
+   SCROLLBAR
+═══════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--wire-2); }
+::-webkit-scrollbar-thumb { background: var(--wire); border-radius: 3px; }
+
+/* ═══════════════════════════════════════════════
+   SCREENS
+═══════════════════════════════════════════════ */
+.screen { display: none; }
+.screen.active { display: flex; }
+
+/* ═══════════════════════════════════════════════
+   LOGIN SCREEN
+═══════════════════════════════════════════════ */
+#loginScreen {
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink);
+  position: relative;
+  overflow: hidden;
+}
+#loginScreen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 30% 60%, rgba(0,200,83,0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 80% 20%, rgba(0,200,83,0.05) 0%, transparent 70%);
+}
+.login-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,200,83,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,200,83,0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.login-box {
+  position: relative;
+  z-index: 2;
+  width: 420px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 48px;
+  backdrop-filter: blur(20px);
+}
+.login-logo {
+  text-align: center;
+  margin-bottom: 40px;
+}
+.login-logo .wordmark {
+  font-family: var(--serif);
+  font-size: 42px;
+  color: var(--white);
+  letter-spacing: -1px;
+  display: block;
+  line-height: 1;
+}
+.login-logo .tagline {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--volt);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 8px;
+  display: block;
+}
+.login-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 8px;
+  display: block;
+}
+.login-select {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--white);
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.login-select option { background: #1a1a1f; color: var(--white); }
+.login-select:focus { outline: none; border-color: var(--volt); }
+.login-input {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--white);
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+.login-input::placeholder { color: rgba(255,255,255,0.25); }
+.login-input:focus { outline: none; border-color: var(--volt); }
+.login-btn {
+  width: 100%;
+  background: var(--volt);
+  color: var(--ink);
+  border: none;
+  padding: 15px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+}
+.login-btn:hover { background: #00e564; transform: translateY(-1px); }
+.login-error {
+  color: #ff6b6b;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 12px;
+  min-height: 18px;
+}
+.login-case-note {
+  text-align: center;
+  margin-top: 28px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  line-height: 1.8;
+  font-family: var(--mono);
+}
+
+/* ═══════════════════════════════════════════════
+   APP SHELL
+═══════════════════════════════════════════════ */
+#appScreen {
+  flex-direction: row;
+  min-height: 100vh;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--ink-2);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  overflow: hidden;
+}
+.sidebar-brand {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.sidebar-brand .name {
+  font-family: var(--serif);
+  font-size: 26px;
+  color: var(--white);
+  display: block;
+  line-height: 1;
+}
+.sidebar-brand .sub {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 2.5px;
+  color: var(--volt);
+  text-transform: uppercase;
+  display: block;
+  margin-top: 5px;
+}
+.sidebar-team-badge {
+  margin: 16px 20px;
+  padding: 12px 14px;
+  background: rgba(0,200,83,0.1);
+  border: 1px solid rgba(0,200,83,0.2);
+  border-radius: var(--radius-sm);
+}
+.sidebar-team-badge .team-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--volt);
+  display: block;
+}
+.sidebar-team-badge .team-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--white);
+  display: block;
+  margin-top: 2px;
+}
+.sidebar-nav {
+  flex: 1;
+  padding: 8px 12px;
+  overflow-y: auto;
+}
+.nav-section {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.25);
+  padding: 16px 8px 6px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: rgba(255,255,255,0.55);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 2px;
+}
+.nav-item:hover { background: rgba(255,255,255,0.06); color: var(--white); }
+.nav-item.active { background: rgba(0,200,83,0.12); color: var(--volt); }
+.nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+.nav-badge {
+  margin-left: auto;
+  background: var(--volt);
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 20px;
+}
+.nav-badge.red { background: var(--red); color: white; }
+.sidebar-round-status {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.round-status-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  display: block;
+  margin-bottom: 6px;
+}
+.round-pips {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.round-pip {
+  width: 28px; height: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.1);
+}
+.round-pip.done { background: var(--volt); }
+.round-pip.active { background: var(--amber); animation: pulse-pip 1.5s ease-in-out infinite; }
+@keyframes pulse-pip {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.sidebar-logout {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.logout-btn {
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.4);
+  padding: 9px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.logout-btn:hover { border-color: var(--red); color: var(--red); background: var(--red-pale); }
+
+/* MAIN */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* TOPBAR */
+.topbar {
+  height: var(--topbar-h);
+  background: var(--white);
+  border-bottom: 1px solid var(--wire);
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+  gap: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.topbar-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  flex: 1;
+}
+.topbar-title span {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 14px;
+  margin-left: 8px;
+}
+.round-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--amber-pale);
+  border: 1px solid var(--amber);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--amber);
+}
+.round-chip .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: pulse-pip 1.5s ease-in-out infinite;
+}
+.cb-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--red-pale);
+  border: 1px solid rgba(211,47,47,0.3);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--red);
+  cursor: pointer;
+  animation: cb-pulse 2s ease-in-out infinite;
+}
+@keyframes cb-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(211,47,47,0.2); }
+  50% { box-shadow: 0 0 0 6px rgba(211,47,47,0); }
+}
+.score-display {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+.score-display strong { color: var(--volt-dim); font-size: 16px; }
+
+/* CONTENT AREA */
+.content {
+  flex: 1;
+  padding: 32px;
+}
+
+/* PAGE SECTIONS */
+.page-section { display: none; }
+.page-section.active { display: block; }
+
+/* ═══════════════════════════════════════════════
+   CARDS & COMPONENTS
+═══════════════════════════════════════════════ */
+.card {
+  background: var(--white);
+  border: 1px solid var(--wire);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.card-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.card-icon.green { background: var(--volt-pale); }
+.card-icon.amber { background: var(--amber-pale); }
+.card-icon.blue { background: var(--blue-pale); }
+.card-icon.red { background: var(--red-pale); }
+.card-icon.purple { background: var(--purple-pale); }
+.card-title { font-size: 16px; font-weight: 700; color: var(--ink); }
+.card-subtitle { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+/* GRID */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+/* STAT TILES */
+.stat-tile {
+  background: var(--white);
+  border: 1px solid var(--wire);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.stat-value {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1;
+}
+.stat-value.positive { color: var(--volt-dim); }
+.stat-value.negative { color: var(--red); }
+.stat-value.warn { color: var(--amber); }
+.stat-delta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stat-delta.up { color: var(--volt-dim); }
+.stat-delta.down { color: var(--red); }
+
+/* METRIC BAR */
+.metric-bar-wrap {
+  margin-bottom: 14px;
+}
+.metric-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.metric-bar-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.metric-bar-val {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.metric-bar-track {
+  height: 6px;
+  background: var(--wire-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.metric-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+}
+.metric-bar-fill.green { background: var(--volt); }
+.metric-bar-fill.amber { background: var(--amber); }
+.metric-bar-fill.red { background: var(--red); }
+.metric-bar-fill.blue { background: var(--blue); }
+
+/* CURVEBALL BANNER */
+.curveball-banner {
+  background: linear-gradient(135deg, #b71c1c 0%, #d32f2f 100%);
+  border-radius: var(--radius);
+  padding: 24px;
+  color: white;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+  animation: cb-appear 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes cb-appear {
+  from { transform: translateY(-16px) scale(0.97); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.curveball-banner::before {
+  content: '⚡';
+  position: absolute;
+  right: 24px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 72px;
+  opacity: 0.12;
+}
+.cb-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cb-label::before {
+  content: '';
+  display: inline-block;
+  width: 20px; height: 2px;
+  background: white;
+  opacity: 0.5;
+}
+.cb-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+.cb-body { font-size: 14px; line-height: 1.7; opacity: 0.88; max-width: 640px; }
+.cb-timestamp {
+  font-family: var(--mono);
+  font-size: 10px;
+  opacity: 0.5;
+  margin-top: 12px;
+}
+
+/* DECISION FORM */
+.decision-domain {
+  background: var(--white);
+  border: 1px solid var(--wire);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.domain-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--wire);
+  background: var(--wire-2);
+}
+.domain-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+.domain-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.domain-subtitle {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.domain-body { padding: 20px; }
+.field-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+  display: block;
+}
+.field-select {
+  width: 100%;
+  border: 1.5px solid var(--wire);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface);
+  margin-bottom: 16px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b74' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+.field-select:focus { outline: none; border-color: var(--volt-dim); box-shadow: 0 0 0 3px var(--volt-glow); }
+.slider-wrap { margin-bottom: 16px; }
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.slider-input {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  background: var(--wire);
+  border-radius: 2px;
+  outline: none;
+}
+.slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--volt-dim);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.slider-val {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  min-width: 70px;
+  text-align: right;
+}
+.field-textarea {
+  width: 100%;
+  border: 1.5px solid var(--wire);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.6;
+}
+.field-textarea:focus { outline: none; border-color: var(--volt-dim); box-shadow: 0 0 0 3px var(--volt-glow); }
+.field-textarea::placeholder { color: var(--faint); }
+
+.submit-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 0 0;
+}
+.btn-primary {
+  background: var(--ink);
+  color: white;
+  border: none;
+  padding: 14px 32px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  transition: all 0.2s;
+}
+.btn-primary:hover { background: var(--ink-3); transform: translateY(-1px); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink-3);
+  border: 1.5px solid var(--wire);
+  padding: 13px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+}
+.btn-secondary:hover { background: var(--wire-2); }
+.submit-note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.submitted-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--volt-pale);
+  border: 1px solid var(--volt);
+  color: var(--volt-dim);
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ASSESSMENT CARD */
+.assessment-card {
+  background: var(--white);
+  border: 1px solid var(--wire);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+.assessment-header {
+  background: linear-gradient(135deg, var(--ink) 0%, var(--ink-3) 100%);
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.assessment-q-badge {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: white;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.assessment-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: white;
+}
+.assessment-score-badge {
+  margin-left: auto;
+  text-align: right;
+}
+.assessment-score-num {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--volt);
+  line-height: 1;
+}
+.assessment-score-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.assessment-body { padding: 24px; }
+.assessment-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.assess-metric {
+  background: var(--wire-2);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  text-align: center;
+}
+.assess-metric-val {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 500;
+  display: block;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.assess-metric-val.good { color: var(--volt-dim); }
+.assess-metric-val.bad { color: var(--red); }
+.assess-metric-val.neutral { color: var(--amber); }
+.assess-metric-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.consideration-list { list-style: none; }
+.consideration-item {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--wire-2);
+}
+.consideration-item:last-child { border-bottom: none; }
+.consid-icon {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.consid-icon.think { background: var(--blue-pale); }
+.consid-icon.risk { background: var(--red-pale); }
+.consid-icon.opp { background: var(--volt-pale); }
+.consid-icon.caution { background: var(--amber-pale); }
+.consid-text {
+  font-size: 13.5px;
+  color: var(--ink-3);
+  line-height: 1.65;
+}
+.consid-text strong { color: var(--ink); }
+
+/* LEADERBOARD */
+.leaderboard-table { width: 100%; border-collapse: collapse; }
+.lb-row {
+  display: grid;
+  grid-template-columns: 36px 1fr 100px 100px 100px 100px 120px;
+  gap: 0;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--wire-2);
+  transition: background 0.1s;
+}
+.lb-row:hover { background: var(--wire-2); }
+.lb-row.header {
+  background: var(--wire-2);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: 10px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.lb-row.header .lb-cell {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lb-row.my-team {
+  background: rgba(0,200,83,0.05);
+  border-left: 3px solid var(--volt);
+}
+.lb-rank {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+.lb-rank.gold { color: #f59e0b; font-size: 18px; }
+.lb-rank.silver { color: #94a3b8; font-size: 18px; }
+.lb-rank.bronze { color: #b45309; font-size: 18px; }
+.lb-cell {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.lb-cell.score {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lb-cell.score.top { color: var(--volt-dim); }
+.lb-team-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+.lb-tag {
+  display: inline-block;
+  background: var(--volt-pale);
+  color: var(--volt-dim);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 10px;
+  margin-left: 8px;
+}
+.lb-delta {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.lb-delta.up { color: var(--volt-dim); }
+.lb-delta.down { color: var(--red); }
+
+/* DECISION HISTORY */
+.history-entry {
+  background: var(--white);
+  border: 1px solid var(--wire);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.history-header {
+  background: var(--wire-2);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.history-header:hover { background: var(--wire); }
+.history-q-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.history-q-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.history-score-badge {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--volt-dim);
+}
+.history-toggle { font-size: 18px; color: var(--muted); transition: transform 0.2s; }
+.history-toggle.open { transform: rotate(180deg); }
+.history-body {
+  display: none;
+  padding: 20px;
+}
+.history-body.open { display: block; }
+.history-decision-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--wire-2);
+  font-size: 13px;
+}
+.history-decision-row:last-child { border-bottom: none; }
+.history-domain-label {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding-top: 2px;
+}
+.history-decision-val { color: var(--ink); line-height: 1.5; }
+
+/* ADMIN PANEL */
+.admin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--purple-pale);
+  border: 1px solid var(--purple);
+  color: var(--purple);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.admin-section-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--wire);
+}
+.cb-compose {
+  background: var(--surface);
+  border: 1.5px dashed var(--wire);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.btn-danger {
+  background: var(--red);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+}
+.btn-danger:hover { background: #b71c1c; }
+.btn-volt {
+  background: var(--volt);
+  color: var(--ink);
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+}
+.btn-volt:hover { background: #00e564; }
+.admin-team-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.admin-team-card {
+  background: var(--white);
+  border: 1px solid var(--wire);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+.admin-team-card-name {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.admin-team-card-status {
+  font-size: 11px;
+  color: var(--muted);
+}
+.status-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+.status-dot.submitted { background: var(--volt); }
+.status-dot.pending { background: var(--amber); animation: pulse-pip 1.5s ease-in-out infinite; }
+.status-dot.waiting { background: var(--faint); }
+
+/* NOTIFICATION */
+.notification {
+  position: fixed;
+  top: 80px; right: 24px;
+  background: var(--ink);
+  color: white;
+  padding: 14px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 9999;
+  box-shadow: var(--shadow-lg);
+  transform: translateX(120%);
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  max-width: 320px;
+}
+.notification.show { transform: none; }
+.notification.success { border-left: 3px solid var(--volt); }
+.notification.error { border-left: 3px solid var(--red); }
+.notification.info { border-left: 3px solid var(--blue); }
+
+/* MODAL */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 580px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: modal-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes modal-in {
+  from { transform: scale(0.92) translateY(20px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.modal-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+.modal-subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  justify-content: flex-end;
+}
+.btn-ghost {
+  background: transparent;
+  border: 1.5px solid var(--wire);
+  color: var(--muted);
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+}
+.btn-ghost:hover { background: var(--wire-2); }
+
+/* EMPTY STATES */
+.empty-state {
+  text-align: center;
+  padding: 60px 32px;
+  color: var(--muted);
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; display: block; }
+.empty-state h3 { font-size: 17px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+.empty-state p { font-size: 13px; line-height: 1.6; max-width: 320px; margin: 0 auto; }
+
+/* PROGRESS INDICATOR */
+.round-timeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 24px;
+}
+.rt-step {
+  flex: 1;
+  text-align: center;
+  position: relative;
+}
+.rt-step::after {
+  content: '';
+  position: absolute;
+  top: 18px; left: 50%; right: -50%;
+  height: 2px;
+  background: var(--wire);
+  z-index: 0;
+}
+.rt-step:last-child::after { display: none; }
+.rt-dot {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 auto 8px;
+  position: relative;
+  z-index: 1;
+  border: 2px solid var(--wire);
+  background: white;
+  color: var(--muted);
+}
+.rt-dot.done {
+  background: var(--volt);
+  border-color: var(--volt);
+  color: var(--ink);
+}
+.rt-dot.active {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: white;
+  box-shadow: 0 0 0 4px rgba(255,143,0,0.2);
+}
+.rt-step-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.rt-step.done .rt-step-label { color: var(--volt-dim); }
+.rt-step.active .rt-step-label { color: var(--amber); }
+
+/* OVERFLOW LABEL */
+.tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.tag.green { background: var(--volt-pale); color: var(--volt-dim); }
+.tag.amber { background: var(--amber-pale); color: var(--amber); }
+.tag.red { background: var(--red-pale); color: var(--red); }
+.tag.blue { background: var(--blue-pale); color: var(--blue); }
+
+/* DIVIDER */
+.divider {
+  height: 1px;
+  background: var(--wire);
+  margin: 20px 0;
+}
+
+/* LOCKED OVERLAY */
+.locked-overlay {
+  background: linear-gradient(135deg, var(--wire-2) 0%, #eeeef3 100%);
+  border: 2px dashed var(--wire);
+  border-radius: var(--radius);
+  padding: 48px;
+  text-align: center;
+}
+.locked-overlay .lock-icon { font-size: 40px; margin-bottom: 16px; display: block; }
+.locked-overlay h3 { font-size: 18px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+.locked-overlay p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+.case-selector-step{display:block}.case-selector-step.hidden{display:none}
+.case-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
+.case-card{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.1);border-radius:10px;padding:16px;cursor:pointer;transition:all .2s;text-align:left}
+.case-card:hover{border-color:var(--volt);background:rgba(0,200,83,.07)}
+.case-card.selected{border-color:var(--volt);background:rgba(0,200,83,.12)}
+.case-card .cc-tag{font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--volt);margin-bottom:6px;display:block}
+.case-card .cc-title{font-size:14px;font-weight:700;color:var(--white);display:block;margin-bottom:4px;line-height:1.3}
+.case-card .cc-sub{font-size:10.5px;color:rgba(255,255,255,.4);display:block;line-height:1.5}
+.case-card .cc-chip{display:inline-block;margin-top:8px;background:rgba(255,255,255,.07);border-radius:4px;padding:2px 8px;font-size:9px;font-family:var(--mono);color:rgba(255,255,255,.35)}
+.case-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;font-family:var(--mono);letter-spacing:.5px}
+.case-badge.volta{background:rgba(0,200,83,.15);color:var(--volt);border:1px solid rgba(0,200,83,.3)}
+.case-badge.arc{background:rgba(21,101,192,.15);color:#64b5f6;border:1px solid rgba(21,101,192,.3)}
+
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+  LOGIN SCREEN
+════════════════════════════════════════════ -->
+<div id="loginScreen" class="screen active">
+  <div class="login-grid"></div>
+  <div class="login-box" style="width:480px">
+    <div class="login-logo">
+      <span class="wordmark">Praxis</span>
+      <span class="tagline">Catalyst Leadership Simulation</span>
+    </div>
+    <div id="caseStep" class="case-selector-step">
+      <label class="login-label">Select Simulation Case</label>
+      <div class="case-cards">
+        <div class="case-card" id="caseCardA" onclick="selectCase('A')">
+          <span class="cc-tag">Case A</span>
+          <span class="cc-title">VOLTA Motors</span>
+          <span class="cc-sub">Navigating the Inflection:<br>Scale, survival, and unit economics</span>
+          <span class="cc-chip">Series C &middot; Complex</span>
+        </div>
+        <div class="case-card" id="caseCardB" onclick="selectCase('B')">
+          <span class="cc-tag">Case B</span>
+          <span class="cc-title">ARC Motors</span>
+          <span class="cc-sub">The Velocity Trap:<br>Product development under market shift</span>
+          <span class="cc-chip">Series B &middot; Intermediate</span>
+        </div>
+      </div>
+      <button class="login-btn" id="caseNextBtn" onclick="proceedToLogin()" disabled style="opacity:0.4">Select a case to continue &rarr;</button>
+      <div class="login-case-note">Ather Catalyst Program &middot; Confidential</div>
+    </div>
+    <div id="loginStep" class="case-selector-step hidden">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <button onclick="backToCase()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.5);padding:6px 12px;border-radius:6px;font-size:11px;font-family:var(--mono)">&larr; Back</button>
+        <span id="selectedCaseBadge" class="case-badge volta">Case A &mdash; VOLTA Motors</span>
+      </div>
+      <label class="login-label">Select Your Team</label>
+      <select id="teamSelect" class="login-select">
+        <option value="">&#8212; choose team &#8212;</option>
+        <option value="admin">Admin (Game Master)</option>
+        <option value="team1" id="t1opt">VOLTA Leadership Board &#8212; Alpha</option>
+        <option value="team2" id="t2opt">VOLTA Leadership Board &#8212; Beta</option>
+        <option value="team3" id="t3opt">VOLTA Leadership Board &#8212; Gamma</option>
+        <option value="team4" id="t4opt">VOLTA Leadership Board &#8212; Delta</option>
+        <option value="team5" id="t5opt">VOLTA Leadership Board &#8212; Epsilon</option>
+        <option value="team6" id="t6opt">VOLTA Leadership Board &#8212; Zeta</option>
+      </select>
+      <label class="login-label">Access Code</label>
+      <input id="accessCode" type="password" class="login-input" placeholder="Enter your team code">
+      <button class="login-btn" onclick="handleLogin()">Enter Simulation &rarr;</button>
+      <div id="loginError" class="login-error"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+  APP SCREEN
+════════════════════════════════════════════ -->
+<div id="appScreen" class="screen">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="name">Praxis</span>
+      <span class="sub">Catalyst Simulation</span>
+    </div>
+    <div class="sidebar-team-badge">
+      <span class="team-label" id="sidebarTeamLabel">Team</span>
+      <span class="team-name" id="sidebarTeamName">—</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Simulation</div>
+      <div class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard">
+        <span class="icon">⬡</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="navigate('curveball')" id="nav-curveball">
+        <span class="icon">⚡</span> Curveballs
+        <span class="nav-badge red" id="cbBadge" style="display:none">!</span>
+      </div>
+      <div class="nav-item" onclick="navigate('decisions')" id="nav-decisions">
+        <span class="icon">◈</span> Decisions
+      </div>
+      <div class="nav-section">Results</div>
+      <div class="nav-item" onclick="navigate('assessment')" id="nav-assessment">
+        <span class="icon">◎</span> Assessment
+      </div>
+      <div class="nav-item" onclick="navigate('history')" id="nav-history">
+        <span class="icon">▦</span> Decision Log
+      </div>
+      <div class="nav-item" onclick="navigate('leaderboard')" id="nav-leaderboard">
+        <span class="icon">▲</span> Leaderboard
+      </div>
+      <div id="adminNavItem" class="nav-item" onclick="navigate('admin')" style="display:none">
+        <span class="icon">⬡</span> Admin Panel
+        <span class="nav-badge" style="background:var(--purple)">GM</span>
+      </div>
+    </nav>
+    <div class="sidebar-round-status">
+      <span class="round-status-label">Simulation Progress</span>
+      <div class="round-pips" id="roundPips"></div>
+    </div>
+    <div class="sidebar-logout">
+      <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title">
+        <span id="topbarCaseName">VOLTA Motors</span> <span id="topbarSubtitle">/ Dashboard</span>
+      </div>
+      <div class="round-chip">
+        <div class="dot"></div>
+        <span id="topbarRound">Quarter 1</span>
+      </div>
+      <div id="cbTopChip" class="cb-chip" style="display:none" onclick="navigate('curveball')">
+        ⚡ <span>Live Curveball</span>
+      </div>
+      <div class="score-display">
+        Score: <strong id="topbarScore">—</strong>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD PAGE -->
+      <div id="page-dashboard" class="page-section active">
+        <div class="round-timeline" id="roundTimeline"></div>
+
+        <div class="grid-4" id="kpiGrid"></div>
+        <div class="divider"></div>
+        <div class="grid-2">
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon green">📊</div>
+                <div>
+                  <div class="card-title">Performance Metrics</div>
+                  <div class="card-subtitle" id="dashMetricsSubtitle">VOLTA dashboard — current quarter</div>
+                </div>
+              </div>
+              <div id="metricsContainer"></div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon amber">🗓</div>
+                <div>
+                  <div class="card-title">Simulation Context</div>
+                  <div class="card-subtitle" id="dashContextSubtitle">VOLTA Motors — FY 2024–25</div>
+                </div>
+              </div>
+              <div id="dashContextBody" style="font-size:13px;color:var(--ink-3);line-height:1.75;"></div>
+            </div>
+            <div class="card" style="margin-top:0">
+              <div class="card-header">
+                <div class="card-icon blue">📋</div>
+                <div>
+                  <div class="card-title">Case Reference</div>
+                  <div class="card-subtitle" id="caseRefSubtitle">VOLTA Motors: Navigating the Inflection</div>
+                </div>
+              </div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.6;">
+                <span id="caseRefBody">Case reference text loads here.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CURVEBALL PAGE -->
+      <div id="page-curveball" class="page-section">
+        <div id="curbveballContent"></div>
+      </div>
+
+      <!-- DECISIONS PAGE -->
+      <div id="page-decisions" class="page-section">
+        <div id="decisionsContent"></div>
+      </div>
+
+      <!-- ASSESSMENT PAGE -->
+      <div id="page-assessment" class="page-section">
+        <div id="assessmentContent"></div>
+      </div>
+
+      <!-- HISTORY PAGE -->
+      <div id="page-history" class="page-section">
+        <div id="historyContent"></div>
+      </div>
+
+      <!-- LEADERBOARD PAGE -->
+      <div id="page-leaderboard" class="page-section">
+        <div id="leaderboardContent"></div>
+      </div>
+
+      <!-- ADMIN PAGE -->
+      <div id="page-admin" class="page-section">
+        <div id="adminContent"></div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- CURVEBALL MODAL -->
+<div id="cbModal" class="modal-overlay">
+  <div class="modal">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div style="background:var(--red-pale);border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">⚡</div>
+      <div>
+        <div class="modal-title" id="cbModalTitle">Curveball Event</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:1px;text-transform:uppercase;margin-top:2px;" id="cbModalTimestamp"></div>
+      </div>
+    </div>
+    <div class="modal-subtitle" id="cbModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="closeCbModal()">Acknowledged →</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICATION -->
+<div id="notification" class="notification"></div>
+
+<script>
+
+// =================================================
+//  SUPABASE CONFIG
+// =================================================
+const SUPA_URL = 'https://towyztagdudjbxfevnus.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvd3l6dGFnZHVkamJ4ZmV2bnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NzA0NzQsImV4cCI6MjA5MTE0NjQ3NH0.57SNbO6ZtxxZOgd1OPlE3mT92F62-dTSavqVEWK2ENA';
+const supabase = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// Session context (set after login)
+var currentSession = null;   // { id, code, case_id, current_round, round_open, cohort_name }
+var currentTeam    = null;   // { id, slot, display_name, access_code, session_id }
+
+// =================================================
+//  URL SESSION ROUTING (#/session/CODE)
+// =================================================
+function getSessionCodeFromURL() {
+  const hash = window.location.hash; // e.g. #/session/XK7P2Q
+  const m = hash.match(/#\/session\/([A-Z0-9]{6,8})/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+function setSessionInURL(code) {
+  window.location.hash = '/session/' + code;
+}
+
+// =================================================
+//  DB LAYER — replaces localStorage
+// =================================================
+async function dbGetSession(code) {
+  const { data, error } = await supabase
+    .from('sessions').select('*, cases(slug,name,subtitle,difficulty)')
+    .eq('code', code.toUpperCase()).single();
+  return error ? null : data;
+}
+
+async function dbGetTeams(sessionId) {
+  const { data } = await supabase.from('teams').select('*').eq('session_id', sessionId).order('slot');
+  return data || [];
+}
+
+async function dbGetTeam(sessionId, slot) {
+  const { data } = await supabase.from('teams').select('*')
+    .eq('session_id', sessionId).eq('slot', slot).single();
+  return data;
+}
+
+async function dbSaveDecision(sessionId, teamId, round, domainId, fieldId, value) {
+  const { error } = await supabase.from('decisions').upsert({
+    session_id: sessionId, team_id: teamId, round, domain_id: domainId, field_id: fieldId, value,
+    submitted_at: new Date().toISOString()
+  }, { onConflict: 'session_id,team_id,round,field_id' });
+  return !error;
+}
+
+async function dbGetDecisions(sessionId, teamId, round) {
+  const { data } = await supabase.from('decisions').select('*')
+    .eq('session_id', sessionId).eq('team_id', teamId).eq('round', round);
+  return data || [];
+}
+
+async function dbGetAllDecisions(sessionId) {
+  const { data } = await supabase.from('decisions').select('*, teams(slot,display_name)')
+    .eq('session_id', sessionId).order('submitted_at');
+  return data || [];
+}
+
+async function dbPublishOutcome(sessionId, teamId, round, metrics, score) {
+  const { error } = await supabase.from('outcomes').upsert({
+    session_id: sessionId, team_id: teamId, round,
+    revenue: metrics.revenue, gross_margin: metrics.grossMargin,
+    cash_runway: metrics.cashRunway, market_share: metrics.marketShare,
+    product_health: metrics.productHealth, team_capability: metrics.teamCapability,
+    score, published_at: new Date().toISOString()
+  }, { onConflict: 'session_id,team_id,round' });
+  return !error;
+}
+
+async function dbGetOutcomes(sessionId) {
+  const { data } = await supabase.from('outcomes').select('*, teams(slot,display_name)')
+    .eq('session_id', sessionId).order('round');
+  return data || [];
+}
+
+async function dbInjectCurveball(sessionId, round, title, body, adminEmail) {
+  const { error } = await supabase.from('curveballs').insert({
+    session_id: sessionId, round, title, body,
+    injected_by: adminEmail, injected_at: new Date().toISOString()
+  });
+  return !error;
+}
+
+async function dbGetCurveballs(sessionId) {
+  const { data } = await supabase.from('curveballs').select('*')
+    .eq('session_id', sessionId).order('injected_at');
+  return data || [];
+}
+
+async function dbUpdateSession(sessionId, updates) {
+  const { error } = await supabase.from('sessions').update(updates).eq('id', sessionId);
+  return !error;
+}
+
+async function dbCreateSession(caseSlug, cohortName, adminEmail) {
+  // Get case id
+  const { data: caseData } = await supabase.from('cases').select('id').eq('slug', caseSlug).single();
+  if (!caseData) return null;
+
+  // Generate 6-char code
+  const code = Math.random().toString(36).substring(2,8).toUpperCase();
+
+  const { data: sess, error } = await supabase.from('sessions').insert({
+    code, case_id: caseData.id, cohort_name: cohortName,
+    admin_email: adminEmail, current_round: 1, round_open: true, status: 'active'
+  }).select().single();
+  if (error) return null;
+
+  // Create 6 teams
+  const slots = ['alpha','beta','gamma','delta','epsilon','zeta'];
+  const names = ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta'];
+  const codes = ['alpha01','beta02','gamma03','delta04','epsilon05','zeta06'];
+  const teams = slots.map((slot, i) => ({
+    session_id: sess.id, slot, display_name: names[i], access_code: codes[i]
+  }));
+  await supabase.from('teams').insert(teams);
+
+  return sess;
+}
+
+// =================================================
+//  REALTIME SUBSCRIPTION
+// =================================================
+var realtimeChannel = null;
+
+function subscribeToSession(sessionId) {
+  if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+  realtimeChannel = supabase.channel('session:' + sessionId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions', filter: 'id=eq.' + sessionId },
+      payload => { currentSession = { ...currentSession, ...payload.new }; onSessionUpdate(); })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'curveballs', filter: 'session_id=eq.' + sessionId },
+      payload => { onNewCurveball(payload.new); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'outcomes', filter: 'session_id=eq.' + sessionId },
+      () => { renderLeaderboard(); renderKPIs(); renderMetrics(); })
+    .subscribe();
+}
+
+function onSessionUpdate() {
+  renderRoundPips();
+  renderTimeline();
+  const roundEl = document.getElementById('topbarRound');
+  if (roundEl) roundEl.textContent = 'Quarter ' + currentSession.current_round;
+  if (!currentSession.round_open) showNotification('Round closed by Game Master.', 'info');
+}
+
+function onNewCurveball(cb) {
+  showCbModal(cb);
+  checkCurveballs();
+  showNotification('\u26a1 Curveball injected by Game Master!', 'error');
+}
+
+
+var selectedCase = 'A';
+
+var CASE_CTX = {
+  A: {
+    company: 'VOLTA Motors',
+    board: 'VOLTA Leadership Board',
+    badgeClass: 'volta',
+    badgeText: 'Case A — VOLTA Motors',
+    dashMetrics: 'VOLTA dashboard — current quarter',
+    dashCtxSubtitle: 'VOLTA Motors — FY 2024–25',
+    dashCtxBody: 'You are VOLTA\'s collective leadership team. The company has just closed its <strong>&#8377;320 Cr Series C</strong> with a critical covenant: achieve <strong>positive gross margin (&ge;2%) on the VOLTA Edge</strong> within 18 months. Current burn: <strong style="color:var(--red)">&#8377;4.2 Cr/month</strong>. Runway: <strong>22 months</strong>. The second tranche of &#8377;140 Cr depends on hitting this milestone.',
+    caseRefSubtitle: 'VOLTA Motors: Navigating the Inflection',
+    caseRefBody: 'Refer to your Ather Catalyst Program case document for full BOM breakdowns, supply chain data, engineering bandwidth models, and financial scenario analysis. Annexures A–D contain decision-relevant quantitative data.',
+  },
+  B: {
+    company: 'ARC Motors',
+    board: 'ARC Leadership Board',
+    badgeClass: 'arc',
+    badgeText: 'Case B — ARC Motors',
+    dashMetrics: 'ARC dashboard — current quarter',
+    dashCtxSubtitle: 'ARC Motors — FY 2025–26',
+    dashCtxBody: 'You are ARC\'s collective leadership team. The Nimbus is 12 months from launch. Three competitors have launched with features it does not have. Cash on hand: <strong>&#8377;68 Cr</strong>. Burn: <strong style="color:var(--red)">&#8377;2.8 Cr/month</strong>. Runway: <strong>24 months</strong>. Your decisions on product direction, feature prioritisation, and cash allocation will determine whether Nimbus launches into relevance — or obsolescence.',
+    caseRefSubtitle: 'ARC Motors: The Velocity Trap',
+    caseRefBody: 'Refer to your Ather Catalyst Program case document for the full feature trade-off matrix, cash flow scenarios, market evolution data, and decision frameworks. Annexures A–D contain all quantitative analysis.',
+  }
+};
+
+function selectCase(id) {
+  selectedCase = id;
+  document.querySelectorAll('.case-card').forEach(function(c) { c.classList.remove('selected'); });
+  document.getElementById('caseCard' + id).classList.add('selected');
+  var btn = document.getElementById('caseNextBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+}
+
+function proceedToLogin() {
+  var cfg = CASE_CTX[selectedCase];
+  ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta'].forEach(function(n, i) {
+    var el = document.getElementById('t' + (i+1) + 'opt');
+    if (el) el.textContent = cfg.board + ' — ' + n;
+  });
+  var b = document.getElementById('selectedCaseBadge');
+  b.className = 'case-badge ' + cfg.badgeClass;
+  b.textContent = cfg.badgeText;
+  document.getElementById('caseStep').classList.add('hidden');
+  document.getElementById('loginStep').classList.remove('hidden');
+}
+
+function backToCase() {
+  document.getElementById('loginStep').classList.add('hidden');
+  document.getElementById('caseStep').classList.remove('hidden');
+  document.getElementById('teamSelect').value = '';
+  document.getElementById('accessCode').value = '';
+  selectedCase = 'A';
+  var cs = document.getElementById('caseStep'); if(cs) cs.classList.remove('hidden');
+  var ls = document.getElementById('loginStep'); if(ls) ls.classList.add('hidden');
+  document.querySelectorAll('.case-card').forEach(function(c){c.classList.remove('selected')});
+  var nb = document.getElementById('caseNextBtn'); if(nb){nb.disabled=true;nb.style.opacity='0.4';}
+  currentSession = null; currentTeam = null;
+  if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+  document.getElementById('loginError').textContent = '';
+}
+
+function applyCaseConfig() {
+  var c = CASE_CTX[selectedCase], el;
+  el = document.getElementById('topbarCaseName');      if(el) el.textContent = c.company;
+  el = document.getElementById('dashMetricsSubtitle'); if(el) el.textContent = c.dashMetrics;
+  el = document.getElementById('dashContextSubtitle'); if(el) el.textContent = c.dashCtxSubtitle;
+  el = document.getElementById('dashContextBody');     if(el) el.innerHTML   = c.dashCtxBody;
+  el = document.getElementById('caseRefSubtitle');     if(el) el.textContent = c.caseRefSubtitle;
+  el = document.getElementById('caseRefBody');         if(el) el.textContent = c.caseRefBody;
+  el = document.getElementById('sidebarTeamLabel');
+  if(el && currentUser && !currentUser.isAdmin) el.textContent = c.board;
+}
+
+var DECISION_DOMAINS_ARC = [
+  { id:'pd', num:1, title:'Product Direction', subtitle:'What do you do with the Nimbus spec — and what signal does that send?', icon:'◈',
+    fields:[
+      { type:'select', id:'pd_path', label:'Nimbus Development Path This Quarter', options:['Hold Course — ship Nimbus as currently specced (Sep 2026)','Selective Adapt — add Companion App + 7-inch display only (+4 months)','Selective Adapt — add App + Display + Fast-charge (+6 months)','Full Parity — add all features including removable battery (+9 months)','Pause and reassess — commission a 6-week market research sprint first'] },
+      { type:'select', id:'pd_comms', label:'External Communication Strategy', options:['Stay silent — no public comment on Nimbus timeline or spec','Signal spec update to dealers only (controlled channel)','Announce Nimbus delay publicly with feature rationale','Accelerate Nimbus PR — generate buzz to defend against competitors now'] },
+      { type:'textarea', id:'pd_why', label:'Strategic Rationale (3–4 sentences)', placeholder:'What is your reasoning? What assumption are you making about whether the feature shift is structural or temporary?' }
+    ]
+  },
+  { id:'fp', num:2, title:'Feature Prioritisation', subtitle:'If adapting, which features in what sequence — and why those over others.', icon:'▲',
+    fields:[
+      { type:'select', id:'fp_top', label:'Highest Priority Feature to Add (if adapting)', options:['Not adapting — hold current spec','Companion App + Gamification (Rs 3.2 Cr, +4 months)','Large Display 7-inch (Rs 1.8 Cr, +3 months)','Fast-Charge Hardware BMS Revision (Rs 5.4 Cr, +5–6 months)','Removable Battery Frame Redesign (Rs 9.8 Cr, +7–9 months)'] },
+      { type:'slider', id:'fp_bw', label:'% Engineering Bandwidth on Nimbus (vs. Drift optimisation)', min:40, max:95, default:70, unit:'%' },
+      { type:'textarea', id:'fp_why', label:'Prioritisation Rationale', placeholder:'Why this feature over the others? What customer or financial data anchors this choice?' }
+    ]
+  },
+  { id:'cm', num:3, title:'Cash & Runway Management', subtitle:'How you allocate spend — and what you protect against.', icon:'◎',
+    fields:[
+      { type:'select', id:'cm_budget', label:'Nimbus Additional Budget Commitment This Quarter', options:['Zero — no additional spend beyond current Rs 14 Cr envelope','Up to Rs 5 Cr additional — software + display scope only','Up to Rs 10 Cr additional — software + display + fast-charge','Up to Rs 20 Cr additional — full parity scope (requires cash reserve draw)'] },
+      { type:'slider', id:'cm_drift', label:'Drift Commercial Defence Budget (Rs Lakhs/month)', min:10, max:80, default:25, unit:' L/mo' },
+      { type:'textarea', id:'cm_why', label:'Cash Allocation Rationale', placeholder:'What is your minimum acceptable runway buffer? What would trigger a capital raise conversation?' }
+    ]
+  },
+  { id:'cr', num:4, title:'Commercial Response', subtitle:'Managing the Drift holding position while Nimbus is in development.', icon:'📈',
+    fields:[
+      { type:'select', id:'cr_drift', label:'Drift Defence Strategy', options:['Hold price and positioning — no change','Introduce Drift SE accessories bundle (Rs 5K premium)','Reduce Drift price by Rs 5,000 to defend volume against SwiftEV','Push Drift into Tier 2 cities where feature gap matters less','Wind down Drift marketing — let it coast while Nimbus builds anticipation'] },
+      { type:'select', id:'cr_dealer', label:'Dealer Network Management', options:['No change — standard dealer support','Offer Drift sell-through incentives to prevent stockpile','Brief select dealers on Nimbus timeline (NDA-bound)','Pause new dealer onboarding until Nimbus spec is confirmed'] },
+      { type:'textarea', id:'cr_why', label:'Commercial Rationale', placeholder:'How does your commercial strategy protect Drift volume without cannibalising the Nimbus launch?' }
+    ]
+  },
+  { id:'ps', num:5, title:'People & Stability', subtitle:'Protecting the team executing the decision you just made.', icon:'🧠',
+    fields:[
+      { type:'select', id:'ps_ret', label:'Engineering Retention Response', options:['No specific intervention this quarter','Provide clear Nimbus direction brief to full engineering team','Accelerate ESOP vesting for senior engineers at risk (Rs 80L cost)','Both — direction brief + ESOP acceleration','Hire 4–6 new engineers as redundancy buffer (Rs 1.2 Cr/quarter)'] },
+      { type:'slider', id:'ps_amb', label:'Months of Strategic Ambiguity Willing to Hold Before Locking Direction', min:0, max:3, default:1, unit:' months' },
+      { type:'textarea', id:'ps_why', label:'People Rationale', placeholder:'How are you managing the human cost of product uncertainty?' }
+    ]
+  }
+];
+
+var ROUND_ASSESSMENTS_ARC = {
+  1:{ title:'Quarter 1 — Direction Set', considerations:[
+    { type:'think', icon:'💭', text:'<strong>On your Nimbus path choice:</strong> Have you considered what assumption about customer behaviour sits underneath your decision — and whether that assumption is falsifiable? If you held course, what evidence over the next two quarters would tell you the assumption was wrong?' },
+    { type:'risk',  icon:'⚠️', text:'<strong>On your cash commitment:</strong> The Rs 14 Cr remaining covers current spec cleanly. Have you considered that each month of Nimbus delay costs approximately Rs 0.9 Cr in foregone contribution — meaning a 4-month delay has a cost comparable to adding the app and display features?' },
+    { type:'opp',   icon:'🔎', text:'<strong>On the Drift holding position:</strong> Have you thought about whether your commercial response actively defends Drift volume — or just delays decline? There is a difference between a holding strategy and a drift strategy. Which one did you set?' },
+    { type:'caution',icon:'📋',text:'<strong>On team communication:</strong> Two senior engineers received competing offers citing uncertainty about product direction. Have you considered that clarity of direction — even if it is "we are evaluating" — is itself a retention lever? Silence compounds attrition risk.' }
+  ]},
+  2:{ title:'Quarter 2 — Resource Allocation', considerations:[
+    { type:'think', icon:'💭', text:'<strong>On the Maharashtra subsidy:</strong> A government subsidy accelerates EV demand in a state where ARC is underpenetrated. Have you considered whether your Drift defence strategy captures this — or whether it is entirely Nimbus-dependent?' },
+    { type:'risk',  icon:'⚠️', text:'<strong>On your engineering bandwidth split:</strong> The proportion allocated to Nimbus vs. Drift has a direct effect on both timelines. Have you considered what the minimum viable Drift optimisation effort looks like?' },
+    { type:'opp',   icon:'🔎', text:'<strong>On selective adaptation:</strong> If you chose app and display only, have you thought about how you will position the absence of removable battery when the SwiftEV kiosk network continues to expand? The narrative must be proactive, not reactive.' },
+    { type:'caution',icon:'📋',text:'<strong>On cash burn trajectory:</strong> Have you modelled runway if Drift volume erodes 20% during the Nimbus wait period, layered on top of scope additions? The combination is not additive — it is compounding.' }
+  ]},
+  3:{ title:'Quarter 3 — Market Response', considerations:[
+    { type:'risk',  icon:'⚠️', text:'<strong>On Zep Aire launch:</strong> Zep entered with a product that has every feature Nimbus lacks — at a price premium signalling the market will pay for completeness. Have you considered what this does to your pricing assumptions for the Nimbus launch?' },
+    { type:'think', icon:'💭', text:'<strong>On SwiftEV kiosk expansion:</strong> 400 new swap kiosks signals removable battery infrastructure is becoming structural. Have you considered whether this changes your Q1 assessment of the feature gap?' },
+    { type:'opp',   icon:'🔎', text:'<strong>On design advantage:</strong> Where feature parity is converging, design differentiation may re-emerge for a segment of buyers. Have you thought about a targeted segment strategy for design-first buyers in Bengaluru and Chennai?' },
+    { type:'caution',icon:'📋',text:'<strong>On Drift NPS trend:</strong> NPS has declined from 68 to 61 over three quarters. Have you considered what level would indicate brand damage that carries forward to the Nimbus launch rather than resetting with the new product?' }
+  ]},
+  4:{ title:'Quarter 4 — Execution Under Pressure', considerations:[
+    { type:'risk',  icon:'⚠️', text:'<strong>On NovaBike S2:</strong> Your most direct competitor has announced a product closing its feature gap. Have you considered what this does to the competitive position you are targeting for Nimbus — and whether the window for differentiation on any single feature is narrowing?' },
+    { type:'think', icon:'💭', text:'<strong>On the go/no-go decision:</strong> Launch parameters matter as much as the product. Have you thought about which cities to prioritise — leading in Bengaluru vs. going wide for volume given your current competitive position?' },
+    { type:'opp',   icon:'🔎', text:'<strong>On team performance:</strong> Teams that received clear direction early tend to execute launches better than teams under sustained ambiguity. Are the people decisions from Q1 and Q2 paying off — or creating execution risk in the most critical quarter?' },
+    { type:'caution',icon:'📋',text:'<strong>On cash position:</strong> You are entering the final stretch before Nimbus revenue begins. Have you confirmed runway holds if month 1 volume is 40% below forecast?' }
+  ]},
+  5:{ title:'Quarter 5 — Launch and Legacy', considerations:[
+    { type:'opp',   icon:'🔎', text:'<strong>On FAME IV:</strong> A potential policy requiring swap-compatibility for subsidised vehicles is emerging. Have you considered how your Nimbus spec positions ARC if this policy is confirmed? This is a risk that compounds over the next product cycle.' },
+    { type:'think', icon:'💭', text:'<strong>On Nimbus launch volume:</strong> What does the data tell you about the quality of your original assumption — not whether the decision was right, but whether your reasoning process was sound?' },
+    { type:'risk',  icon:'⚠️', text:'<strong>On the Drift exit:</strong> Have you considered whether you managed the Drift decline deliberately — protecting margin through to a natural handoff — or whether it eroded faster than planned?' },
+    { type:'caution',icon:'📋',text:'<strong>On the full arc:</strong> Was the core debate about features, or was it about how your team makes decisions under genuine uncertainty? What did you learn about your reasoning under ambiguity — and where did you default to certainty when the data did not warrant it?' }
+  ]}
+};
+
+var CB_BANK_A = [
+  { q:'Q2', t:'LFP Cell Price Spike', b:'Global lithium carbonate prices spiked 22% in the spot market following supply disruption at two Chilean mines. Increase expected to persist 5-7 months.' },
+  { q:'Q3', t:'Zephyr Launches at Rs 76,000', b:'Zephyr EV officially launched the Zephyr Flash at Rs 76,000 ex-showroom. Strong order intake reported in Bengaluru and Hyderabad.' },
+  { q:'Q3', t:'VoltaOS 3-Star Safety Rating', b:'AutoSafe India published a VoltaOS connectivity stability report giving the VOLTA Edge a 3-star rating, citing intermittent Bluetooth disconnection.' },
+  { q:'Q4', t:'FAME III Subsidy Restructure', b:'Draft FAME III circular: vehicles priced above Rs 85,000 ex-showroom no longer qualify for per-unit subsidy. Directly affects VOLTA Go eligibility.' },
+  { q:'Q4', t:'Pune Plant Work Stoppage Risk', b:'Pune plant workers union issued 72-hour notice of industrial action. Management estimates 3-day stoppage could reduce output by 2,800 units/month.' },
+  { q:'Q5', t:'Strategic Acquisition Approach', b:'Singapore-based mobility fund approached VOLTA with indicative acquisition offer of Rs 900 Cr at 2.1x revenue. Requires clean VoltaOS IP ownership.' },
+];
+
+var CB_BANK_B = [
+  { q:'Q1', t:'Zep Aire Launches — Full Spec Confirmed', b:'Zep Motors confirms Aire launches this month at Rs 1,22,000 with removable battery, fast-charge, and 7-inch display. First-week bookings exceeded 2,000 units.' },
+  { q:'Q2', t:'Maharashtra EV Subsidy Announced', b:'Maharashtra announces Rs 8,000 per-vehicle EV purchase subsidy. Analysts estimate 35-40% demand increase in the state over the following two quarters.' },
+  { q:'Q3', t:'SwiftEV Announces 400 New Swap Kiosks', b:'SwiftEV doubles their battery swap network across Maharashtra, Karnataka, and Tamil Nadu. Removable battery ecosystem deepening faster than forecast.' },
+  { q:'Q3', t:'ARC Drift Wins Design Award — Sales Flat', b:'The ARC Drift wins a national industrial design award. Strong media coverage but dealer data shows no meaningful sales uplift. Recognition and purchase intent are diverging.' },
+  { q:'Q4', t:'NovaBike Nova S2 Announced', b:'NovaBike announces the Nova S2 with removable battery option, planned launch in 3 months. Your most active Bengaluru competitor is closing its feature gap.' },
+  { q:'Q5', t:'FAME IV Consultation — Swap Policy Signal', b:'FAME IV consultation paper proposes restricting subsidies to swap-compatible vehicles from FY28 onwards. The signal is serious.' },
+];
+
+function getCurveballBank() { return selectedCase === 'B' ? CB_BANK_B : CB_BANK_A; }
+function getDecisionDomains() { return selectedCase === 'B' ? DECISION_DOMAINS_ARC : DECISION_DOMAINS; }
+function getRoundAssessments() { return selectedCase === 'B' ? ROUND_ASSESSMENTS_ARC : ROUND_ASSESSMENTS; }
+
+function renderCurveballBank() {
+  var grid = document.getElementById('cbBankGrid');
+  var title = document.getElementById('cbBankTitle');
+  if (!grid) return;
+  if (title) title.textContent = 'Curveball Idea Bank — ' + (selectedCase === 'B' ? 'Case B: ARC Motors' : 'Case A: VOLTA Motors');
+  grid.innerHTML = getCurveballBank().map(function(cb) {
+    var st = cb.t.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var sb = cb.b.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return '<div style="background:var(--wire-2);border-radius:var(--radius-sm);padding:14px;cursor:pointer;border:1px solid var(--wire)" onclick="prefillCurveball(\''+st+'\',\''+sb+'\',\''+cb.q+'\')">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:4px">'+cb.q+'</div>' +
+      '<div style="font-size:13px;font-weight:700;color:var(--ink)">'+cb.t+'</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">'+cb.b.substring(0,80)+'...</div></div>';
+  }).join('');
+}
+
+
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+const TEAM_CODES = {
+  admin:  'admin2024',
+  team1:  "alpha01",
+  team2:  "beta02",
+  team3:  "gamma03",
+  team4:  "delta04",
+  team5:  "epsilon05",
+  team6:  "zeta06",
+};
+
+const TEAM_NAMES = {
+  admin:  'Game Master',
+  team1:  "Alpha",
+  team2:  "Beta",
+  team3:  "Gamma",
+  team4:  "Delta",
+  team5:  "Epsilon",
+  team6:  "Zeta",
+};
+
+const QUARTERS = [
+  { id: 1, label: 'Q1', theme: 'Baseline Operations', status: 'active' },
+  { id: 2, label: 'Q2', theme: 'Growth Pressure', status: 'pending' },
+  { id: 3, label: 'Q3', theme: 'Competitive Shock', status: 'pending' },
+  { id: 4, label: 'Q4', theme: 'Crisis Quarter', status: 'pending' },
+  { id: 5, label: 'Q5', theme: 'Legacy Round', status: 'pending' },
+];
+
+// Simulated game state (in real deployment this would be server-side)
+// Storage handled by Supabase
+
+function getState() {
+  const raw = null /*supabase*/;
+  if (raw) return JSON.parse(raw);
+  return initState();
+}
+
+function initState() {
+  const state = {
+    currentRound: 1,
+    roundOpen: true,
+    curveballs: [],
+    decisions: { team1:{}, team2:{}, team3:{}, team4:{}, team5:{}, team6:{} },
+    outcomes: {},
+    assessments: {},
+    scores: {
+      team1: { total: 0, history: [] },
+      team2: { total: 0, history: [] },
+      team3: { total: 0, history: [] },
+      team4: { total: 0, history: [] },
+      team5: { total: 0, history: [] },
+      team6: { total: 0, history: [] },
+    },
+    metrics: {
+      team1: defaultMetrics(), team2: defaultMetrics(),
+      team3: defaultMetrics(), team4: defaultMetrics(),
+      team5: defaultMetrics(), team6: defaultMetrics(),
+    }
+  };
+  saveState(state);
+  return state;
+}
+
+function defaultMetrics() {
+  if (selectedCase === 'B') return { revenue: 6.9, grossMargin: 4.2, cashRunway: 24, marketShare: 52, productHealth: 72, teamCapability: 74 };
+  return {
+    revenue: 16.8,
+    grossMargin: -5.8,
+    cashRunway: 22,
+    marketShare: 42,
+    productHealth: 58,
+    teamCapability: 65,
+  };
+}
+
+function saveState(state) {
+  //localStorage.setItem(STORAGE_KEY(), JSON.stringify(state));
+}
+
+// Current user session
+let currentUser = null;
+
+// ═══════════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════════
+async function handleLogin() {
+  const teamSlot = document.getElementById('teamSelect').value;
+  const code     = document.getElementById('accessCode').value.trim();
+  const err      = document.getElementById('loginError');
+  const btn      = document.querySelector('#loginStep .login-btn');
+
+  if (!teamSlot) { err.textContent = 'Please select your team.'; return; }
+  if (!code)     { err.textContent = 'Please enter your access code.'; return; }
+
+  // Admin login
+  if (teamSlot === 'admin') {
+    if (code !== 'admin2024' && code !== (currentSession && currentSession.admin_email)) {
+      err.textContent = 'Incorrect admin code.'; return;
+    }
+    currentUser = { teamId: 'admin', teamName: 'Game Master', isAdmin: true };
+    err.textContent = ''; showApp(); return;
+  }
+
+  // Team login — requires active session
+  if (!currentSession) {
+    err.textContent = 'No active session. Use the session link from your facilitator.'; return;
+  }
+
+  // Validate against DB
+  if (btn) { btn.textContent = 'Verifying...'; btn.disabled = true; }
+  const team = await dbGetTeam(currentSession.id, teamSlot);
+  if (btn) { btn.textContent = 'Enter Simulation →'; btn.disabled = false; }
+
+  if (!team) { err.textContent = 'Team not found in this session.'; return; }
+  if (team.access_code !== code) { err.textContent = 'Incorrect access code.'; return; }
+
+  // Check expiry
+  if (team.expires_at && new Date(team.expires_at) < new Date()) {
+    err.textContent = 'Your access to this session has expired.'; return;
+  }
+
+  currentTeam = team;
+  currentUser = { teamId: teamSlot, teamName: team.display_name, isAdmin: false };
+
+  // Mark activated if first login
+  if (!team.activated_at) {
+    const exp = new Date(); exp.setDate(exp.getDate() + 30);
+    await supabase.from('teams').update({
+      activated_at: new Date().toISOString(),
+      expires_at: exp.toISOString()
+    }).eq('id', team.id);
+  }
+
+  err.textContent = ''; showApp();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('loginScreen').classList.contains('active')) {
+    handleLogin();
+  }
+});
+
+function handleLogout() {
+  currentUser = null;
+  document.getElementById('loginScreen').classList.add('active');
+  document.getElementById('appScreen').classList.remove('active');
+  document.getElementById('teamSelect').value = '';
+  document.getElementById('accessCode').value = '';
+}
+
+// ═══════════════════════════════════════════════
+//  APP INIT
+// ═══════════════════════════════════════════════
+function showApp() {
+  document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('appScreen').classList.add('active');
+
+  // Set sidebar
+  const cfg = CASE_CTX[selectedCase];
+  const label = currentUser.isAdmin ? 'Administrator' : cfg.board;
+  applyCaseConfig();
+  document.getElementById('sidebarTeamLabel').textContent = label;
+  document.getElementById('sidebarTeamName').textContent = currentUser.teamName;
+
+  // Admin nav
+  if (currentUser.isAdmin) {
+    document.getElementById('adminNavItem').style.display = 'flex';
+  }
+
+  renderApp();
+  navigate('dashboard');
+}
+
+function renderApp() {
+  renderRoundPips();
+  renderTimeline();
+  renderKPIs();
+  renderMetrics();
+  checkCurveballs();
+}
+
+// ═══════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════
+function navigate(page) {
+  document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  document.getElementById('page-' + page).classList.add('active');
+  const navEl = document.getElementById('nav-' + page);
+  if (navEl) navEl.classList.add('active');
+
+  const titles = {
+    dashboard: 'Dashboard', curveball: 'Curveballs', decisions: 'Decisions',
+    assessment: 'Assessment', history: 'Decision Log', leaderboard: 'Leaderboard', admin: 'Admin Panel'
+  };
+  document.getElementById('topbarSubtitle').textContent = '/ ' + (titles[page] || page);
+
+  // Render page-specific content
+  if (page === 'curveball') renderCurveballs();
+  if (page === 'decisions') renderDecisions();
+  if (page === 'assessment') renderAssessments();
+  if (page === 'history') renderHistory();
+  if (page === 'leaderboard') renderLeaderboard();
+  if (page === 'admin' && currentUser.isAdmin) renderAdmin();
+}
+
+// ═══════════════════════════════════════════════
+//  ROUND STATUS HELPERS
+// ═══════════════════════════════════════════════
+function renderRoundPips() {
+  const state = getState();
+  const pips = document.getElementById('roundPips');
+  pips.innerHTML = '';
+  QUARTERS.forEach((q, i) => {
+    const pip = document.createElement('div');
+    pip.className = 'round-pip';
+    if (i + 1 < state.currentRound) pip.classList.add('done');
+    else if (i + 1 === state.currentRound) pip.classList.add('active');
+    pips.appendChild(pip);
+  });
+  document.getElementById('topbarRound').textContent = 'Quarter ' + state.currentRound;
+  var tn = document.getElementById('topbarCaseName'); if(tn) tn.textContent = CASE_CTX[selectedCase].company;
+}
+
+function renderTimeline() {
+  const state = getState();
+  const tl = document.getElementById('roundTimeline');
+  tl.innerHTML = '';
+  QUARTERS.forEach((q, i) => {
+    const step = document.createElement('div');
+    const isDone   = i + 1 < state.currentRound;
+    const isActive = i + 1 === state.currentRound;
+    step.className = 'rt-step' + (isDone ? ' done' : isActive ? ' active' : '');
+    step.innerHTML = `
+      <div class="rt-dot ${isDone ? 'done' : isActive ? 'active' : ''}">
+        ${isDone ? '✓' : q.id}
+      </div>
+      <div class="rt-step-label">${q.label}: ${q.theme}</div>
+    `;
+    tl.appendChild(step);
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  KPI TILES
+// ═══════════════════════════════════════════════
+const KPI_DEFS = [
+  { key: 'revenue',       label: 'Monthly Revenue',      unit: '₹ Cr',  good: 'high' },
+  { key: 'grossMargin',   label: 'Gross Margin',          unit: '%',     good: 'high' },
+  { key: 'cashRunway',    label: 'Cash Runway',           unit: 'months',good: 'high' },
+  { key: 'marketShare',   label: 'Market Share Index',    unit: '/100',  good: 'high' },
+];
+
+function renderKPIs() {
+  const state   = getState();
+  const teamId  = currentUser.isAdmin ? 'team1' : currentUser.teamId;
+  const metrics = state.metrics[teamId] || defaultMetrics();
+  const grid    = document.getElementById('kpiGrid');
+  grid.innerHTML = '';
+
+  KPI_DEFS.forEach(def => {
+    const val   = metrics[def.key];
+    const isNeg = def.good === 'high' ? val < 0 : val > 80;
+    const isWarn= def.key === 'grossMargin' && val < 0 && val > -8;
+    const cls   = def.key === 'grossMargin' && val >= 2 ? 'positive' : (val < 0 ? 'negative' : isWarn ? 'warn' : '');
+
+    const tile = document.createElement('div');
+    tile.className = 'stat-tile';
+    tile.innerHTML = `
+      <div class="stat-label">${def.label}</div>
+      <div class="stat-value ${cls}">${def.key === 'grossMargin' ? (val > 0 ? '+' : '') : ''}${val}${def.unit === '%' ? '%' : def.unit === '₹ Cr' ? '' : ''}</div>
+      <div class="stat-delta">${def.unit !== '%' ? def.unit : ''}</div>
+    `;
+    grid.appendChild(tile);
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  METRICS BARS
+// ═══════════════════════════════════════════════
+const METRIC_BARS = [
+  { key: 'productHealth',   label: 'Product Health Score',   color: 'green',  max: 100 },
+  { key: 'teamCapability',  label: 'Team Capability Index',  color: 'blue',   max: 100 },
+  { key: 'marketShare',     label: 'Market Share Index',     color: 'amber',  max: 100 },
+  { key: 'cashRunway',      label: 'Cash Runway Utilisation',color: 'green',  max: 30  },
+];
+
+function renderMetrics() {
+  const state   = getState();
+  const teamId  = currentUser.isAdmin ? 'team1' : currentUser.teamId;
+  const metrics = state.metrics[teamId] || defaultMetrics();
+  const cont    = document.getElementById('metricsContainer');
+  cont.innerHTML = '';
+
+  METRIC_BARS.forEach(mb => {
+    const val = metrics[mb.key];
+    const pct = Math.min(100, Math.round((val / mb.max) * 100));
+    const color = pct < 35 ? 'red' : pct < 60 ? 'amber' : mb.color;
+
+    cont.innerHTML += `
+      <div class="metric-bar-wrap">
+        <div class="metric-bar-header">
+          <span class="metric-bar-label">${mb.label}</span>
+          <span class="metric-bar-val">${val}${mb.max === 100 ? '/100' : ' months'}</span>
+        </div>
+        <div class="metric-bar-track">
+          <div class="metric-bar-fill ${color}" style="width:${pct}%"></div>
+        </div>
+      </div>
+    `;
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  CURVEBALLS
+// ═══════════════════════════════════════════════
+const CB_ICONS = ['⚡', '🌩', '🔺', '⚠️'];
+
+function checkCurveballs() {
+  const state = getState();
+  const hasCb = state.curveballs.length > 0;
+  const badge = document.getElementById('cbBadge');
+  const chip  = document.getElementById('cbTopChip');
+
+  if (hasCb) {
+    badge.style.display = 'flex';
+    chip.style.display  = 'flex';
+    // Show modal for latest unread
+    const latest = state.curveballs[state.curveballs.length - 1];
+    if (!latest.acknowledged) showCbModal(latest);
+  } else {
+    badge.style.display = 'none';
+    chip.style.display  = 'none';
+  }
+}
+
+function showCbModal(cb) {
+  document.getElementById('cbModalTitle').textContent = cb.title;
+  document.getElementById('cbModalBody').textContent  = cb.body;
+  document.getElementById('cbModalTimestamp').textContent = cb.timestamp;
+  document.getElementById('cbModal').classList.add('open');
+}
+
+function closeCbModal() {
+  const state = getState();
+  state.curveballs.forEach(cb => { cb.acknowledged = true; });
+  saveState(state);
+  document.getElementById('cbModal').classList.remove('open');
+}
+
+async function renderCurveballs() {
+  const cont = document.getElementById('curbveballContent');
+  if (!currentSession) {
+    cont.innerHTML = '<div class="empty-state"><span class="icon">⚡</span><h3>No Active Session</h3><p>Join a session to see curveball events.</p></div>';
+    return;
+  }
+
+  const cbs = await dbGetCurveballs(currentSession.id);
+
+  if (cbs.length === 0) {
+    cont.innerHTML = '<div class="empty-state"><span class="icon">⚡</span><h3>No Curveballs Yet</h3><p>The Game Master has not injected any scenario events. Stay alert.</p></div>';
+    return;
+  }
+
+  cont.innerHTML = '';
+  [...cbs].reverse().forEach(cb => {
+    const div = document.createElement('div');
+    const ts = new Date(cb.injected_at).toLocaleString('en-IN', { hour12: true });
+    div.innerHTML = `<div class="curveball-banner">
+      <div class="cb-label">Scenario Event — Q${cb.round}</div>
+      <div class="cb-title">${cb.title}</div>
+      <div class="cb-body">${cb.body}</div>
+      <div class="cb-timestamp">Injected: ${ts}</div>
+    </div>`;
+    cont.appendChild(div);
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  DECISION DOMAINS
+// ═══════════════════════════════════════════════
+const DECISION_DOMAINS = [
+  {
+    id: 'engineering',
+    num: 1,
+    title: 'Engineering & Product',
+    subtitle: 'What do you build, what do you defer, how do you allocate bandwidth?',
+    icon: '⚙️',
+    fields: [
+      {
+        type: 'select',
+        id: 'eng_priority',
+        label: 'Primary Engineering Priority This Quarter',
+        options: [
+          'Resolve BLE memory leak (VoltaOS stability)',
+          'Accelerate Fast-Charge EVSE integration',
+          'Ship Fleet Management API for B2B',
+          'Begin VoltaOS 2.0 architecture (Edge Gen 2)',
+          'Focus on Core Maintenance & bug reduction',
+        ]
+      },
+      {
+        type: 'slider',
+        id: 'eng_bandwidth',
+        label: '% Engineering Bandwidth on Primary Priority',
+        min: 30, max: 80, default: 50, unit: '%'
+      },
+      {
+        type: 'textarea',
+        id: 'eng_rationale',
+        label: 'Strategic Rationale (3–4 sentences)',
+        placeholder: 'What is your reasoning? What are you knowingly deferring and why?',
+      }
+    ]
+  },
+  {
+    id: 'manufacturing',
+    num: 2,
+    title: 'Manufacturing & Quality',
+    subtitle: 'Speed, cost, or quality — pick the tension you are willing to hold.',
+    icon: '🏭',
+    fields: [
+      {
+        type: 'select',
+        id: 'mfg_hosur',
+        label: 'Hosur Contract Manufacturing Decision',
+        options: [
+          'Invest ₹2.2 Cr to fix Hosur quality (process audit + tooling)',
+          'Maintain Hosur as-is and accept warranty cost',
+          'Reduce Hosur volume by 50% and absorb lower output',
+          'Exit Hosur entirely and expand Pune capacity (₹8.5 Cr capex)',
+        ]
+      },
+      {
+        type: 'slider',
+        id: 'mfg_target_units',
+        label: 'Monthly Production Target (units, all sources)',
+        min: 9000, max: 18000, default: 12000, unit: ' units'
+      },
+      {
+        type: 'textarea',
+        id: 'mfg_rationale',
+        label: 'Strategic Rationale',
+        placeholder: 'What quality–cost–volume trade-off are you making this quarter?',
+      }
+    ]
+  },
+  {
+    id: 'supplychain',
+    num: 3,
+    title: 'Supply Chain & Procurement',
+    subtitle: 'The decisions that look routine until they blow up.',
+    icon: '🔗',
+    fields: [
+      {
+        type: 'select',
+        id: 'sc_battery',
+        label: 'Battery Cell Procurement Strategy',
+        options: [
+          'Full spot market (no forward contract)',
+          '50% forward contract at ₹8,600/kWh + 50% spot',
+          '100% forward contract at ₹8,600/kWh (full hedge)',
+        ]
+      },
+      {
+        type: 'select',
+        id: 'sc_chipaxis',
+        label: 'ChipAxis Single-Vendor Dependency Response',
+        options: [
+          'No action — maintain status quo',
+          'Begin qualification of alternate SoC vendor (6-month project)',
+          'Invest in in-house SoC development track (18-month horizon)',
+          'Renegotiate volume commitment for better pricing',
+        ]
+      },
+      {
+        type: 'textarea',
+        id: 'sc_rationale',
+        label: 'Strategic Rationale',
+        placeholder: 'How are you managing input cost risk and vendor concentration this quarter?',
+      }
+    ]
+  },
+  {
+    id: 'commercial',
+    num: 4,
+    title: 'Commercial & Pricing',
+    subtitle: 'Market signal interpretation under incomplete information.',
+    icon: '📈',
+    fields: [
+      {
+        type: 'select',
+        id: 'com_edge',
+        label: 'VOLTA Edge Pricing & Positioning Decision',
+        options: [
+          'Hold price at ₹1,42,000 — defend positioning',
+          'Increase price by ₹5,000 to improve margin (test price elasticity)',
+          'Reduce price by ₹5,000 to respond to ArcMotion pressure',
+          'Launch B2B fleet variant of Edge at negotiated fleet pricing',
+        ]
+      },
+      {
+        type: 'select',
+        id: 'com_go',
+        label: 'VOLTA Go Volume Strategy',
+        options: [
+          'Hold volume and pricing — status quo',
+          'Reduce Go production and focus on Edge margin improvement',
+          'Expand Go to 5 new cities (₹3.2 Cr dealer investment)',
+          'Drop Go price by ₹5,000 to defend against Zephyr',
+        ]
+      },
+      {
+        type: 'slider',
+        id: 'com_marketing',
+        label: 'Monthly Marketing & Brand Investment (₹ Lakhs)',
+        min: 10, max: 120, default: 40, unit: ' L'
+      },
+      {
+        type: 'textarea',
+        id: 'com_rationale',
+        label: 'Strategic Rationale',
+        placeholder: 'How does your commercial strategy connect to the unit economics covenant?',
+      }
+    ]
+  },
+  {
+    id: 'people',
+    num: 5,
+    title: 'People & Capability',
+    subtitle: 'The domain engineers underweight — by design.',
+    icon: '🧠',
+    fields: [
+      {
+        type: 'select',
+        id: 'ppl_retention',
+        label: 'Engineering Retention Intervention',
+        options: [
+          'ESOP acceleration scheme (₹1.8 Cr/year)',
+          'IIT Bombay structured learning program (₹60L/year)',
+          'Hybrid work policy (opposed by engineering leadership)',
+          'Both ESOP acceleration + IIT Bombay program',
+          'No specific retention investment this quarter',
+        ]
+      },
+      {
+        type: 'slider',
+        id: 'ppl_hiring',
+        label: 'New Engineering Hires This Quarter',
+        min: 0, max: 20, default: 4, unit: ' engineers'
+      },
+      {
+        type: 'textarea',
+        id: 'ppl_rationale',
+        label: 'Strategic Rationale',
+        placeholder: 'How does your people decision connect to your engineering and roadmap priorities?',
+      }
+    ]
+  }
+];
+
+function renderDecisions() {
+  const state  = getState();
+  const cont   = document.getElementById('decisionsContent');
+  const teamId = currentUser.teamId;
+
+  if (currentUser.isAdmin) {
+    cont.innerHTML = `
+      <div class="locked-overlay">
+        <span class="lock-icon">🛡</span>
+        <h3>Admin View</h3>
+        <p>Decision input is only available to participant teams. Use the Admin Panel to manage rounds, curveballs, and outcomes.</p>
+      </div>
+    `;
+    return;
+  }
+
+  if (!state.roundOpen) {
+    cont.innerHTML = `
+      <div class="locked-overlay">
+        <span class="lock-icon">🔒</span>
+        <h3>Round Closed</h3>
+        <p>The Game Master has closed decision input for this quarter. Await results and the next round briefing.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const submitted = state.decisions[teamId] && state.decisions[teamId][state.currentRound];
+
+  if (submitted) {
+    cont.innerHTML = `
+      <div style="padding: 32px; text-align:center;">
+        <div class="submitted-badge" style="margin:0 auto 20px;">✓ Decisions Submitted — Q${state.currentRound}</div>
+        <p style="color:var(--muted);font-size:14px;line-height:1.7;max-width:480px;margin:0 auto;">Your team's decisions for Quarter ${state.currentRound} have been recorded. The Game Master will process outcomes and release results. Check the Assessment page after the round closes.</p>
+      </div>
+    `;
+    return;
+  }
+
+  let html = `
+    <div class="card" style="background:var(--amber-pale);border-color:var(--amber);">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:20px;">🕐</span>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:var(--amber);">Quarter ${state.currentRound} — Decision Window Open</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">Make decisions across all five domains. Submit only when your team has aligned.</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Render each domain
+  getDecisionDomains().forEach(domain => {
+    html += `
+      <div class="decision-domain">
+        <div class="domain-header">
+          <div class="domain-num">${domain.num}</div>
+          <div>
+            <div class="domain-title">${domain.icon} ${domain.title}</div>
+            <div class="domain-subtitle">${domain.subtitle}</div>
+          </div>
+        </div>
+        <div class="domain-body">
+    `;
+
+    domain.fields.forEach(field => {
+      if (field.type === 'select') {
+        html += `<label class="field-label">${field.label}</label>`;
+        html += `<select class="field-select" id="field_${field.id}">`;
+        html += `<option value="">— select —</option>`;
+        field.options.forEach(opt => {
+          html += `<option value="${opt}">${opt}</option>`;
+        });
+        html += `</select>`;
+      } else if (field.type === 'slider') {
+        html += `
+          <label class="field-label">${field.label}</label>
+          <div class="slider-wrap">
+            <div class="slider-row">
+              <input type="range" class="slider-input" id="field_${field.id}"
+                min="${field.min}" max="${field.max}" value="${field.default}"
+                oninput="document.getElementById('val_${field.id}').textContent = this.value + '${field.unit}'">
+              <span class="slider-val" id="val_${field.id}">${field.default}${field.unit}</span>
+            </div>
+          </div>
+        `;
+      } else if (field.type === 'textarea') {
+        html += `
+          <label class="field-label">${field.label}</label>
+          <textarea class="field-textarea" id="field_${field.id}" placeholder="${field.placeholder}"></textarea>
+        `;
+      }
+    });
+
+    html += `</div></div>`;
+  });
+
+  html += `
+    <div class="submit-row">
+      <button class="btn-primary" onclick="submitDecisions()">Submit Team Decisions →</button>
+      <div class="submit-note">Ensure all five domains are completed before submitting.<br>Once submitted, decisions cannot be changed.</div>
+    </div>
+  `;
+
+  cont.innerHTML = html;
+}
+
+function submitDecisions() {
+  // Validate all fields
+  const required = getDecisionDomains().map(d => d.fields.find(f => f.type==='select')).filter(Boolean).map(f => f.id);
+  for (const id of required) {
+    const el = document.getElementById('field_' + id);
+    if (!el || !el.value) {
+      showNotification('Please complete all decision fields before submitting.', 'error');
+      return;
+    }
+  }
+
+  // Collect all decisions
+  const decisions = {};
+  getDecisionDomains().forEach(domain => {
+    domain.fields.forEach(field => {
+      const el = document.getElementById('field_' + field.id);
+      if (el) decisions[field.id] = el.value || el.textContent;
+    });
+  });
+
+  const state = getState();
+  const teamId = currentUser.teamId;
+  if (!state.decisions[teamId]) state.decisions[teamId] = {};
+  state.decisions[teamId][state.currentRound] = {
+    data: decisions,
+    timestamp: new Date().toLocaleString('en-IN', { hour12: true })
+  };
+  saveState(state);
+
+  showNotification('Decisions submitted successfully for Q' + state.currentRound, 'success');
+  renderDecisions();
+}
+
+// ═══════════════════════════════════════════════
+//  ASSESSMENTS
+// ═══════════════════════════════════════════════
+
+// Assessment content bank — consideration prompts per round
+const ROUND_ASSESSMENTS = {
+  1: {
+    title: 'Quarter 1 — Baseline Established',
+    considerations: [
+      {
+        type: 'think',
+        icon: '💭',
+        text: `<strong>On your engineering bandwidth allocation:</strong> Did your team consider that the BLE memory leak currently affects 6.2% of Edge vehicles in the field? Have you thought about how warranty claim costs compound each quarter the fix is deferred — currently running at an additional ₹12 Lakhs per month of delay?`
+      },
+      {
+        type: 'risk',
+        icon: '⚠️',
+        text: `<strong>On your battery procurement decision:</strong> The current spot price of ₹8,200/kWh sits below the forward contract rate of ₹8,600/kWh. Have you considered what your Q2 or Q3 cost structure looks like if LFP spot prices replicate the Q3 FY23 spike — which hit ₹11,800/kWh and lasted seven months?`
+      },
+      {
+        type: 'opp',
+        icon: '🔎',
+        text: `<strong>On your commercial strategy:</strong> The fast-charge EVSE integration, once shipped, opens a B2B fleet procurement channel estimated at 800–1,200 units per month at structurally better margins. Have you thought about what engineering decisions made in Q1 shorten or extend the timeline to unlocking that channel?`
+      },
+      {
+        type: 'caution',
+        icon: '📋',
+        text: `<strong>On your Hosur decision:</strong> The current warranty differential between Hosur-manufactured and Pune-manufactured Go units is 2.3x. Have you considered that the ₹2.2 Cr fix investment has a payback period of approximately 5–6 months given current warranty overhang of ₹38 Lakhs per month?`
+      },
+      {
+        type: 'think',
+        icon: '💭',
+        text: `<strong>On people and attrition:</strong> At 22% annualised attrition, your engineering team is losing ~36 engineers per year. Have you considered that each percentage point increase in attrition delays your product roadmap by approximately 3 weeks — meaning this is not a "people issue" but a product delivery risk?`
+      }
+    ]
+  },
+  2: {
+    title: 'Quarter 2 — Growth Pressure Response',
+    considerations: [
+      {
+        type: 'risk',
+        icon: '⚠️',
+        text: `<strong>On the battery price spike:</strong> If you were on full spot market entering this quarter, your blended cell cost has now increased significantly. Have you considered how this changes your gross margin trajectory on both Edge and Go — and whether this accelerates or delays the Tranche 2 covenant milestone?`
+      },
+      {
+        type: 'think',
+        icon: '💭',
+        text: `<strong>On your growth versus consolidation decision:</strong> Expanding to new cities requires a ₹3.2 Cr dealer investment and doubles commercial team workload. Have you considered whether capturing volume at negative margins improves or worsens your path to the unit economics covenant — especially for the Go?`
+      },
+      {
+        type: 'opp',
+        icon: '🔎',
+        text: `<strong>On manufacturing capacity:</strong> If your engineering priority in Q1 was the BLE fix, the warranty provision on the Edge should be beginning to decline. Have you thought about what the combined effect of warranty reduction and any volume increase does to your fixed cost allocation — and whether Edge breakeven is now within a two-quarter window?`
+      },
+      {
+        type: 'caution',
+        icon: '📋',
+        text: `<strong>On ChipAxis:</strong> The ChipAxis SoC remains a single-source dependency with a 9–14 month switch timeline. Have you considered that beginning vendor qualification now — even as a background activity — protects your roadmap optionality in Q4 and Q5, when external pressure will be highest?`
+      }
+    ]
+  },
+  3: {
+    title: 'Quarter 3 — Competitive Shock',
+    considerations: [
+      {
+        type: 'risk',
+        icon: '⚠️',
+        text: `<strong>On the competitor price move:</strong> Zephyr's ₹76,000 launch directly undercuts the Go's effective consumer price. Have you considered the downstream effect — not just on Go volume, but on dealer confidence and the commercial team's ability to defend shelf space in cities where both products are present?`
+      },
+      {
+        type: 'think',
+        icon: '💭',
+        text: `<strong>On the VoltaOS safety rating:</strong> A 3-star safety rating in a media report affects consumer trust most acutely in the Edge segment, where buyers are more research-driven. Have you thought about whether this accelerates the argument for BLE fix investment — and what it does to your NPS and warranty claim trajectory over the next two quarters?`
+      },
+      {
+        type: 'opp',
+        icon: '🔎',
+        text: `<strong>On the B2B channel:</strong> Fleet operators are largely insulated from consumer media coverage. Have you considered that Q3's competitive pressure in the consumer segment might actually make a pivot toward B2B fleet volume more — not less — attractive, if fast-charge integration is close to being shipped?`
+      },
+      {
+        type: 'caution',
+        icon: '📋',
+        text: `<strong>On pricing decisions:</strong> Dropping the Edge price to defend against ArcMotion moves you further from the ≥2% gross margin covenant. Have you considered that the covenant is measured on the Edge specifically — and that a price reduction here has a direct, linear impact on the Tranche 2 timeline?`
+      }
+    ]
+  },
+  4: {
+    title: 'Quarter 4 — Crisis Management',
+    considerations: [
+      {
+        type: 'risk',
+        icon: '⚠️',
+        text: `<strong>On the FAME III restructuring:</strong> If the Go loses its ₹12,000 per unit FAME II qualification, the effective price rises by that amount for the consumer — or VOLTA absorbs the margin hit. Have you considered whether the Go's commercial viability at this cost structure warrants continued investment, or whether this is the trigger to reweight toward Edge?`
+      },
+      {
+        type: 'think',
+        icon: '💭',
+        text: `<strong>On the Pune work stoppage risk:</strong> Teams that over-indexed Hosur in Q1 and Q2 have reduced buffer against a Pune production disruption. Have you considered how your current Pune-to-Hosur volume split affects your resilience — and what your minimum viable output is to maintain dealer commitments and cash flow?`
+      },
+      {
+        type: 'opp',
+        icon: '🔎',
+        text: `<strong>On the crisis as signal:</strong> Crisis quarters tend to reveal which earlier decisions were structurally sound versus tactically convenient. Have you considered which of your Q1 and Q2 decisions are now providing insulation — and which are amplifying the pressure? The pattern here is worth naming explicitly within your team.`
+      },
+      {
+        type: 'caution',
+        icon: '📋',
+        text: `<strong>On cash runway:</strong> With multiple compounding pressures in Q4, have you modelled your cash runway scenario under a combined stress test — FAME III cut, battery price spike (if unhedged), and production disruption? Runway management in a crisis is a leadership discipline, not a finance task.`
+      }
+    ]
+  },
+  5: {
+    title: 'Quarter 5 — Legacy and Investor Readiness',
+    considerations: [
+      {
+        type: 'opp',
+        icon: '🔎',
+        text: `<strong>On the acquisition offer:</strong> The ₹900 Cr offer is contingent on clean IP — meaning VoltaOS must be fully in-house. Have you considered whether decisions made in earlier quarters to outsource any VoltaOS module have created an IP dependency that discounts or eliminates this option?`
+      },
+      {
+        type: 'think',
+        icon: '💭',
+        text: `<strong>On your trajectory versus the covenant:</strong> The investor review cares primarily about whether positive Edge gross margin has been achieved and held for two consecutive months. Have you considered whether your Q4 and Q5 decisions brought you closer to or further from that specific milestone — and what story the metric sequence tells?`
+      },
+      {
+        type: 'risk',
+        icon: '⚠️',
+        text: `<strong>On organisational health:</strong> Five quarters of decisions have compounded in your team capability index. Have you considered that an organisation under sustained pressure without intentional investment in people tends to lose its highest performers first — and that this is the asset the acquirer is actually buying?`
+      },
+      {
+        type: 'caution',
+        icon: '📋',
+        text: `<strong>On the full arc:</strong> Looking across all five quarters, have you considered which of your earliest decisions created the most lasting structural advantage or disadvantage? The supply chain hedge, the BLE fix timing, the Hosur quality investment — these early calls have long tails. What would you have changed, and when?`
+      }
+    ]
+  }
+};
+
+function renderAssessments() {
+  const state  = getState();
+  const teamId = currentUser.isAdmin ? 'team1' : currentUser.teamId;
+  const cont   = document.getElementById('assessmentContent');
+
+  // Find completed rounds
+  const completedRounds = [];
+  for (let r = 1; r < state.currentRound; r++) {
+    if (state.outcomes && state.outcomes[r]) completedRounds.push(r);
+  }
+
+  if (completedRounds.length === 0) {
+    cont.innerHTML = `
+      <div class="empty-state">
+        <span class="icon">◎</span>
+        <h3>No Results Yet</h3>
+        <p>Assessments and round outcomes will appear here after each quarter closes. Complete your Q${state.currentRound} decisions first.</p>
+      </div>
+    `;
+    return;
+  }
+
+  cont.innerHTML = '';
+  completedRounds.reverse().forEach(round => {
+    const outcome   = state.outcomes[round];
+    const scoreData = state.scores[teamId];
+    const roundScore = scoreData && scoreData.history[round - 1] ? scoreData.history[round - 1] : Math.floor(60 + Math.random() * 25);
+    const assessment = getRoundAssessments()[round];
+    const teamMetrics = outcome && outcome[teamId] ? outcome[teamId] : defaultMetrics();
+
+    const gmChange = teamMetrics.grossMargin - (round === 1 ? -5.8 : (state.outcomes[round-1] && state.outcomes[round-1][teamId] ? state.outcomes[round-1][teamId].grossMargin : -5.8));
+    const gmClass = gmChange >= 0 ? 'good' : 'bad';
+
+    let html = `
+      <div class="assessment-card">
+        <div class="assessment-header">
+          <div class="assessment-q-badge">Q${round}</div>
+          <div class="assessment-title">${assessment.title}</div>
+          <div class="assessment-score-badge">
+            <div class="assessment-score-num">${roundScore}</div>
+            <div class="assessment-score-label">/ 100 pts</div>
+          </div>
+        </div>
+        <div class="assessment-body">
+          <div class="assessment-metrics-row">
+            <div class="assess-metric">
+              <span class="assess-metric-val ${teamMetrics.revenue > 16 ? 'good' : 'neutral'}">₹${teamMetrics.revenue}Cr</span>
+              <span class="assess-metric-label">Monthly Revenue</span>
+            </div>
+            <div class="assess-metric">
+              <span class="assess-metric-val ${teamMetrics.grossMargin >= 0 ? 'good' : 'bad'}">${teamMetrics.grossMargin > 0 ? '+' : ''}${teamMetrics.grossMargin}%</span>
+              <span class="assess-metric-label">Gross Margin</span>
+            </div>
+            <div class="assess-metric">
+              <span class="assess-metric-val ${teamMetrics.cashRunway > 15 ? 'good' : 'neutral'}">${teamMetrics.cashRunway}mo</span>
+              <span class="assess-metric-label">Cash Runway</span>
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+              <span style="width:20px;height:1px;background:var(--wire);display:inline-block;"></span>
+              Considerations for Reflection
+              <span style="flex:1;height:1px;background:var(--wire);display:inline-block;"></span>
+            </div>
+            <ul class="consideration-list">
+    `;
+
+    assessment.considerations.forEach(item => {
+      html += `
+        <li class="consideration-item">
+          <div class="consid-icon ${item.type}">${item.icon}</div>
+          <div class="consid-text">${item.text}</div>
+        </li>
+      `;
+    });
+
+    html += `</ul></div></div></div>`;
+    cont.innerHTML += html;
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  DECISION HISTORY
+// ═══════════════════════════════════════════════
+const DOMAIN_LABELS = {
+  eng_priority:    'Engineering Priority',
+  eng_bandwidth:   'Bandwidth Allocation',
+  eng_rationale:   'Engineering Rationale',
+  mfg_hosur:       'Hosur Decision',
+  mfg_target_units:'Production Target',
+  mfg_rationale:   'Manufacturing Rationale',
+  sc_battery:      'Battery Procurement',
+  sc_chipaxis:     'ChipAxis Strategy',
+  sc_rationale:    'Supply Chain Rationale',
+  com_edge:        'Edge Pricing',
+  com_go:          'Go Strategy',
+  com_marketing:   'Marketing Spend',
+  com_rationale:   'Commercial Rationale',
+  ppl_retention:   'Retention Intervention',
+  ppl_hiring:      'New Hires',
+  ppl_rationale:   'People Rationale',
+  // Case B
+  pd_path:'Nimbus Path', pd_comms:'Communication', pd_why:'Product Rationale',
+  fp_top:'Priority Feature', fp_bw:'Eng Bandwidth', fp_why:'Prioritisation Rationale',
+  cm_budget:'Nimbus Budget', cm_drift:'Drift Budget', cm_why:'Cash Rationale',
+  cr_drift:'Drift Strategy', cr_dealer:'Dealer Management', cr_why:'Commercial Rationale',
+  ps_ret:'Retention', ps_amb:'Ambiguity Tolerance', ps_why:'People Rationale',
+};
+
+async function renderHistory() {
+  const cont = document.getElementById('historyContent');
+  cont.innerHTML = '<div class="empty-state"><span class="icon">▦</span><h3>Loading...</h3></div>';
+
+  if (!currentSession || !currentTeam) {
+    cont.innerHTML = '<div class="empty-state"><span class="icon">▦</span><h3>No Decisions Yet</h3><p>Your team submitted decisions will appear here quarter by quarter.</p></div>';
+    return;
+  }
+
+  const allDecisions = await dbGetAllDecisions(currentSession.id);
+  const myDecisions  = allDecisions.filter(d => d.team_id === currentTeam.id);
+
+  // Group by round
+  const byRound = {};
+  myDecisions.forEach(d => {
+    if (!byRound[d.round]) byRound[d.round] = [];
+    byRound[d.round].push(d);
+  });
+
+  const teamDec = byRound;
+
+  if (Object.keys(teamDec).length === 0) {
+    cont.innerHTML = '<div class="empty-state"><span class="icon">▦</span><h3>No Decisions Yet</h3><p>Your team submitted decisions will appear here quarter by quarter.</p></div>';
+    return;
+  }
+
+  cont.innerHTML = '';
+  Object.keys(teamDec).sort((a,b) => b - a).forEach(round => {
+    const fields = teamDec[round];
+    const entry = { data: Object.fromEntries(fields.map(d => [d.field_id, d.value])), timestamp: fields[0]?.submitted_at ? new Date(fields[0].submitted_at).toLocaleString('en-IN',{hour12:true}) : 'Unknown' };
+    const scoreData= state.scores[teamId];
+    const roundScore = scoreData && scoreData.history[round-1] ? scoreData.history[round-1] : null;
+    const qTheme   = QUARTERS[round-1] ? QUARTERS[round-1].theme : '';
+
+    const div = document.createElement('div');
+    div.className = 'history-entry';
+    div.innerHTML = `
+      <div class="history-header" onclick="toggleHistory(this)">
+        <div>
+          <div class="history-q-label">Quarter ${round}</div>
+          <div class="history-q-title">${qTheme}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          ${roundScore ? `<div class="history-score-badge">${roundScore} pts</div>` : '<span class="tag amber">Pending</span>'}
+          <div class="history-toggle">▾</div>
+        </div>
+      </div>
+      <div class="history-body">
+        ${Object.entries(entry.data || {}).map(([key, val]) => `
+          <div class="history-decision-row">
+            <div class="history-domain-label">${DOMAIN_LABELS[key] || key}</div>
+            <div class="history-decision-val">${val}</div>
+          </div>
+        `).join('')}
+        <div style="font-size:11px;color:var(--faint);margin-top:12px;font-family:var(--mono);">Submitted: ${entry.timestamp}</div>
+      </div>
+    `;
+    cont.appendChild(div);
+  });
+}
+
+function toggleHistory(headerEl) {
+  const body   = headerEl.nextElementSibling;
+  const toggle = headerEl.querySelector('.history-toggle');
+  const open   = body.classList.toggle('open');
+  toggle.classList.toggle('open', open);
+}
+
+// ═══════════════════════════════════════════════
+//  LEADERBOARD
+// ═══════════════════════════════════════════════
+const LB_TEAMS = [
+  { id: "team1", name: "Alpha" },
+  { id: "team2", name: "Beta" },
+  { id: "team3", name: "Gamma" },
+  { id: "team4", name: "Delta" },
+  { id: "team5", name: "Epsilon" },
+  { id: "team6", name: "Zeta" },
+];
+
+const RANK_ICONS = ['🥇', '🥈', '🥉', '4', '5', '6'];
+
+function renderLeaderboard() {
+  const state = getState();
+  const cont  = document.getElementById('leaderboardContent');
+  const myId  = currentUser.isAdmin ? null : currentUser.teamId;
+
+  // Build sorted scores
+  const rows = LB_TEAMS.map(t => {
+    const scoreObj = state.scores[t.id] || { total: 0, history: [] };
+    const total    = scoreObj.total;
+    const prev     = scoreObj.history.length > 1 ? scoreObj.history[scoreObj.history.length - 2] : null;
+    const latest   = scoreObj.history.length > 0 ? scoreObj.history[scoreObj.history.length - 1] : null;
+    const delta    = prev !== null && latest !== null ? latest - prev : null;
+    const metrics  = state.metrics[t.id] || defaultMetrics();
+    return { ...t, total, delta, metrics };
+  }).sort((a,b) => b.total - a.total);
+
+  let html = `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:20px 24px;border-bottom:1px solid var(--wire);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="card-title">Simulation Leaderboard</div>
+          <div class="card-subtitle">After Q${state.currentRound - 1} · Updated on round close</div>
+        </div>
+        <span class="tag amber">Q${state.currentRound} In Progress</span>
+      </div>
+      <div>
+        <div class="lb-row header">
+          <div class="lb-cell">#</div>
+          <div class="lb-cell">Team</div>
+          <div class="lb-cell">Revenue</div>
+          <div class="lb-cell">Margin</div>
+          <div class="lb-cell">Runway</div>
+          <div class="lb-cell">Health</div>
+          <div class="lb-cell">Total Score</div>
+        </div>
+  `;
+
+  rows.forEach((row, i) => {
+    const isMe   = row.id === myId;
+    const rankEl = i < 3 ? `<div class="lb-rank ${['gold','silver','bronze'][i]}">${RANK_ICONS[i]}</div>` : `<div class="lb-rank">${i+1}</div>`;
+    const deltaEl = row.delta !== null
+      ? `<span class="lb-delta ${row.delta >= 0 ? 'up' : 'down'}">${row.delta >= 0 ? '▲' : '▼'}${Math.abs(row.delta)}</span>`
+      : '';
+    const myTag  = isMe ? `<span class="lb-tag">You</span>` : '';
+    const marginColor = row.metrics.grossMargin >= 2 ? 'color:var(--volt-dim);font-weight:700;' : row.metrics.grossMargin >= 0 ? 'color:var(--amber);' : 'color:var(--red);';
+
+    html += `
+      <div class="lb-row ${isMe ? 'my-team' : ''}">
+        ${rankEl}
+        <div class="lb-cell"><span class="lb-team-name">${row.name}</span>${myTag}</div>
+        <div class="lb-cell">₹${row.metrics.revenue}Cr</div>
+        <div class="lb-cell" style="${marginColor}">${row.metrics.grossMargin > 0 ? '+' : ''}${row.metrics.grossMargin}%</div>
+        <div class="lb-cell">${row.metrics.cashRunway}mo</div>
+        <div class="lb-cell">${row.metrics.productHealth}/100</div>
+        <div class="lb-cell score ${i === 0 ? 'top' : ''}">${row.total > 0 ? row.total : '—'} ${deltaEl}</div>
+      </div>
+    `;
+  });
+
+  html += `</div></div>`;
+
+  // Dimension breakdown
+  html += `
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header">
+        <div class="card-icon blue">📐</div>
+        <div>
+          <div class="card-title">Scoring Dimensions</div>
+          <div class="card-subtitle">How the Leadership Index is weighted</div>
+        </div>
+      </div>
+      <div class="grid-4">
+        ${[
+          { label: 'Financial Health', weight: '30%', desc: 'Revenue, margin trajectory, cash position' },
+          { label: 'Market Position', weight: '25%', desc: 'Volume, share index, brand health' },
+          { label: 'Org Resilience', weight: '25%', desc: 'Team capability, attrition, execution quality' },
+          { label: 'Innovation Pipeline', weight: '20%', desc: 'Product health, roadmap, tech differentiation' },
+        ].map(d => `
+          <div class="stat-tile">
+            <div class="stat-label">${d.label}</div>
+            <div class="stat-value" style="font-size:22px;color:var(--accent);">${d.weight}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">${d.desc}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  cont.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════
+//  ADMIN PANEL
+// ═══════════════════════════════════════════════
+function renderAdmin() {
+  const state = getState();
+  const cont  = document.getElementById('adminContent');
+
+  // Team submission status
+  const submissionStatus = LB_TEAMS.map(t => {
+    const submitted = state.decisions[t.id] && state.decisions[t.id][state.currentRound];
+    return { ...t, submitted: !!submitted };
+  });
+
+  const submittedCount = submissionStatus.filter(t => t.submitted).length;
+
+  // Load session data
+  if (currentSession && !_stateCache) { loadStateFromDB(); }
+
+  cont.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+      <div class="card-title">Admin Panel</div>
+      <span class="admin-chip">🛡 Game Master</span>
+    </div>
+
+
+    <!-- SESSION MANAGEMENT -->
+    <div class="card" style="margin-bottom:20px;border-left:3px solid var(--volt);">
+      <div class="admin-section-title">Session Management</div>
+      ${currentSession ? `
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+          <div class="stat-tile" style="flex:1">
+            <div class="stat-label">Active Session</div>
+            <div class="stat-value" style="font-size:22px;letter-spacing:2px">${currentSession.code}</div>
+          </div>
+          <div class="stat-tile" style="flex:1">
+            <div class="stat-label">Cohort</div>
+            <div class="stat-value" style="font-size:18px">${currentSession.cohort_name}</div>
+          </div>
+          <div class="stat-tile" style="flex:1">
+            <div class="stat-label">Share Link</div>
+            <div class="stat-value" style="font-size:12px;font-family:var(--mono);color:var(--volt)">${window.location.origin}${window.location.pathname}#/session/${currentSession.code}</div>
+          </div>
+          <button class="btn-secondary" onclick="copySessionLink()" style="flex-shrink:0">Copy Link</button>
+        </div>
+      ` : `
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">No active session. Create one to begin a simulation run with a cohort.</p>
+      `}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
+        <div>
+          <label class="field-label">Cohort Name</label>
+          <input type="text" id="newCohortName" class="login-input" placeholder="e.g. Catalyst Batch 4 — Oct 2025"
+            style="background:var(--surface);border-color:var(--wire);color:var(--ink);margin:0;padding:11px 14px;font-size:13px;width:100%">
+        </div>
+        <div>
+          <label class="field-label">Case</label>
+          <select id="newCaseSlug" class="field-select" style="margin:0">
+            <option value="volta">Case A — VOLTA Motors</option>
+            <option value="arc">Case B — ARC Motors</option>
+            <option value="demo">Demo — ShopPulse</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Admin Email (for session)</label>
+          <input type="email" id="newAdminEmail" class="login-input" placeholder="you@ather.in"
+            style="background:var(--surface);border-color:var(--wire);color:var(--ink);margin:0;padding:11px 14px;font-size:13px;width:100%">
+        </div>
+        <button class="btn-volt" onclick="adminCreateSession()" style="white-space:nowrap">Create New Session</button>
+      </div>
+    </div>
+
+    <!-- ROUND CONTROL -->
+    <div class="card">
+      <div class="admin-section-title">Round Control</div>
+      <div class="grid-3" style="margin-bottom:20px;">
+        <div class="stat-tile">
+          <div class="stat-label">Current Quarter</div>
+          <div class="stat-value">Q${state.currentRound}</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Round Status</div>
+          <div class="stat-value" style="color:${state.roundOpen ? 'var(--volt-dim)' : 'var(--red)'};">${state.roundOpen ? 'Open' : 'Closed'}</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Submissions</div>
+          <div class="stat-value">${submittedCount} / 6</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <button class="btn-volt" onclick="adminToggleRound()">${state.roundOpen ? '🔒 Close Decision Window' : '🔓 Open Decision Window'}</button>
+        ${state.currentRound < 5 ? `<button class="btn-primary" onclick="adminAdvanceRound()">Advance to Q${state.currentRound + 1} →</button>` : '<span class="tag green">Final Round</span>'}
+        <button class="btn-secondary" onclick="adminResetGame()" style="margin-left:auto;border-color:var(--red);color:var(--red);">Reset Simulation</button>
+      </div>
+    </div>
+
+    <!-- TEAM STATUS -->
+    <div class="card">
+      <div class="admin-section-title">Team Submission Status — Q${state.currentRound}</div>
+      <div class="admin-team-grid">
+        ${submissionStatus.map(t => `
+          <div class="admin-team-card">
+            <div class="admin-team-card-name">${t.name}</div>
+            <div class="admin-team-card-status">
+              <span class="status-dot ${t.submitted ? 'submitted' : 'pending'}"></span>
+              ${t.submitted ? 'Decisions Submitted' : 'Awaiting Submission'}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- CURVEBALL INJECTION -->
+    <div class="card">
+      <div class="admin-section-title">Curveball Injection</div>
+      <div class="cb-compose">
+        <div class="grid-2" style="margin-bottom:12px;">
+          <div>
+            <label class="field-label">Event Title</label>
+            <input type="text" class="login-input" id="cbTitle" placeholder="e.g. LFP Cell Price Spike — Spot Rate +22%"
+              style="background:white;border-color:var(--wire);color:var(--ink);margin:0;">
+          </div>
+          <div>
+            <label class="field-label" style="margin-top:0;">Applies to Quarter</label>
+            <select class="field-select" id="cbRound" style="margin:0;">
+              ${[1,2,3,4,5].map(r => `<option value="${r}" ${r === state.currentRound ? 'selected' : ''}>Q${r}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <label class="field-label">Event Description (shown to all teams simultaneously)</label>
+        <textarea class="field-textarea" id="cbBody" placeholder="Describe the market event, its confirmed facts, and any ambiguity teams must navigate. Be factual and precise." style="min-height:100px;"></textarea>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <button class="btn-danger" onclick="adminInjectCurveball()">⚡ Inject Curveball — Broadcast to All Teams</button>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;max-width:280px;">This will immediately appear on all team screens as a red alert banner and notification modal.</div>
+      </div>
+    </div>
+
+    <!-- SCORE & OUTCOMES -->
+    <div class="card">
+      <div class="admin-section-title">Post-Round Outcome Scoring</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6;">
+        After reviewing team submissions, enter the simulated outcomes for each team. These populate their dashboard metrics and leaderboard. Adjust based on decision quality and your scoring matrix.
+      </p>
+      <div id="scoringPanelContent">
+        ${LB_TEAMS.map(t => `
+          <div style="border:1px solid var(--wire);border-radius:var(--radius-sm);padding:16px;margin-bottom:12px;">
+            <div style="font-weight:700;font-size:14px;margin-bottom:12px;color:var(--ink);">${t.name}</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+              <div>
+                <label class="field-label">Revenue (₹Cr)</label>
+                <input type="number" class="login-input" id="score_revenue_${t.id}" placeholder="16.8"
+                  style="background:white;border-color:var(--wire);color:var(--ink);margin:0;padding:8px 12px;font-size:13px;">
+              </div>
+              <div>
+                <label class="field-label">Gross Margin (%)</label>
+                <input type="number" class="login-input" id="score_gm_${t.id}" placeholder="-5.8"
+                  style="background:white;border-color:var(--wire);color:var(--ink);margin:0;padding:8px 12px;font-size:13px;">
+              </div>
+              <div>
+                <label class="field-label">Cash Runway (mo)</label>
+                <input type="number" class="login-input" id="score_runway_${t.id}" placeholder="22"
+                  style="background:white;border-color:var(--wire);color:var(--ink);margin:0;padding:8px 12px;font-size:13px;">
+              </div>
+              <div>
+                <label class="field-label">Leadership Score (/100)</label>
+                <input type="number" class="login-input" id="score_pts_${t.id}" placeholder="70"
+                  style="background:white;border-color:var(--wire);color:var(--ink);margin:0;padding:8px 12px;font-size:13px;">
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn-primary" onclick="adminPublishOutcomes()" style="margin-top:8px;">Publish Outcomes to All Teams →</button>
+    </div>
+
+    <!-- CURVEBALL BANK -->
+    <div class="card">
+      <div class="admin-section-title" id="cbBankTitle">Curveball Idea Bank</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="cbBankGrid"></div>
+    </div>
+  `;
+  renderCurveballBank();
+}
+
+function prefillCurveball(title, body, q) {
+  document.getElementById('cbTitle').value = title;
+  document.getElementById('cbBody').value  = body;
+  const qNum = parseInt(q.replace('Q',''));
+  document.getElementById('cbRound').value = qNum;
+}
+
+
+async function adminCreateSession() {
+  const cohortName = document.getElementById('newCohortName')?.value.trim();
+  const caseSlug   = document.getElementById('newCaseSlug')?.value;
+  const adminEmail = document.getElementById('newAdminEmail')?.value.trim();
+
+  if (!cohortName) { showNotification('Please enter a cohort name.', 'error'); return; }
+  if (!adminEmail) { showNotification('Please enter your admin email.', 'error'); return; }
+
+  const btn = document.querySelector('[onclick="adminCreateSession()"]');
+  if (btn) { btn.textContent = 'Creating...'; btn.disabled = true; }
+
+  const sess = await dbCreateSession(caseSlug, cohortName, adminEmail);
+
+  if (btn) { btn.textContent = 'Create New Session'; btn.disabled = false; }
+
+  if (!sess) { showNotification('Failed to create session. Check Supabase connection.', 'error'); return; }
+
+  currentSession = sess;
+  // Update selected case to match
+  selectedCase = caseSlug === 'volta' ? 'A' : caseSlug === 'arc' ? 'B' : 'demo';
+  applyCaseConfig();
+
+  const link = window.location.origin + window.location.pathname + '#/session/' + sess.code;
+  showNotification('Session created: ' + sess.code + ' — share the link with participants!', 'success');
+
+  setSessionInURL(sess.code);
+  _stateCache = null;
+  await loadStateFromDB();
+  renderAdmin();
+}
+
+async function copySessionLink() {
+  if (!currentSession) return;
+  const link = window.location.origin + window.location.pathname + '#/session/' + currentSession.code;
+  try {
+    await navigator.clipboard.writeText(link);
+    showNotification('Session link copied to clipboard!', 'success');
+  } catch(e) {
+    prompt('Copy this session link:', link);
+  }
+}
+
+async function adminToggleRound() {
+  if (!currentSession) return;
+  const newOpen = !currentSession.round_open;
+  await dbUpdateSession(currentSession.id, { round_open: newOpen });
+  currentSession.round_open = newOpen;
+  if (_stateCache) _stateCache.roundOpen = newOpen;
+  renderAdmin();
+  showNotification(newOpen ? 'Decision window opened for all teams.' : 'Decision window closed.', 'success');
+}
+
+async function adminAdvanceRound() {
+  if (!currentSession || currentSession.current_round >= 5) return;
+  const newRound = currentSession.current_round + 1;
+  await dbUpdateSession(currentSession.id, { current_round: newRound, round_open: true });
+  currentSession.current_round = newRound;
+  currentSession.round_open = true;
+  _stateCache = null;
+  await loadStateFromDB();
+  renderApp();
+  renderAdmin();
+  showNotification('Advanced to Quarter ' + newRound + '. Decision window is now open.', 'success');
+}
+
+async function adminInjectCurveball() {
+  const title = document.getElementById('cbTitle').value.trim();
+  const body  = document.getElementById('cbBody').value.trim();
+  const round = parseInt(document.getElementById('cbRound').value);
+
+  if (!title || !body) { showNotification('Please fill in both the event title and description.', 'error'); return; }
+  if (!currentSession) { showNotification('No active session.', 'error'); return; }
+
+  const ok = await dbInjectCurveball(currentSession.id, round, title, body, currentSession.admin_email);
+  if (!ok) { showNotification('Failed to inject curveball.', 'error'); return; }
+
+  showNotification('\u26a1 Curveball injected — all teams notified via realtime.', 'success');
+  document.getElementById('cbTitle').value = '';
+  document.getElementById('cbBody').value  = '';
+}
+
+async function adminPublishOutcomes() {
+  if (!currentSession) { showNotification('No active session.', 'error'); return; }
+  const state = getState();
+  const round = currentSession.current_round;
+  const teams = (state._teams || []);
+
+  const btn = document.querySelector('[onclick="adminPublishOutcomes()"]');
+  if (btn) { btn.textContent = 'Publishing...'; btn.disabled = true; }
+
+  const slotToKey = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
+
+  const promises = LB_TEAMS.map(async t => {
+    const teamObj = (state._teamMap||{})[t.id] || teams.find(x => slotToKey[x.slot] === t.id);
+    if (!teamObj) return;
+
+    const revenue = parseFloat(document.getElementById('score_revenue_'+t.id)?.value) || state.metrics[t.id]?.revenue || 0;
+    const gm      = parseFloat(document.getElementById('score_gm_'+t.id)?.value)      || state.metrics[t.id]?.grossMargin || 0;
+    const runway  = parseFloat(document.getElementById('score_runway_'+t.id)?.value)  || state.metrics[t.id]?.cashRunway || 0;
+    const pts     = parseFloat(document.getElementById('score_pts_'+t.id)?.value)     || 65;
+
+    const metrics = { revenue, grossMargin: gm, cashRunway: runway,
+      marketShare: state.metrics[t.id]?.marketShare || 50,
+      productHealth: state.metrics[t.id]?.productHealth || 60,
+      teamCapability: state.metrics[t.id]?.teamCapability || 65 };
+
+    return dbPublishOutcome(currentSession.id, teamObj.id, round, metrics, pts);
+  });
+
+  await Promise.all(promises);
+  if (btn) { btn.textContent = 'Publish Outcomes to All Teams →'; btn.disabled = false; }
+
+  // Invalidate cache so fresh data loads
+  _stateCache = null;
+  await loadStateFromDB();
+
+  renderAdmin();
+  showNotification('Outcomes published — all team dashboards updated.', 'success');
+}
+
+function adminResetGame() {
+  if (!confirm('Reset the entire simulation? This cannot be undone.')) return;
+  //localStorage.removeItem(STORAGE_KEY());
+  initState();
+  renderApp();
+  renderAdmin();
+  showNotification('Simulation reset to Q1.', 'info');
+}
+
+// ═══════════════════════════════════════════════
+//  NOTIFICATION
+// ═══════════════════════════════════════════════
+let notifTimer = null;
+function showNotification(msg, type = 'success') {
+  const el = document.getElementById('notification');
+  el.textContent   = msg;
+  el.className     = `notification ${type} show`;
+  if (notifTimer) clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => { el.classList.remove('show'); }, 3500);
+}
+
+// ═══════════════════════════════════════════════
+//  SCORE DISPLAY
+// ═══════════════════════════════════════════════
+function updateTopbarScore() {
+  const state = getState();
+  const teamId= currentUser?.isAdmin ? null : currentUser?.teamId;
+  if (teamId && state.scores[teamId]) {
+    const total = state.scores[teamId].total;
+    document.getElementById('topbarScore').textContent = total > 0 ? total + ' pts' : '—';
+  }
+}
+
+// ── PAGE LOAD: check URL for session code ──────────────────────────
+document.addEventListener('DOMContentLoaded', async function() {
+  const code = getSessionCodeFromURL();
+  if (code) {
+    const sess = await dbGetSession(code);
+    if (sess) {
+      currentSession = sess;
+      selectedCase = sess.cases?.slug || 'volta';
+      if (selectedCase === 'volta') selectedCase = 'A';
+      else if (selectedCase === 'arc') selectedCase = 'B';
+      else if (selectedCase === 'demo') selectedCase = 'demo';
+
+      // Pre-select case and show login step
+      document.getElementById('caseStep').classList.add('hidden');
+      document.getElementById('loginStep').classList.remove('hidden');
+      const badge = document.getElementById('selectedCaseBadge');
+      const cfg = CASE_CTX[selectedCase] || CASE_CTX['A'];
+      if (badge) { badge.className = 'case-badge ' + cfg.badgeClass; badge.textContent = cfg.badgeText; }
+
+      // Update team options with correct board name
+      ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta'].forEach(function(n,i) {
+        var el = document.getElementById('t'+(i+1)+'opt');
+        if (el) el.textContent = cfg.board + ' — ' + n;
+      });
+
+      showNotification('Session ' + code + ' loaded: ' + (sess.cohort_name||''), 'success');
+    } else {
+      showNotification('Session "' + code + '" not found.', 'error');
+    }
+  }
+});
+
+// Poll for state changes (simulates multi-team real-time in single-browser demo)
+setInterval(() => {
+  if (!currentUser) return;
+  const state = getState();
+  checkCurveballs();
+  renderRoundPips();
+  renderKPIs();
+  renderMetrics();
+  updateTopbarScore();
+  document.getElementById('topbarRound').textContent = 'Quarter ' + state.currentRound;
+  var tn = document.getElementById('topbarCaseName'); if(tn) tn.textContent = CASE_CTX[selectedCase].company;
+}, 3000);
+</script>
+</body>
+</html>
