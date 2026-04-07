@@ -130,4 +130,3 @@ create policy "outcomes_update" on outcomes for update using (true);
 -- Curveballs: read/write
 create policy "curveballs_read"   on curveballs for select using (true);
 create policy "curveballs_insert" on curveballs for insert with check (true);
-
