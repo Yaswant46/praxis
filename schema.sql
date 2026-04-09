@@ -96,6 +96,25 @@ insert into cases (slug, name, subtitle, difficulty, series, description) values
    'A quick-commerce startup facing a classic growth vs. margin dilemma. Built as a taster for first-time Praxis participants.')
 on conflict (slug) do nothing;
 
+-- ── PARTICIPANT FIELDS ON TEAMS ──────────────────────────────
+alter table teams add column if not exists participant_email text;
+alter table teams add column if not exists participant_name text;
+
+-- ── MASTER ADMINS ───────────────────────────────────────────
+create table if not exists master_admins (
+  id         uuid primary key default gen_random_uuid(),
+  email      text unique not null,
+  created_at timestamptz default now()
+);
+
+-- Seed the superuser
+insert into master_admins (email) values ('ross.harvey92@gmail.com')
+on conflict (email) do nothing;
+
+-- RLS for master_admins
+alter table master_admins enable row level security;
+create policy "master_admins_read" on master_admins for select using (true);
+
 -- ── ROW LEVEL SECURITY ───────────────────────────────────────
 alter table cases      enable row level security;
 alter table sessions   enable row level security;
