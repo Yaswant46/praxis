@@ -1620,16 +1620,19 @@ input, select, textarea { font-family: var(--sans); }
 // =================================================
 const SUPA_URL = 'https://towyztagdudjbxfevnus.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvd3l6dGFnZHVkamJ4ZmV2bnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NzA0NzQsImV4cCI6MjA5MTE0NjQ3NH0.57SNbO6ZtxxZOgd1OPlE3mT92F62-dTSavqVEWK2ENA';
-// Safe Supabase init — waits for SDK to be available
-var supabase = null;
+// Safe Supabase init — the CDN sets window.supabase as the SDK object.
+// We store our client in _supabaseClient to avoid shadowing the SDK global.
+var _supabaseClient = null;
 function initSupabase() {
-  if (window.supabase && window.supabase.createClient) {
-    supabase = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+  if (_supabaseClient) return true;
+  var sdk = window.supabase;
+  if (sdk && sdk.createClient) {
+    _supabaseClient = sdk.createClient(SUPA_URL, SUPA_KEY);
     return true;
   }
   return false;
 }
-// Try immediately; SDK script loaded at end of body will call this again
+// Try immediately; if SDK already loaded this will succeed
 initSupabase();
 
 // Session context (set after login)
@@ -1653,8 +1656,8 @@ function setSessionInURL(code) {
 //  DB LAYER — replaces localStorage
 // =================================================
 function getSupabase() {
-  if (!supabase) initSupabase();
-  return supabase;
+  if (!_supabaseClient) initSupabase();
+  return _supabaseClient;
 }
 
 async function dbGetSession(code) {
@@ -1744,14 +1747,15 @@ async function dbUpdateSession(sessionId, updates) {
 }
 
 async function dbCreateSession(caseSlug, cohortName, adminEmail) {
+  var sb = getSupabase(); if (!sb) return null;
   // Get case id
-  const { data: caseData } = await supabase.from('cases').select('id').eq('slug', caseSlug).single();
+  const { data: caseData } = await sb.from('cases').select('id').eq('slug', caseSlug).single();
   if (!caseData) return null;
 
   // Generate 6-char code
   const code = Math.random().toString(36).substring(2,8).toUpperCase();
 
-  const { data: sess, error } = await supabase.from('sessions').insert({
+  const { data: sess, error } = await sb.from('sessions').insert({
     code, case_id: caseData.id, cohort_name: cohortName,
     admin_email: adminEmail, current_round: 1, round_open: true, status: 'active'
   }).select().single();
@@ -1764,7 +1768,7 @@ async function dbCreateSession(caseSlug, cohortName, adminEmail) {
   const teams = slots.map((slot, i) => ({
     session_id: sess.id, slot, display_name: names[i], access_code: codes[i]
   }));
-  await supabase.from('teams').insert(teams);
+  await sb.from('teams').insert(teams);
 
   return sess;
 }
@@ -1775,7 +1779,7 @@ async function dbCreateSession(caseSlug, cohortName, adminEmail) {
 var realtimeChannel = null;
 
 function subscribeToSession(sessionId) {
-  if (realtimeChannel && supabase) { supabase.removeChannel(realtimeChannel); }
+  if (realtimeChannel && _supabaseClient) { _supabaseClient.removeChannel(realtimeChannel); }
   var _sb = getSupabase();
   if (!_sb) return;
   realtimeChannel = _sb.channel('session:' + sessionId)
