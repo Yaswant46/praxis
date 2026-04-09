@@ -1272,6 +1272,37 @@ input, select, textarea { font-family: var(--sans); }
 .case-badge.volta{background:rgba(0,200,83,.15);color:var(--volt);border:1px solid rgba(0,200,83,.3)}
 .case-badge.arc{background:rgba(21,101,192,.15);color:#64b5f6;border:1px solid rgba(21,101,192,.3)}
 
+/* ═══════════════════════════════════════════════
+   NEW LOGIN FLOW — ROLE CARDS + OTP
+═══════════════════════════════════════════════ */
+.role-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px}
+.role-card{background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.1);border-radius:14px;padding:28px 20px;cursor:pointer;text-align:center;transition:all .2s}
+.role-card:hover{border-color:var(--volt);background:rgba(0,200,83,.06);transform:translateY(-2px)}
+.role-card .role-icon{font-size:36px;display:block;margin-bottom:12px}
+.role-card .role-title{font-size:16px;font-weight:700;color:var(--white);display:block;margin-bottom:4px}
+.role-card .role-sub{font-size:11px;color:rgba(255,255,255,.4);display:block;line-height:1.5}
+.otp-inputs{display:flex;gap:8px;justify-content:center;margin-bottom:24px}
+.otp-inputs input{width:44px;height:52px;text-align:center;font-family:var(--mono);font-size:22px;font-weight:700;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:8px;color:var(--white);outline:none}
+.otp-inputs input:focus{border-color:var(--volt);box-shadow:0 0 0 3px rgba(0,200,83,.15)}
+.login-back-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.5);padding:6px 12px;border-radius:6px;font-size:11px;font-family:var(--mono);cursor:pointer}
+.login-back-btn:hover{border-color:var(--volt);color:var(--volt)}
+.login-step-indicator{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.25);text-align:center;margin-bottom:20px}
+.team-slot-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.team-slot-btn{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.1);border-radius:8px;padding:10px;text-align:center;cursor:pointer;transition:all .15s;color:rgba(255,255,255,.6);font-size:13px;font-weight:600}
+.team-slot-btn:hover{border-color:var(--volt);color:var(--white)}
+.team-slot-btn.selected{border-color:var(--volt);background:rgba(0,200,83,.12);color:var(--volt)}
+
+/* MASTER ADMIN STYLES */
+.ma-sessions-table{width:100%;border-collapse:collapse;font-size:13px}
+.ma-sessions-table th{text-align:left;padding:10px 12px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);background:var(--wire-2);border-bottom:1px solid var(--wire)}
+.ma-sessions-table td{padding:10px 12px;border-bottom:1px solid var(--wire-2)}
+.ma-sessions-table tr:hover td{background:var(--wire-2)}
+.ma-team-row{display:grid;grid-template-columns:80px 1fr 1fr 140px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--wire-2)}
+.ma-team-row:last-child{border-bottom:none}
+.ma-team-row .slot-label{font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.ma-team-row input{border:1.5px solid var(--wire);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--ink);width:100%}
+.ma-team-row input:focus{outline:none;border-color:var(--volt-dim);box-shadow:0 0 0 3px var(--volt-glow)}
+
 </style>
 </head>
 <body>
@@ -1286,8 +1317,64 @@ input, select, textarea { font-family: var(--sans); }
       <span class="wordmark">Praxis</span>
       <span class="tagline">Scenario Simulation Game</span>
     </div>
-    <div id="caseStep" class="case-selector-step">
-      <label class="login-label">Select Simulation Case</label>
+
+    <!-- STEP 0: Role choice -->
+    <div id="roleStep" class="case-selector-step">
+      <div class="login-step-indicator">Step 1 of 2 &mdash; Choose your role</div>
+      <div class="role-cards">
+        <div class="role-card" onclick="loginAsGM()">
+          <span class="role-icon">🛡</span>
+          <span class="role-title">I am a Game Master</span>
+          <span class="role-sub">Facilitate a simulation session, manage rounds and curveballs</span>
+        </div>
+        <div class="role-card" onclick="loginAsParticipant()">
+          <span class="role-icon">◈</span>
+          <span class="role-title">I am a Participant</span>
+          <span class="role-sub">Join your team and make leadership decisions</span>
+        </div>
+      </div>
+      <div class="login-case-note">Scenario Simulation Game &middot; Confidential</div>
+    </div>
+
+    <!-- STEP GM-1: Enter email for OTP -->
+    <div id="gmEmailStep" class="case-selector-step hidden">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <button class="login-back-btn" onclick="backToRole()">&larr; Back</button>
+        <span style="font-size:12px;font-weight:600;color:var(--volt)">Game Master Login</span>
+      </div>
+      <div class="login-step-indicator">Step 2 &mdash; Verify your email</div>
+      <label class="login-label">Email Address</label>
+      <input id="gmEmail" type="email" class="login-input" placeholder="your.email@example.com">
+      <button class="login-btn" id="gmSendOtpBtn" onclick="gmSendOTP()">Send Verification Code &rarr;</button>
+      <div id="gmEmailError" class="login-error"></div>
+    </div>
+
+    <!-- STEP GM-2: Enter OTP -->
+    <div id="gmOtpStep" class="case-selector-step hidden">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <button class="login-back-btn" onclick="backToGmEmail()">&larr; Back</button>
+        <span style="font-size:12px;font-weight:600;color:var(--volt)">Game Master Login</span>
+      </div>
+      <div class="login-step-indicator">Enter the 6-digit code sent to your email</div>
+      <div class="otp-inputs" id="otpInputs">
+        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
+        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      </div>
+      <button class="login-btn" id="gmVerifyBtn" onclick="gmVerifyOTP()">Verify &amp; Enter &rarr;</button>
+      <div id="gmOtpError" class="login-error"></div>
+    </div>
+
+    <!-- STEP P-1: Case selection (participant) -->
+    <div id="caseStep" class="case-selector-step hidden">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <button class="login-back-btn" onclick="backToRole()">&larr; Back</button>
+        <span style="font-size:12px;font-weight:600;color:rgba(255,255,255,.4)">Participant Login</span>
+      </div>
+      <div class="login-step-indicator">Step 2 of 4 &mdash; Select your simulation case</div>
       <div class="case-cards">
         <div class="case-card" id="caseCardA" onclick="selectCase('A')">
           <span class="cc-tag">Case A</span>
@@ -1308,27 +1395,29 @@ input, select, textarea { font-family: var(--sans); }
           <span class="cc-chip" style="color:var(--amber)">Seed Stage &middot; Introductory &middot; E-commerce</span>
         </div>
       </div>
-      <button class="login-btn" id="caseNextBtn" onclick="proceedToLogin()" disabled style="opacity:0.4">Select a case to continue &rarr;</button>
-      <div class="login-case-note">Scenario Simulation Game &middot; Confidential</div>
+      <button class="login-btn" id="caseNextBtn" onclick="proceedToTeamSelect()" disabled style="opacity:0.4">Select a case to continue &rarr;</button>
     </div>
+
+    <!-- STEP P-2: Team select + email + access code -->
     <div id="loginStep" class="case-selector-step hidden">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
-        <button onclick="backToCase()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.5);padding:6px 12px;border-radius:6px;font-size:11px;font-family:var(--mono)">&larr; Back</button>
+        <button class="login-back-btn" id="participantBackBtn" onclick="backToCase()">&larr; Back</button>
         <span id="selectedCaseBadge" class="case-badge volta">Case A &mdash; VOLTA Motors</span>
       </div>
+      <div class="login-step-indicator">Select team, enter email &amp; access code</div>
       <label class="login-label">Select Your Team</label>
-      <select id="teamSelect" class="login-select">
-        <option value="">&#8212; choose team &#8212;</option>
-        <option value="admin">Admin (Game Master)</option>
-        <option value="team1" id="t1opt">VOLTA Leadership Board &#8212; Alpha</option>
-        <option value="team2" id="t2opt">VOLTA Leadership Board &#8212; Beta</option>
-        <option value="team3" id="t3opt">VOLTA Leadership Board &#8212; Gamma</option>
-        <option value="team4" id="t4opt">VOLTA Leadership Board &#8212; Delta</option>
-        <option value="team5" id="t5opt">VOLTA Leadership Board &#8212; Epsilon</option>
-        <option value="team6" id="t6opt">VOLTA Leadership Board &#8212; Zeta</option>
-      </select>
+      <div class="team-slot-grid" id="teamSlotGrid">
+        <div class="team-slot-btn" onclick="selectTeamSlot('alpha',this)">Alpha</div>
+        <div class="team-slot-btn" onclick="selectTeamSlot('beta',this)">Beta</div>
+        <div class="team-slot-btn" onclick="selectTeamSlot('gamma',this)">Gamma</div>
+        <div class="team-slot-btn" onclick="selectTeamSlot('delta',this)">Delta</div>
+        <div class="team-slot-btn" onclick="selectTeamSlot('epsilon',this)">Epsilon</div>
+        <div class="team-slot-btn" onclick="selectTeamSlot('zeta',this)">Zeta</div>
+      </div>
+      <label class="login-label">Your Email Address</label>
+      <input id="participantEmail" type="email" class="login-input" placeholder="your.email@example.com">
       <label class="login-label">Access Code</label>
-      <input id="accessCode" type="password" class="login-input" placeholder="Enter your team code">
+      <input id="accessCode" type="password" class="login-input" placeholder="Enter your team access code">
       <button class="login-btn" onclick="handleLogin()">Enter Simulation &rarr;</button>
       <div id="loginError" class="login-error"></div>
     </div>
@@ -1378,6 +1467,10 @@ input, select, textarea { font-family: var(--sans); }
       <div id="adminNavItem" class="nav-item" onclick="navigate('admin')" style="display:none">
         <span class="icon">⬡</span> Admin Panel
         <span class="nav-badge" style="background:var(--purple)">GM</span>
+      </div>
+      <div id="masterAdminNavItem" class="nav-item" onclick="navigate('master-admin')" style="display:none">
+        <span class="icon">🔑</span> Master Admin
+        <span class="nav-badge" style="background:var(--red)">SA</span>
       </div>
     </nav>
     <div class="sidebar-round-status">
@@ -1490,6 +1583,11 @@ input, select, textarea { font-family: var(--sans); }
         <div id="adminContent"></div>
       </div>
 
+      <!-- MASTER ADMIN PAGE (superuser only) -->
+      <div id="page-master-admin" class="page-section">
+        <div id="masterAdminContent"></div>
+      </div>
+
     </div>
   </main>
 </div>
@@ -1514,6 +1612,7 @@ input, select, textarea { font-family: var(--sans); }
 <!-- NOTIFICATION -->
 <div id="notification" class="notification"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 
 // =================================================
@@ -1744,41 +1843,35 @@ var CASE_CTX = {
 
 function selectCase(id) {
   selectedCase = id;
+  QUARTERS = QUARTERS_BY_CASE[selectedCase] || QUARTERS_BY_CASE['A'];
   document.querySelectorAll('.case-card').forEach(function(c) { c.classList.remove('selected'); });
   document.getElementById('caseCard' + id).classList.add('selected');
   var btn = document.getElementById('caseNextBtn');
   btn.disabled = false; btn.style.opacity = '1';
 }
 
-function proceedToLogin() {
-  var cfg = CASE_CTX[selectedCase];
-  ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta'].forEach(function(n, i) {
-    var el = document.getElementById('t' + (i+1) + 'opt');
-    if (el) el.textContent = cfg.board + ' — ' + n;
-  });
-  var b = document.getElementById('selectedCaseBadge');
-  b.className = 'case-badge ' + cfg.badgeClass;
-  b.textContent = cfg.badgeText;
-  document.getElementById('caseStep').classList.add('hidden');
-  document.getElementById('loginStep').classList.remove('hidden');
-}
+// proceedToTeamSelect is defined in the new auth section above
 
 function backToCase() {
-  document.getElementById('loginStep').classList.add('hidden');
-  document.getElementById('caseStep').classList.remove('hidden');
-  document.getElementById('teamSelect').value = '';
+  // If arrived via session link, go back to role selection instead
+  if (_sessionPreselected) {
+    backToRole();
+    _sessionPreselected = false;
+    currentSession = null; currentTeam = null;
+    return;
+  }
+  showLoginStep('caseStep');
   document.getElementById('accessCode').value = '';
-  selectedCase = 'A';
-  var cs = document.getElementById('caseStep'); if(cs) cs.classList.remove('hidden');
-  var ls = document.getElementById('loginStep'); if(ls) ls.classList.add('hidden');
-  document.querySelectorAll('.case-card').forEach(function(c){c.classList.remove('selected')});
-  var nb = document.getElementById('caseNextBtn'); if(nb){nb.disabled=true;nb.style.opacity='0.4';}
-  currentSession = null; currentTeam = null;
-  if (realtimeChannel) if(supabase) supabase.removeChannel(realtimeChannel);
+  document.getElementById('participantEmail').value = '';
+  _selectedTeamSlot = null;
+  document.querySelectorAll('#teamSlotGrid .team-slot-btn').forEach(function(b){ b.classList.remove('selected'); });
   document.getElementById('loginError').textContent = '';
 }
 
+var _sessionPreselected = false;
+
 function applyCaseConfig() {
+  QUARTERS = QUARTERS_BY_CASE[selectedCase] || QUARTERS_BY_CASE['A'];
   var c = CASE_CTX[selectedCase], el;
   el = document.getElementById('topbarCaseName');      if(el) el.textContent = c.company;
   el = document.getElementById('dashMetricsSubtitle'); if(el) el.textContent = c.dashMetrics;
@@ -1983,20 +2076,82 @@ const TEAM_NAMES = {
   team6:  "Zeta",
 };
 
-const QUARTERS = [
-  { id: 1, label: 'Q1', theme: 'Baseline Operations', status: 'active' },
-  { id: 2, label: 'Q2', theme: 'Growth Pressure', status: 'pending' },
-  { id: 3, label: 'Q3', theme: 'Competitive Shock', status: 'pending' },
-  { id: 4, label: 'Q4', theme: 'Crisis Quarter', status: 'pending' },
-  { id: 5, label: 'Q5', theme: 'Legacy Round', status: 'pending' },
-];
+var QUARTERS_BY_CASE = {
+  A: [
+    { id: 1, label: 'Q1', theme: 'Baseline Operations' },
+    { id: 2, label: 'Q2', theme: 'Growth Pressure' },
+    { id: 3, label: 'Q3', theme: 'Competitive Shock' },
+    { id: 4, label: 'Q4', theme: 'Crisis Quarter' },
+    { id: 5, label: 'Q5', theme: 'Legacy Round' },
+  ],
+  B: [
+    { id: 1, label: 'Q1', theme: 'Direction Setting' },
+    { id: 2, label: 'Q2', theme: 'Resource Allocation' },
+    { id: 3, label: 'Q3', theme: 'Market Response' },
+    { id: 4, label: 'Q4', theme: 'Execution Under Pressure' },
+    { id: 5, label: 'Q5', theme: 'Launch and Legacy' },
+  ],
+  demo: [
+    { id: 1, label: 'Q1', theme: 'First Moves' },
+    { id: 2, label: 'Q2', theme: 'Finding the Rhythm' },
+    { id: 3, label: 'Q3', theme: 'The Pivot Window' },
+    { id: 4, label: 'Q4', theme: 'Covenant Quarter' },
+  ],
+};
+function getQuarters() { return QUARTERS_BY_CASE[selectedCase] || QUARTERS_BY_CASE['A']; }
+var QUARTERS = QUARTERS_BY_CASE['A'];
 
-// Simulated game state (in real deployment this would be server-side)
-// Storage handled by Supabase
+// ── State management — backed by Supabase ──
+var _stateCache = null;
+
+async function loadStateFromDB() {
+  if (!currentSession) return;
+  var sb = getSupabase(); if (!sb) return;
+
+  var state = initState();
+  state.currentRound = currentSession.current_round || 1;
+  state.roundOpen = currentSession.round_open !== false;
+
+  // Load teams
+  var teams = await dbGetTeams(currentSession.id);
+  state._teams = teams;
+  state._teamMap = {};
+  var slotToKey = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
+  teams.forEach(function(t) {
+    var key = slotToKey[t.slot];
+    if (key) state._teamMap[key] = t;
+  });
+
+  // Load outcomes and build metrics/scores
+  var outcomes = await dbGetOutcomes(currentSession.id);
+  outcomes.forEach(function(o) {
+    var tSlot = o.teams ? o.teams.slot : null;
+    var key = tSlot ? slotToKey[tSlot] : null;
+    if (!key) return;
+
+    if (!state.outcomes[o.round]) state.outcomes[o.round] = {};
+    var m = {
+      revenue: parseFloat(o.revenue) || 0, grossMargin: parseFloat(o.gross_margin) || 0,
+      cashRunway: parseFloat(o.cash_runway) || 0, marketShare: parseFloat(o.market_share) || 50,
+      productHealth: parseFloat(o.product_health) || 60, teamCapability: parseFloat(o.team_capability) || 65
+    };
+    state.outcomes[o.round][key] = m;
+    state.metrics[key] = m;
+    state.scores[key].history[o.round - 1] = o.score || 0;
+    state.scores[key].total = state.scores[key].history.reduce(function(a, b) { return a + (b || 0); }, 0);
+  });
+
+  // Load curveballs
+  var cbs = await dbGetCurveballs(currentSession.id);
+  state.curveballs = cbs.map(function(cb) {
+    return { title: cb.title, body: cb.body, round: cb.round, timestamp: cb.injected_at, acknowledged: false };
+  });
+
+  _stateCache = state;
+}
 
 function getState() {
-  const raw = null /*supabase*/;
-  if (raw) return JSON.parse(raw);
+  if (_stateCache) return _stateCache;
   return initState();
 }
 
@@ -2028,6 +2183,7 @@ function initState() {
 
 function defaultMetrics() {
   if (selectedCase === 'B') return { revenue: 6.9, grossMargin: 4.2, cashRunway: 24, marketShare: 52, productHealth: 72, teamCapability: 74 };
+  if (selectedCase === 'demo') return { revenue: 1.1, grossMargin: -12, cashRunway: 11, marketShare: 18, productHealth: 45, teamCapability: 60 };
   return {
     revenue: 16.8,
     grossMargin: -5.8,
@@ -2046,98 +2202,292 @@ function saveState(state) {
 let currentUser = null;
 
 // ═══════════════════════════════════════════════
-//  AUTH
+//  SUPERUSER CONFIG
 // ═══════════════════════════════════════════════
-async function handleLogin() {
-  const teamSlot = document.getElementById('teamSelect').value;
-  const code     = document.getElementById('accessCode').value.trim();
-  const err      = document.getElementById('loginError');
-  const btn      = document.querySelector('#loginStep .login-btn');
+const SUPERUSER_EMAIL = 'ross.harvey92@gmail.com';
 
-  if (!teamSlot) { err.textContent = 'Please select your team.'; return; }
-  if (!code)     { err.textContent = 'Please enter your access code.'; return; }
+// ═══════════════════════════════════════════════
+//  AUTH — NEW LOGIN FLOW
+// ═══════════════════════════════════════════════
+var _selectedTeamSlot = null;
+var _gmEmailForOTP = null;
 
-  // Admin login
-  if (teamSlot === 'admin') {
-    if (code !== 'admin2024' && code !== (currentSession && currentSession.admin_email)) {
-      err.textContent = 'Incorrect admin code.'; return;
-    }
-    currentUser = { teamId: 'admin', teamName: 'Game Master', isAdmin: true };
-    err.textContent = ''; showApp(); return;
-  }
-
-  // Team login — try local codes first (works without session for demo/testing)
-  var localCodes = TEAM_CODES;
-  if (localCodes[teamSlot] && code === localCodes[teamSlot]) {
-    var tname = (TEAM_NAMES && TEAM_NAMES[teamSlot]) || teamSlot;
-    currentUser = { teamId: teamSlot, teamName: tname, isAdmin: false };
-    if (currentSession) {
-      if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
-      var dbTeam = await dbGetTeam(currentSession.id, teamSlot);
-      if (btn) { btn.textContent = 'Enter Simulation →'; btn.disabled = false; }
-      if (dbTeam) {
-        currentTeam = dbTeam;
-        currentUser.teamName = dbTeam.display_name;
-      }
-    }
-    err.textContent = ''; showApp(); return;
-  }
-
-  // If no local match, need session to validate
-  if (!currentSession) {
-    err.textContent = 'Incorrect access code. Check with your facilitator.'; return;
-  }
-
-  if (btn) { btn.textContent = 'Verifying...'; btn.disabled = true; }
-  var teamFromDB = await dbGetTeam(currentSession.id, teamSlot);
-  if (btn) { btn.textContent = 'Enter Simulation →'; btn.disabled = false; }
-
-  if (!teamFromDB) { err.textContent = 'Team not found in this session.'; return; }
-  if (teamFromDB.access_code !== code) { err.textContent = 'Incorrect access code.'; return; }
-  if (teamFromDB.expires_at && new Date(teamFromDB.expires_at) < new Date()) {
-    err.textContent = 'Your access has expired. Contact your facilitator.'; return;
-  }
-
-  currentTeam = teamFromDB;
-  currentUser = { teamId: teamSlot, teamName: teamFromDB.display_name, isAdmin: false };
-  err.textContent = ''; showApp();
+function showLoginStep(stepId) {
+  ['roleStep','gmEmailStep','gmOtpStep','caseStep','loginStep'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', id !== stepId);
+  });
 }
 
-document.addEventListener('keydown', e => {
+function backToRole() {
+  showLoginStep('roleStep');
+  _selectedTeamSlot = null;
+  _gmEmailForOTP = null;
+}
+
+// ── Game Master flow ──
+function loginAsGM() {
+  showLoginStep('gmEmailStep');
+  document.getElementById('gmEmail').value = '';
+  document.getElementById('gmEmailError').textContent = '';
+  setTimeout(function(){ document.getElementById('gmEmail').focus(); }, 100);
+}
+
+async function gmSendOTP() {
+  var email = document.getElementById('gmEmail').value.trim().toLowerCase();
+  var err = document.getElementById('gmEmailError');
+  var btn = document.getElementById('gmSendOtpBtn');
+  if (!email || !email.includes('@')) { err.textContent = 'Please enter a valid email address.'; return; }
+
+  btn.textContent = 'Sending...'; btn.disabled = true;
+  err.textContent = '';
+
+  var sb = getSupabase();
+  if (!sb) { err.textContent = 'Supabase not initialised. Refresh and try again.'; btn.textContent = 'Send Verification Code →'; btn.disabled = false; return; }
+
+  var { error } = await sb.auth.signInWithOtp({ email: email });
+  btn.textContent = 'Send Verification Code →'; btn.disabled = false;
+
+  if (error) { err.textContent = error.message || 'Failed to send OTP.'; return; }
+
+  _gmEmailForOTP = email;
+  showLoginStep('gmOtpStep');
+  document.getElementById('gmOtpError').textContent = '';
+  // Focus first OTP input
+  var inputs = document.querySelectorAll('#otpInputs input');
+  if (inputs[0]) inputs[0].focus();
+}
+
+function backToGmEmail() {
+  showLoginStep('gmEmailStep');
+}
+
+// OTP input auto-advance
+document.addEventListener('DOMContentLoaded', function() {
+  var otpBox = document.getElementById('otpInputs');
+  if (!otpBox) return;
+  otpBox.addEventListener('input', function(e) {
+    var inp = e.target;
+    if (inp.value.length === 1 && inp.nextElementSibling) inp.nextElementSibling.focus();
+  });
+  otpBox.addEventListener('keydown', function(e) {
+    if (e.key === 'Backspace' && !e.target.value && e.target.previousElementSibling) {
+      e.target.previousElementSibling.focus();
+    }
+    if (e.key === 'Enter') gmVerifyOTP();
+  });
+  // Handle paste
+  otpBox.addEventListener('paste', function(e) {
+    e.preventDefault();
+    var text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+    var inputs = otpBox.querySelectorAll('input');
+    for (var i = 0; i < text.length && i < inputs.length; i++) { inputs[i].value = text[i]; }
+    if (text.length >= 6) gmVerifyOTP();
+  });
+});
+
+async function gmVerifyOTP() {
+  var inputs = document.querySelectorAll('#otpInputs input');
+  var token = '';
+  inputs.forEach(function(inp) { token += inp.value; });
+  token = token.replace(/\D/g, '');
+
+  var err = document.getElementById('gmOtpError');
+  var btn = document.getElementById('gmVerifyBtn');
+  if (token.length !== 6) { err.textContent = 'Please enter the full 6-digit code.'; return; }
+
+  btn.textContent = 'Verifying...'; btn.disabled = true;
+  err.textContent = '';
+
+  var sb = getSupabase();
+  var { data, error } = await sb.auth.verifyOtp({ email: _gmEmailForOTP, token: token, type: 'email' });
+  btn.textContent = 'Verify & Enter →'; btn.disabled = false;
+
+  if (error) { err.textContent = error.message || 'Incorrect code. Try again.'; return; }
+
+  // Check if superuser
+  var isSuperuser = (_gmEmailForOTP === SUPERUSER_EMAIL);
+
+  // If not superuser, check if email matches any session's admin_email
+  if (!isSuperuser) {
+    var { data: sessions } = await sb.from('sessions').select('id,code,cohort_name,admin_email,current_round,round_open,status,case_id,cases(slug,name)').eq('admin_email', _gmEmailForOTP);
+    if (!sessions || sessions.length === 0) {
+      err.textContent = 'No sessions found for this email. Contact the master admin.';
+      await sb.auth.signOut();
+      return;
+    }
+    // If only one session, auto-select it
+    if (sessions.length === 1) {
+      currentSession = sessions[0];
+      var cSlug = sessions[0].cases ? sessions[0].cases.slug : 'volta';
+      selectedCase = cSlug === 'volta' ? 'A' : cSlug === 'arc' ? 'B' : 'demo';
+    }
+  }
+
+  currentUser = { teamId: 'admin', teamName: 'Game Master', isAdmin: true, isSuperuser: isSuperuser, email: _gmEmailForOTP };
+  showApp();
+}
+
+// ── Participant flow ──
+function loginAsParticipant() {
+  // If session pre-selected via URL, skip case selection
+  if (_sessionPreselected && currentSession) {
+    var cfg = CASE_CTX[selectedCase];
+    var b = document.getElementById('selectedCaseBadge');
+    if (b) { b.className = 'case-badge ' + cfg.badgeClass; b.textContent = cfg.badgeText; }
+    _selectedTeamSlot = null;
+    document.querySelectorAll('#teamSlotGrid .team-slot-btn').forEach(function(b){ b.classList.remove('selected'); });
+    document.getElementById('participantEmail').value = '';
+    document.getElementById('accessCode').value = '';
+    document.getElementById('loginError').textContent = '';
+    showLoginStep('loginStep');
+    return;
+  }
+  showLoginStep('caseStep');
+  document.querySelectorAll('.case-card').forEach(function(c) { c.classList.remove('selected'); });
+  var nb = document.getElementById('caseNextBtn'); if(nb){nb.disabled=true;nb.style.opacity='0.4';}
+}
+
+function selectTeamSlot(slot, el) {
+  _selectedTeamSlot = slot;
+  document.querySelectorAll('#teamSlotGrid .team-slot-btn').forEach(function(b){ b.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function proceedToTeamSelect() {
+  var cfg = CASE_CTX[selectedCase];
+  var b = document.getElementById('selectedCaseBadge');
+  b.className = 'case-badge ' + cfg.badgeClass;
+  b.textContent = cfg.badgeText;
+  _selectedTeamSlot = null;
+  document.querySelectorAll('#teamSlotGrid .team-slot-btn').forEach(function(b){ b.classList.remove('selected'); });
+  document.getElementById('participantEmail').value = '';
+  document.getElementById('accessCode').value = '';
+  document.getElementById('loginError').textContent = '';
+  showLoginStep('loginStep');
+}
+
+async function handleLogin() {
+  var slot  = _selectedTeamSlot;
+  var email = document.getElementById('participantEmail').value.trim().toLowerCase();
+  var code  = document.getElementById('accessCode').value.trim();
+  var err   = document.getElementById('loginError');
+  var btn   = document.querySelector('#loginStep .login-btn');
+
+  if (!slot)  { err.textContent = 'Please select your team.'; return; }
+  if (!email) { err.textContent = 'Please enter your email address.'; return; }
+  if (!code)  { err.textContent = 'Please enter your access code.'; return; }
+
+  // Map slot name to teamId key
+  var slotToTeamId = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
+  var teamIdKey = slotToTeamId[slot];
+
+  // If we have a session, validate against DB
+  if (currentSession) {
+    btn.textContent = 'Verifying...'; btn.disabled = true;
+    var teamFromDB = await dbGetTeam(currentSession.id, slot);
+    btn.textContent = 'Enter Simulation →'; btn.disabled = false;
+
+    if (!teamFromDB) { err.textContent = 'Team not found in this session.'; return; }
+    if (teamFromDB.access_code !== code) { err.textContent = 'Incorrect access code.'; return; }
+    // Check participant_email if set (GM may not have set it yet)
+    if (teamFromDB.participant_email && teamFromDB.participant_email.toLowerCase() !== email) {
+      err.textContent = 'Email does not match the registered participant for this team.'; return;
+    }
+    if (teamFromDB.expires_at && new Date(teamFromDB.expires_at) < new Date()) {
+      err.textContent = 'Your access has expired. Contact your facilitator.'; return;
+    }
+
+    currentTeam = teamFromDB;
+    currentUser = { teamId: teamIdKey, teamName: teamFromDB.display_name, isAdmin: false, isSuperuser: false, email: email };
+    // Update activated_at
+    var sb = getSupabase();
+    if (sb && !teamFromDB.activated_at) {
+      sb.from('teams').update({ activated_at: new Date().toISOString(), participant_email: email }).eq('id', teamFromDB.id).then(function(){});
+    }
+    err.textContent = ''; showApp(); return;
+  }
+
+  // Fallback: try local codes (for demo/testing without session)
+  var localCodes = TEAM_CODES;
+  if (localCodes[teamIdKey] && code === localCodes[teamIdKey]) {
+    var tname = (TEAM_NAMES && TEAM_NAMES[teamIdKey]) || slot;
+    currentUser = { teamId: teamIdKey, teamName: tname, isAdmin: false, isSuperuser: false, email: email };
+    err.textContent = ''; showApp(); return;
+  }
+
+  err.textContent = 'Incorrect access code or no active session. Check with your facilitator.';
+}
+
+document.addEventListener('keydown', function(e) {
   if (e.key === 'Enter' && document.getElementById('loginScreen').classList.contains('active')) {
-    handleLogin();
+    // Determine which step is visible
+    if (!document.getElementById('loginStep').classList.contains('hidden')) handleLogin();
+    else if (!document.getElementById('gmEmailStep').classList.contains('hidden')) gmSendOTP();
   }
 });
 
 function handleLogout() {
+  // Sign out of Supabase auth
+  var sb = getSupabase();
+  if (sb) sb.auth.signOut().catch(function(){});
+
   currentUser = null;
+  currentTeam = null;
+  _selectedTeamSlot = null;
+  _gmEmailForOTP = null;
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('appScreen').classList.remove('active');
-  document.getElementById('teamSelect').value = '';
+  showLoginStep('roleStep');
   document.getElementById('accessCode').value = '';
+  document.getElementById('participantEmail').value = '';
+  document.getElementById('adminNavItem').style.display = 'none';
+  document.getElementById('masterAdminNavItem').style.display = 'none';
 }
 
 // ═══════════════════════════════════════════════
 //  APP INIT
 // ═══════════════════════════════════════════════
-function showApp() {
+async function showApp() {
   document.getElementById('loginScreen').classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
 
   // Set sidebar
   const cfg = CASE_CTX[selectedCase];
-  const label = currentUser.isAdmin ? 'Administrator' : cfg.board;
+  const label = currentUser.isAdmin ? (currentUser.isSuperuser ? 'Master Admin' : 'Game Master') : cfg.board;
   applyCaseConfig();
   document.getElementById('sidebarTeamLabel').textContent = label;
   document.getElementById('sidebarTeamName').textContent = currentUser.teamName;
 
-  // Admin nav
+  // Admin nav — visible only to GM or superuser
   if (currentUser.isAdmin) {
     document.getElementById('adminNavItem').style.display = 'flex';
+  } else {
+    document.getElementById('adminNavItem').style.display = 'none';
+  }
+
+  // Master admin nav — visible only to superuser
+  if (currentUser.isSuperuser) {
+    document.getElementById('masterAdminNavItem').style.display = 'flex';
+  } else {
+    document.getElementById('masterAdminNavItem').style.display = 'none';
+  }
+
+  // Load state from DB if session exists
+  if (currentSession) {
+    _stateCache = null;
+    await loadStateFromDB();
+    subscribeToSession(currentSession.id);
   }
 
   renderApp();
-  navigate('dashboard');
+
+  // Route superuser to master admin by default if no session selected
+  if (currentUser.isSuperuser && !currentSession) {
+    navigate('master-admin');
+  } else {
+    navigate('dashboard');
+  }
 }
 
 function renderApp() {
@@ -2155,13 +2505,18 @@ function navigate(page) {
   document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
-  document.getElementById('page-' + page).classList.add('active');
+  var pageEl = document.getElementById('page-' + page);
+  if (pageEl) pageEl.classList.add('active');
   const navEl = document.getElementById('nav-' + page);
   if (navEl) navEl.classList.add('active');
+  // Also check nav items by id pattern for master-admin etc
+  var navItem2 = document.getElementById(page === 'master-admin' ? 'masterAdminNavItem' : (page === 'admin' ? 'adminNavItem' : ''));
+  if (navItem2) navItem2.classList.add('active');
 
   const titles = {
     dashboard: 'Dashboard', case: 'Case Brief', curveball: 'Curveballs', decisions: 'Decisions',
-    assessment: 'Assessment', history: 'Decision Log', leaderboard: 'Leaderboard', admin: 'Admin Panel'
+    assessment: 'Assessment', history: 'Decision Log', leaderboard: 'Leaderboard', admin: 'Admin Panel',
+    'master-admin': 'Master Admin'
   };
   document.getElementById('topbarSubtitle').textContent = '/ ' + (titles[page] || page);
 
@@ -2173,6 +2528,7 @@ function navigate(page) {
   if (page === 'history') renderHistory();
   if (page === 'leaderboard') renderLeaderboard();
   if (page === 'admin' && currentUser.isAdmin) renderAdmin();
+  if (page === 'master-admin' && currentUser.isSuperuser) renderMasterAdmin();
 }
 
 // ═══════════════════════════════════════════════
@@ -2182,7 +2538,7 @@ function renderRoundPips() {
   const state = getState();
   const pips = document.getElementById('roundPips');
   pips.innerHTML = '';
-  QUARTERS.forEach((q, i) => {
+  getQuarters().forEach((q, i) => {
     const pip = document.createElement('div');
     pip.className = 'round-pip';
     if (i + 1 < state.currentRound) pip.classList.add('done');
@@ -2197,7 +2553,7 @@ function renderTimeline() {
   const state = getState();
   const tl = document.getElementById('roundTimeline');
   tl.innerHTML = '';
-  QUARTERS.forEach((q, i) => {
+  getQuarters().forEach((q, i) => {
     const step = document.createElement('div');
     const isDone   = i + 1 < state.currentRound;
     const isActive = i + 1 === state.currentRound;
@@ -2765,7 +3121,7 @@ function renderDecisions() {
   cont.innerHTML = html;
 }
 
-function submitDecisions() {
+async function submitDecisions() {
   // Validate all fields
   const required = getDecisionDomains().map(d => d.fields.find(f => f.type==='select')).filter(Boolean).map(f => f.id);
   for (const id of required) {
@@ -2787,6 +3143,22 @@ function submitDecisions() {
 
   const state = getState();
   const teamId = currentUser.teamId;
+
+  // Save to Supabase if session + team exist
+  if (currentSession && currentTeam) {
+    var savePromises = [];
+    getDecisionDomains().forEach(function(domain) {
+      domain.fields.forEach(function(field) {
+        var val = decisions[field.id];
+        if (val !== undefined) {
+          savePromises.push(dbSaveDecision(currentSession.id, currentTeam.id, state.currentRound, domain.id, field.id, val));
+        }
+      });
+    });
+    await Promise.all(savePromises);
+  }
+
+  // Update local state
   if (!state.decisions[teamId]) state.decisions[teamId] = {};
   state.decisions[teamId][state.currentRound] = {
     data: decisions,
@@ -3076,9 +3448,12 @@ async function renderHistory() {
   Object.keys(teamDec).sort((a,b) => b - a).forEach(round => {
     const fields = teamDec[round];
     const entry = { data: Object.fromEntries(fields.map(d => [d.field_id, d.value])), timestamp: fields[0] && fields[0].submitted_at ? new Date(fields[0].submitted_at).toLocaleString('en-IN',{hour12:true}) : 'Unknown' };
-    const scoreData= state.scores[teamId];
+    var _state = getState();
+    var _teamId = currentUser.isAdmin ? 'team1' : currentUser.teamId;
+    const scoreData= _state.scores[_teamId];
     const roundScore = scoreData && scoreData.history[round-1] ? scoreData.history[round-1] : null;
-    const qTheme   = QUARTERS[round-1] ? QUARTERS[round-1].theme : '';
+    const _q = getQuarters();
+    const qTheme   = _q[round-1] ? _q[round-1].theme : '';
 
     const div = document.createElement('div');
     div.className = 'history-entry';
@@ -3308,7 +3683,7 @@ function renderAdmin() {
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <button class="btn-volt" onclick="adminToggleRound()">${state.roundOpen ? '🔒 Close Decision Window' : '🔓 Open Decision Window'}</button>
-        ${state.currentRound < 5 ? `<button class="btn-primary" onclick="adminAdvanceRound()">Advance to Q${state.currentRound + 1} →</button>` : '<span class="tag green">Final Round</span>'}
+        ${state.currentRound < getQuarters().length ? `<button class="btn-primary" onclick="adminAdvanceRound()">Advance to Q${state.currentRound + 1} →</button>` : '<span class="tag green">Final Round</span>'}
         <button class="btn-secondary" onclick="adminResetGame()" style="margin-left:auto;border-color:var(--red);color:var(--red);">Reset Simulation</button>
       </div>
     </div>
@@ -3463,7 +3838,8 @@ async function adminToggleRound() {
 }
 
 async function adminAdvanceRound() {
-  if (!currentSession || currentSession.current_round >= 5) return;
+  var maxRounds = getQuarters().length;
+  if (!currentSession || currentSession.current_round >= maxRounds) return;
   const newRound = currentSession.current_round + 1;
   await dbUpdateSession(currentSession.id, { current_round: newRound, round_open: true });
   currentSession.current_round = newRound;
@@ -3540,6 +3916,290 @@ function adminResetGame() {
 }
 
 // ═══════════════════════════════════════════════
+//  MASTER ADMIN PANEL (superuser only)
+// ═══════════════════════════════════════════════
+var _masterSessions = [];
+
+async function dbGetAllSessions() {
+  var sb = getSupabase(); if (!sb) return [];
+  var { data } = await sb.from('sessions').select('*, cases(slug,name,subtitle,difficulty)').order('created_at', { ascending: false });
+  return data || [];
+}
+
+async function dbGetTeamsForSession(sessionId) {
+  var sb = getSupabase(); if (!sb) return [];
+  var { data } = await sb.from('teams').select('*').eq('session_id', sessionId).order('slot');
+  return data || [];
+}
+
+async function dbUpdateTeam(teamId, updates) {
+  var sb = getSupabase(); if (!sb) return false;
+  var { error } = await sb.from('teams').update(updates).eq('id', teamId);
+  return !error;
+}
+
+async function renderMasterAdmin() {
+  var cont = document.getElementById('masterAdminContent');
+  if (!currentUser || !currentUser.isSuperuser) {
+    cont.innerHTML = '<div class="locked-overlay"><span class="lock-icon">🔒</span><h3>Access Denied</h3><p>Master Admin is restricted to the superuser account.</p></div>';
+    return;
+  }
+
+  cont.innerHTML = '<div class="empty-state"><span class="icon">🔑</span><h3>Loading sessions...</h3></div>';
+
+  _masterSessions = await dbGetAllSessions();
+
+  var html = '';
+
+  // Header
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">';
+  html += '<div class="card-title" style="font-size:20px">Master Admin Panel</div>';
+  html += '<span class="admin-chip" style="background:var(--red-pale);color:var(--red);border-color:var(--red)">🔑 Superuser</span>';
+  html += '</div>';
+
+  // ── Create New Session ──
+  html += '<div class="card" style="border-left:3px solid var(--volt);margin-bottom:20px">';
+  html += '<div class="admin-section-title">Create New Session</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">';
+  html += '<div><label class="field-label">Cohort Name</label><input type="text" id="maNewCohort" class="login-input" placeholder="e.g. Catalyst Batch 4" style="background:var(--surface);border-color:var(--wire);color:var(--ink);margin:0;padding:11px 14px;font-size:13px;width:100%"></div>';
+  html += '<div><label class="field-label">Case</label><select id="maNewCase" class="field-select" style="margin:0"><option value="volta">Case A — VOLTA Motors</option><option value="arc">Case B — ARC Motors</option><option value="demo">Demo — ShopPulse</option></select></div>';
+  html += '<div><label class="field-label">Number of Teams</label><select id="maNewTeamCount" class="field-select" style="margin:0" onchange="maRenderTeamInputs()"><option value="2">2 Teams</option><option value="3">3 Teams</option><option value="4">4 Teams</option><option value="5">5 Teams</option><option value="6" selected>6 Teams</option></select></div>';
+  html += '</div>';
+  html += '<div><label class="field-label">Session Admin Email (Game Master for this session)</label><input type="email" id="maNewAdminEmail" class="login-input" placeholder="gm@example.com" style="background:var(--surface);border-color:var(--wire);color:var(--ink);margin:0 0 16px;padding:11px 14px;font-size:13px;width:100%"></div>';
+  html += '<div id="maTeamInputs"></div>';
+  html += '<button class="btn-volt" onclick="maCreateSession()" style="margin-top:12px">Create Session &rarr;</button>';
+  html += '</div>';
+
+  // ── All Sessions ──
+  html += '<div class="card">';
+  html += '<div class="admin-section-title">All Sessions (' + _masterSessions.length + ')</div>';
+
+  if (_masterSessions.length === 0) {
+    html += '<p style="font-size:13px;color:var(--muted)">No sessions yet. Create your first one above.</p>';
+  } else {
+    html += '<table class="ma-sessions-table"><thead><tr><th>Code</th><th>Cohort</th><th>Case</th><th>Round</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>';
+    _masterSessions.forEach(function(s) {
+      var caseName = s.cases ? s.cases.name : '—';
+      var created = new Date(s.created_at).toLocaleDateString('en-IN');
+      var statusColor = s.status === 'active' ? 'var(--volt-dim)' : 'var(--muted)';
+      html += '<tr>';
+      html += '<td style="font-family:var(--mono);font-weight:700;letter-spacing:1px">' + s.code + '</td>';
+      html += '<td>' + (s.cohort_name || '—') + '</td>';
+      html += '<td>' + caseName + '</td>';
+      html += '<td>Q' + s.current_round + (s.round_open ? ' <span class="tag green">Open</span>' : ' <span class="tag amber">Closed</span>') + '</td>';
+      html += '<td style="color:' + statusColor + ';font-weight:600;text-transform:capitalize">' + s.status + '</td>';
+      html += '<td style="font-size:12px;color:var(--muted)">' + created + '</td>';
+      html += '<td><button class="btn-secondary" style="padding:6px 12px;font-size:11px" onclick="maManageSession(\'' + s.id + '\')">Manage</button> ';
+      html += '<button class="btn-secondary" style="padding:6px 12px;font-size:11px" onclick="maEnterSession(\'' + s.id + '\')">Enter as GM</button></td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+  html += '</div>';
+
+  // ── Manage Session Detail (rendered dynamically) ──
+  html += '<div id="maSessionDetail"></div>';
+
+  cont.innerHTML = html;
+  maRenderTeamInputs();
+}
+
+function maRenderTeamInputs() {
+  var count = parseInt(document.getElementById('maNewTeamCount')?.value || 6);
+  var slots = ['alpha','beta','gamma','delta','epsilon','zeta'];
+  var names = ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta'];
+  var cont = document.getElementById('maTeamInputs');
+  if (!cont) return;
+
+  var html = '<div class="admin-section-title" style="font-size:10px;margin-bottom:10px">Team Configuration</div>';
+  for (var i = 0; i < count; i++) {
+    html += '<div class="ma-team-row">';
+    html += '<div class="slot-label">' + names[i] + '</div>';
+    html += '<input type="text" id="maTeamName_' + i + '" placeholder="Team display name" value="' + names[i] + '">';
+    html += '<input type="email" id="maTeamEmail_' + i + '" placeholder="participant@email.com">';
+    html += '<input type="text" id="maTeamCode_' + i + '" placeholder="Access code" value="' + slots[i] + (i < 10 ? '0' : '') + (i+1) + '">';
+    html += '</div>';
+  }
+  cont.innerHTML = html;
+}
+
+async function maCreateSession() {
+  var cohort = document.getElementById('maNewCohort')?.value.trim();
+  var caseSlug = document.getElementById('maNewCase')?.value;
+  var teamCount = parseInt(document.getElementById('maNewTeamCount')?.value || 6);
+  var adminEmail = document.getElementById('maNewAdminEmail')?.value.trim();
+
+  if (!cohort) { showNotification('Please enter a cohort name.', 'error'); return; }
+  if (!adminEmail) { showNotification('Please enter an admin email for this session.', 'error'); return; }
+
+  var sb = getSupabase();
+  if (!sb) { showNotification('Supabase not connected.', 'error'); return; }
+
+  // Get case id
+  var { data: caseData } = await sb.from('cases').select('id').eq('slug', caseSlug).single();
+  if (!caseData) { showNotification('Case not found.', 'error'); return; }
+
+  // Generate session code
+  var code = Math.random().toString(36).substring(2,8).toUpperCase();
+
+  var { data: sess, error } = await sb.from('sessions').insert({
+    code: code, case_id: caseData.id, cohort_name: cohort,
+    admin_email: adminEmail, current_round: 1, round_open: true, status: 'active'
+  }).select().single();
+
+  if (error || !sess) { showNotification('Failed to create session: ' + (error?.message || 'Unknown error'), 'error'); return; }
+
+  // Create teams
+  var slots = ['alpha','beta','gamma','delta','epsilon','zeta'];
+  var teams = [];
+  for (var i = 0; i < teamCount; i++) {
+    var tname = document.getElementById('maTeamName_' + i)?.value.trim() || slots[i];
+    var temail = document.getElementById('maTeamEmail_' + i)?.value.trim() || null;
+    var tcode = document.getElementById('maTeamCode_' + i)?.value.trim() || (slots[i] + '0' + (i+1));
+    teams.push({ session_id: sess.id, slot: slots[i], display_name: tname, access_code: tcode, participant_email: temail || null });
+  }
+  await sb.from('teams').insert(teams);
+
+  var link = window.location.origin + window.location.pathname + '#/session/' + code;
+  showNotification('Session ' + code + ' created! Share link: ' + link, 'success');
+  renderMasterAdmin();
+}
+
+async function maManageSession(sessionId) {
+  var sb = getSupabase(); if (!sb) return;
+  var detailCont = document.getElementById('maSessionDetail');
+  if (!detailCont) return;
+
+  detailCont.innerHTML = '<div class="card"><div class="empty-state"><h3>Loading...</h3></div></div>';
+
+  var sess = _masterSessions.find(function(s) { return s.id === sessionId; });
+  if (!sess) return;
+
+  var teams = await dbGetTeamsForSession(sessionId);
+  var allDecisions = await dbGetAllDecisions(sessionId);
+
+  var html = '<div class="card" style="border-left:3px solid var(--purple);margin-top:20px">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">';
+  html += '<div><div class="admin-section-title" style="margin-bottom:0">Manage Session: ' + sess.code + '</div>';
+  html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">' + (sess.cohort_name || '') + ' &mdash; ' + (sess.cases ? sess.cases.name : '') + '</div></div>';
+  html += '<button class="btn-ghost" onclick="document.getElementById(\'maSessionDetail\').innerHTML=\'\'">Close</button>';
+  html += '</div>';
+
+  // Session link
+  var link = window.location.origin + window.location.pathname + '#/session/' + sess.code;
+  html += '<div style="background:var(--wire-2);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">';
+  html += '<span style="font-size:12px;font-weight:600;color:var(--muted)">Share Link:</span>';
+  html += '<code style="font-family:var(--mono);font-size:12px;color:var(--volt-dim);flex:1">' + link + '</code>';
+  html += '<button class="btn-secondary" style="padding:6px 12px;font-size:11px" onclick="navigator.clipboard.writeText(\'' + link + '\');showNotification(\'Link copied!\',\'success\')">Copy</button>';
+  html += '</div>';
+
+  // Participant / team management
+  html += '<div class="admin-section-title" style="font-size:10px">Participants</div>';
+  teams.forEach(function(t) {
+    var teamDecisions = allDecisions.filter(function(d) { return d.team_id === t.id; });
+    var rounds = {};
+    teamDecisions.forEach(function(d) { rounds[d.round] = true; });
+    var submittedRounds = Object.keys(rounds).length;
+
+    html += '<div class="ma-team-row">';
+    html += '<div class="slot-label">' + t.slot + '</div>';
+    html += '<input type="text" id="maEdit_name_' + t.id + '" value="' + (t.display_name || '') + '" placeholder="Display name">';
+    html += '<input type="email" id="maEdit_email_' + t.id + '" value="' + (t.participant_email || '') + '" placeholder="participant@email.com">';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<input type="text" id="maEdit_code_' + t.id + '" value="' + (t.access_code || '') + '" placeholder="Access code" style="width:100px">';
+    html += '<span class="tag ' + (submittedRounds > 0 ? 'green' : 'amber') + '" style="white-space:nowrap">' + submittedRounds + ' rounds</span>';
+    html += '</div></div>';
+  });
+  html += '<button class="btn-volt" style="margin-top:12px" onclick="maSaveParticipants(\'' + sessionId + '\')">Save Changes</button>';
+
+  // Round control
+  html += '<div class="divider"></div>';
+  html += '<div class="admin-section-title" style="font-size:10px">Round Control</div>';
+  html += '<div style="display:flex;gap:12px;align-items:center">';
+  html += '<span style="font-size:13px;font-weight:600">Current: Q' + sess.current_round + '</span>';
+  html += '<span class="tag ' + (sess.round_open ? 'green' : 'amber') + '">' + (sess.round_open ? 'Open' : 'Closed') + '</span>';
+  html += '<button class="btn-secondary" style="padding:6px 16px;font-size:12px" onclick="maToggleRound(\'' + sessionId + '\',' + (sess.round_open ? 'false' : 'true') + ')">' + (sess.round_open ? 'Close Round' : 'Open Round') + '</button>';
+  var maxR = (sess.cases && sess.cases.slug === 'demo') ? 4 : 5;
+  if (sess.current_round < maxR) {
+    html += '<button class="btn-primary" style="padding:6px 16px;font-size:12px" onclick="maAdvanceRound(\'' + sessionId + '\',' + sess.current_round + ')">Advance to Q' + (sess.current_round + 1) + '</button>';
+  }
+  html += '</div>';
+
+  // Curveball injection
+  html += '<div class="divider"></div>';
+  html += '<div class="admin-section-title" style="font-size:10px">Inject Curveball</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;margin-bottom:12px">';
+  html += '<input type="text" id="maCbTitle_' + sessionId + '" class="login-input" placeholder="Event title" style="background:var(--surface);border-color:var(--wire);color:var(--ink);margin:0;padding:10px 14px;font-size:13px">';
+  html += '<select id="maCbRound_' + sessionId + '" class="field-select" style="margin:0;width:80px">';
+  for (var r = 1; r <= maxR; r++) { html += '<option value="' + r + '"' + (r === sess.current_round ? ' selected' : '') + '>Q' + r + '</option>'; }
+  html += '</select></div>';
+  html += '<textarea id="maCbBody_' + sessionId + '" class="field-textarea" placeholder="Event description..." style="min-height:60px;margin-bottom:12px"></textarea>';
+  html += '<button class="btn-danger" onclick="maInjectCurveball(\'' + sessionId + '\')">⚡ Inject Curveball</button>';
+
+  html += '</div>';
+  detailCont.innerHTML = html;
+}
+
+async function maSaveParticipants(sessionId) {
+  var teams = await dbGetTeamsForSession(sessionId);
+  var promises = teams.map(function(t) {
+    var name = document.getElementById('maEdit_name_' + t.id)?.value.trim();
+    var email = document.getElementById('maEdit_email_' + t.id)?.value.trim();
+    var code = document.getElementById('maEdit_code_' + t.id)?.value.trim();
+    return dbUpdateTeam(t.id, { display_name: name || t.display_name, participant_email: email || null, access_code: code || t.access_code });
+  });
+  await Promise.all(promises);
+  showNotification('Participants updated.', 'success');
+}
+
+async function maToggleRound(sessionId, newOpen) {
+  await dbUpdateSession(sessionId, { round_open: newOpen });
+  var s = _masterSessions.find(function(x) { return x.id === sessionId; });
+  if (s) s.round_open = newOpen;
+  if (currentSession && currentSession.id === sessionId) currentSession.round_open = newOpen;
+  maManageSession(sessionId);
+  showNotification(newOpen ? 'Round opened.' : 'Round closed.', 'success');
+}
+
+async function maAdvanceRound(sessionId, currentRound) {
+  var newRound = currentRound + 1;
+  await dbUpdateSession(sessionId, { current_round: newRound, round_open: true });
+  var s = _masterSessions.find(function(x) { return x.id === sessionId; });
+  if (s) { s.current_round = newRound; s.round_open = true; }
+  if (currentSession && currentSession.id === sessionId) { currentSession.current_round = newRound; currentSession.round_open = true; }
+  maManageSession(sessionId);
+  showNotification('Advanced to Q' + newRound + '.', 'success');
+}
+
+async function maInjectCurveball(sessionId) {
+  var title = document.getElementById('maCbTitle_' + sessionId)?.value.trim();
+  var body = document.getElementById('maCbBody_' + sessionId)?.value.trim();
+  var round = parseInt(document.getElementById('maCbRound_' + sessionId)?.value);
+  if (!title || !body) { showNotification('Fill in both title and description.', 'error'); return; }
+  var ok = await dbInjectCurveball(sessionId, round, title, body, SUPERUSER_EMAIL);
+  if (!ok) { showNotification('Failed to inject curveball.', 'error'); return; }
+  showNotification('Curveball injected for Q' + round + '.', 'success');
+  document.getElementById('maCbTitle_' + sessionId).value = '';
+  document.getElementById('maCbBody_' + sessionId).value = '';
+}
+
+async function maEnterSession(sessionId) {
+  var sess = _masterSessions.find(function(s) { return s.id === sessionId; });
+  if (!sess) return;
+  currentSession = sess;
+  var cSlug = sess.cases ? sess.cases.slug : 'volta';
+  selectedCase = cSlug === 'volta' ? 'A' : cSlug === 'arc' ? 'B' : 'demo';
+  applyCaseConfig();
+  setSessionInURL(sess.code);
+  _stateCache = null;
+  await loadStateFromDB();
+  subscribeToSession(sess.id);
+  renderApp();
+  navigate('admin');
+  showNotification('Entered session ' + sess.code + ' as Game Master.', 'success');
+}
+
+// ═══════════════════════════════════════════════
 //  NOTIFICATION
 // ═══════════════════════════════════════════════
 let notifTimer = null;
@@ -3565,29 +4225,24 @@ function updateTopbarScore() {
 
 // ── PAGE LOAD: check URL for session code ──────────────────────────
 document.addEventListener('DOMContentLoaded', async function() {
-  const code = getSessionCodeFromURL();
+  var hash = window.location.hash;
+
+  // Check for #/master-admin route — will be handled after login
+  // Check for #/session/CODE
+  var code = getSessionCodeFromURL();
   if (code) {
-    const sess = await dbGetSession(code);
+    var sess = await dbGetSession(code);
     if (sess) {
       currentSession = sess;
       selectedCase = (sess.cases ? sess.cases.slug : null) || 'volta';
       if (selectedCase === 'volta') selectedCase = 'A';
       else if (selectedCase === 'arc') selectedCase = 'B';
       else if (selectedCase === 'demo') selectedCase = 'demo';
+      QUARTERS = QUARTERS_BY_CASE[selectedCase] || QUARTERS_BY_CASE['A'];
 
-      // Pre-select case and show login step
-      document.getElementById('caseStep').classList.add('hidden');
-      document.getElementById('loginStep').classList.remove('hidden');
-      const badge = document.getElementById('selectedCaseBadge');
-      const cfg = CASE_CTX[selectedCase] || CASE_CTX['A'];
-      if (badge) { badge.className = 'case-badge ' + cfg.badgeClass; badge.textContent = cfg.badgeText; }
-
-      // Update team options with correct board name
-      ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta'].forEach(function(n,i) {
-        var el = document.getElementById('t'+(i+1)+'opt');
-        if (el) el.textContent = cfg.board + ' — ' + n;
-      });
-
+      // Pre-select case and skip to team selection for participants
+      _sessionPreselected = true;
+      // Show role step — but when participant is chosen, skip case step
       showNotification('Session ' + code + ' loaded: ' + (sess.cohort_name||''), 'success');
     } else {
       showNotification('Session "' + code + '" not found.', 'error');
