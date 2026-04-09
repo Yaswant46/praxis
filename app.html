@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Praxis — Catalyst Simulation Platform</title>
+<title>Praxis — Scenario Simulation Platform</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════
@@ -1284,7 +1284,7 @@ input, select, textarea { font-family: var(--sans); }
   <div class="login-box" style="width:480px">
     <div class="login-logo">
       <span class="wordmark">Praxis</span>
-      <span class="tagline">Catalyst Leadership Simulation</span>
+      <span class="tagline">Scenario Simulation Game</span>
     </div>
     <div id="caseStep" class="case-selector-step">
       <label class="login-label">Select Simulation Case</label>
@@ -1301,9 +1301,15 @@ input, select, textarea { font-family: var(--sans); }
           <span class="cc-sub">The Velocity Trap:<br>Product development under market shift</span>
           <span class="cc-chip">Series B &middot; Intermediate</span>
         </div>
+        <div class="case-card" id="caseCarddemo" onclick="selectCase('demo')" style="grid-column:span 2;border-color:rgba(255,143,0,0.3);background:rgba(255,143,0,0.05)">
+          <span class="cc-tag" style="color:var(--amber)">Demo</span>
+          <span class="cc-title">ShopPulse &mdash; The Last Mile Problem</span>
+          <span class="cc-sub">Quick-commerce growth vs. margin dilemma. Simpler decisions, faster rounds. First taste of Praxis.</span>
+          <span class="cc-chip" style="color:var(--amber)">Seed Stage &middot; Introductory &middot; E-commerce</span>
+        </div>
       </div>
       <button class="login-btn" id="caseNextBtn" onclick="proceedToLogin()" disabled style="opacity:0.4">Select a case to continue &rarr;</button>
-      <div class="login-case-note">Ather Catalyst Program &middot; Confidential</div>
+      <div class="login-case-note">Scenario Simulation Game &middot; Confidential</div>
     </div>
     <div id="loginStep" class="case-selector-step hidden">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
@@ -1338,7 +1344,7 @@ input, select, textarea { font-family: var(--sans); }
   <aside class="sidebar">
     <div class="sidebar-brand">
       <span class="name">Praxis</span>
-      <span class="sub">Catalyst Simulation</span>
+      <span class="sub">Scenario Simulation Game</span>
     </div>
     <div class="sidebar-team-badge">
       <span class="team-label" id="sidebarTeamLabel">Team</span>
@@ -1352,6 +1358,9 @@ input, select, textarea { font-family: var(--sans); }
       <div class="nav-item" onclick="navigate('curveball')" id="nav-curveball">
         <span class="icon">⚡</span> Curveballs
         <span class="nav-badge red" id="cbBadge" style="display:none">!</span>
+      </div>
+      <div class="nav-item" onclick="navigate('case')" id="nav-case">
+        <span class="icon">📋</span> Case
       </div>
       <div class="nav-item" onclick="navigate('decisions')" id="nav-decisions">
         <span class="icon">◈</span> Decisions
@@ -1449,6 +1458,11 @@ input, select, textarea { font-family: var(--sans); }
       <!-- CURVEBALL PAGE -->
       <div id="page-curveball" class="page-section">
         <div id="curbveballContent"></div>
+      </div>
+
+      <!-- CASE PAGE -->
+      <div id="page-case" class="page-section">
+        <div id="caseViewerContent"></div>
       </div>
 
       <!-- DECISIONS PAGE -->
@@ -1700,9 +1714,31 @@ var CASE_CTX = {
     badgeText: 'Case A — VOLTA Motors',
     dashMetrics: 'VOLTA dashboard — current quarter',
     dashCtxSubtitle: 'VOLTA Motors — FY 2024–25',
-    dashCtxBody: 'ARC Motors has the Nimbus 12 months from launch. Three competitors have launched with features it lacks. Cash: Rs 68 Cr. Burn: Rs 2.8 Cr/month. Runway: 24 months.',
+    dashCtxBody: 'VOLTA closed a Rs 320 Cr Series C with an 18-month covenant: achieve 2%+ gross margin on the VOLTA Edge. Current burn: Rs 4.2 Cr/month. Runway: 22 months. Tranche 2 of Rs 140 Cr is milestone-conditional on hitting the margin target.',
+    caseRefSubtitle: 'VOLTA Motors: Navigating the Inflection',
+    caseRefBody: 'Refer to your case document for full BOM breakdowns, supply chain data, engineering bandwidth models, and financial scenario analysis. Annexures A-D contain decision-relevant quantitative data.',
+  },
+  B: {
+    company: 'ARC Motors',
+    board: 'ARC Leadership Board',
+    badgeClass: 'arc',
+    badgeText: 'Case B — ARC Motors',
+    dashMetrics: 'ARC dashboard — current quarter',
+    dashCtxSubtitle: 'ARC Motors — FY 2025–26',
+    dashCtxBody: 'ARC Motors has the Nimbus 12 months from launch. Three competitors launched with features it lacks. Cash on hand: Rs 68 Cr. Burn: Rs 2.8 Cr/month. Runway: 24 months. Your decisions on product direction, feature prioritisation, and cash will determine whether Nimbus launches into relevance or obsolescence.',
     caseRefSubtitle: 'ARC Motors: The Velocity Trap',
-    caseRefBody: 'Refer to your Ather Catalyst Program case document for the full feature trade-off matrix, cash flow scenarios, market evolution data, and decision frameworks. Annexures A–D contain all quantitative analysis.',
+    caseRefBody: 'Refer to your case document for the full feature trade-off matrix, cash flow scenarios, market evolution data, and decision frameworks. Annexures A-D contain all quantitative analysis.',
+  },
+  demo: {
+    company: 'ShopPulse',
+    board: 'ShopPulse Leadership Board',
+    badgeClass: 'volta',
+    badgeText: 'Demo — ShopPulse',
+    dashMetrics: 'ShopPulse dashboard — current quarter',
+    dashCtxSubtitle: 'ShopPulse — FY 2025–26',
+    dashCtxBody: 'ShopPulse is a quick-commerce startup at Seed stage facing a classic growth vs. margin dilemma. You have Rs 12 Cr in the bank, burning Rs 1.1 Cr/month. The board wants growth. The unit economics want you to slow down. Five decisions across four quarters will show which instinct wins.',
+    caseRefSubtitle: 'ShopPulse: The Last Mile Problem',
+    caseRefBody: 'This is the Praxis demo case. Use it to familiarise yourself with the simulation format before running a full case with your cohort.',
   }
 };
 
@@ -1843,9 +1879,70 @@ var CB_BANK_B = [
   { q:'Q5', t:'FAME IV Consultation — Swap Policy Signal', b:'FAME IV consultation paper proposes restricting subsidies to swap-compatible vehicles from FY28 onwards. The signal is serious.' },
 ];
 
-function getCurveballBank() { return selectedCase === 'B' ? CB_BANK_B : CB_BANK_A; }
-function getDecisionDomains() { return selectedCase === 'B' ? DECISION_DOMAINS_ARC : DECISION_DOMAINS; }
-function getRoundAssessments() { return selectedCase === 'B' ? ROUND_ASSESSMENTS_ARC : ROUND_ASSESSMENTS; }
+
+// ═══════════════════════════════════════════════
+//  DEMO CASE — SHOPPULSE DECISION DOMAINS
+// ═══════════════════════════════════════════════
+var DECISION_DOMAINS_DEMO = [
+  { id:'growth', num:1, title:'Growth Strategy', subtitle:'How aggressively do you scale — and what do you accept as the cost?', icon:'📈',
+    fields:[
+      { type:'select', id:'gr_pace', label:'Order Volume Growth Target This Quarter', options:['Hold flat — protect unit economics', 'Grow 15% — measured expansion', 'Grow 30% — aggressive push, accept losses', 'Grow 50%+ — growth at all costs, worry about margins later'] },
+      { type:'slider', id:'gr_darks', label:'New Dark Stores to Open This Quarter', min:0, max:5, default:1, unit:' stores' },
+      { type:'textarea', id:'gr_why', label:'Strategic Rationale', placeholder:'What is your growth thesis? What are you willing to sacrifice for it?' }
+    ]
+  },
+  { id:'unit_econ', num:2, title:'Unit Economics', subtitle:'The levers that determine whether each order makes or loses money.', icon:'◎',
+    fields:[
+      { type:'select', id:'ue_delivery', label:'Delivery Fee Strategy', options:['Hold at Rs 30 — competitive pricing', 'Raise to Rs 45 — improve margin, risk losing price-sensitive users', 'Introduce surge pricing (Rs 20-60 based on time/distance)', 'Offer free delivery for Plus subscribers only'] },
+      { type:'slider', id:'ue_subsidy', label:'Customer Acquisition Subsidy (Rs per new user)', min:0, max:200, default:80, unit:' Rs' },
+      { type:'textarea', id:'ue_why', label:'Economics Rationale', placeholder:'How do you move toward contribution margin positive — and by when?' }
+    ]
+  },
+  { id:'product', num:3, title:'Product & Category', subtitle:'What you sell shapes your economics as much as how you sell it.', icon:'◈',
+    fields:[
+      { type:'select', id:'pr_focus', label:'Category Expansion Decision', options:['Stay core grocery only — deepen density', 'Add electronics (high margin, low frequency)', 'Add pharmacy (regulated, high repeat, decent margin)', 'Add everything — full quick-commerce catalogue'] },
+      { type:'select', id:'pr_plus', label:'ShopPulse Plus Subscriber Push', options:['Organic growth — no forced conversion', 'Offer 3-month trial for Rs 49 to drive conversions', 'Bundle Plus with referral programme', 'Make Plus mandatory for free delivery'] },
+      { type:'textarea', id:'pr_why', label:'Product Rationale', placeholder:'How does category choice connect to your unit economics path?' }
+    ]
+  },
+  { id:'ops', num:4, title:'Operations & Riders', subtitle:'The last mile is where the margin lives or dies.', icon:'🔗',
+    fields:[
+      { type:'select', id:'op_riders', label:'Rider Model', options:['Pure gig — flexible, variable cost, inconsistent', 'Hybrid — core team of 20 full-time + gig overflow', 'Full-time riders in high-density zones only', 'Partner with third-party logistics for all delivery'] },
+      { type:'slider', id:'op_sla', label:'Delivery SLA Target (minutes)', min:10, max:30, default:15, unit:' min' },
+      { type:'textarea', id:'op_why', label:'Operations Rationale', placeholder:'How do you balance rider cost with delivery reliability and speed?' }
+    ]
+  }
+];
+
+var ROUND_ASSESSMENTS_DEMO = {
+  1:{ title:'Quarter 1 — First Moves', considerations:[
+    { type:'think', icon:'💭', text:'<strong>On your growth rate:</strong> Have you considered what your unit economics look like at the volume you just chose? Each incremental order at negative contribution margin compounds the loss. At what order volume does the loss per order start shrinking?' },
+    { type:'risk', icon:'⚠️', text:'<strong>On dark store timing:</strong> Each store costs Rs 45L and takes 3 months to reach fixed-cost breakeven. Have you modelled your cash position assuming those stores underperform in months 1 and 2?' },
+    { type:'opp', icon:'🔎', text:'<strong>On Plus subscribers:</strong> The LTV gap between a Plus subscriber (Rs 680) and a regular user (Rs 210) is the entire business model. Have you considered how many conversions your decisions this quarter will drive?' },
+    { type:'caution', icon:'📋', text:'<strong>On category choice:</strong> Have you thought about whether category expansion before you have density in core grocery is building on sand? Operational complexity scales faster than margin in early-stage quick commerce.' }
+  ]},
+  2:{ title:'Quarter 2 — Finding the Rhythm', considerations:[
+    { type:'think', icon:'💭', text:'<strong>On your delivery fee:</strong> Delivery fee changes have a direct, immediate effect on order volume. Have you considered the price elasticity of your current customer base — and whether the segment you are losing is the high-frequency one?' },
+    { type:'risk', icon:'⚠️', text:'<strong>On rider economics:</strong> As you grow, have you considered whether your rider model can scale without proportionally increasing cost? At what order density per dark store does the per-delivery cost start declining?' },
+    { type:'opp', icon:'🔎', text:'<strong>On the covenant:</strong> Contribution margin positive in 2 cities by Q4. Have you identified which 2 cities are most likely to get there — and are your decisions this quarter concentrating resources there?' },
+    { type:'caution', icon:'📋', text:'<strong>On runway:</strong> With 11 months of runway at the start and monthly burn of Rs 1.1 Cr, every quarter matters. Have you modelled your cash position by Q4 under your current trajectory?' }
+  ]},
+  3:{ title:'Quarter 3 — The Pivot Window', considerations:[
+    { type:'risk', icon:'⚠️', text:'<strong>On operational complexity:</strong> By now your category mix and dark store footprint are creating real operational load. Have you considered whether your rider model and SLA targets are holding up as complexity increases?' },
+    { type:'think', icon:'💭', text:'<strong>On the Series A signal:</strong> Investors will look at contribution margin trajectory, not absolute numbers. Have you considered what story your decisions tell — and whether the trend line is convincing?' },
+    { type:'opp', icon:'🔎', text:'<strong>On Plus conversion:</strong> Three quarters in, your subscriber base reflects your acquisition and conversion choices. Have you considered what LTV improvement you could have achieved with a different conversion strategy in Q1?' },
+    { type:'caution', icon:'📋', text:'<strong>On cash:</strong> You are one quarter from the covenant deadline. Have you confirmed you have enough runway to reach it — and what happens if Q4 performance is 20% below plan?' }
+  ]},
+  4:{ title:'Quarter 4 — Covenant Quarter', considerations:[
+    { type:'opp', icon:'🔎', text:'<strong>On the covenant result:</strong> Contribution margin positive in 2 cities. Did you get there — and if so, which decisions in Q1-Q3 were most responsible? If not, which decision would you reverse?' },
+    { type:'think', icon:'💭', text:'<strong>On what you built:</strong> Looking back across all four quarters, what kind of company did you actually build? A growth-at-all-costs machine, a margin-first operator, or something in between? Is that what you intended?' },
+    { type:'caution', icon:'📋', text:'<strong>On the full arc:</strong> The decisions that feel routine in Q1 (delivery fee, rider model, category choice) compound in ways that are hard to reverse. What would you have changed — and at what point would the change have mattered most?' }
+  ]}
+};
+
+function getCurveballBank() { return selectedCase === 'B' ? CB_BANK_B : (selectedCase === 'demo' ? CB_BANK_B : CB_BANK_A); }
+function getDecisionDomains() { return selectedCase === 'B' ? DECISION_DOMAINS_ARC : (selectedCase === 'demo' ? DECISION_DOMAINS_DEMO : DECISION_DOMAINS); }
+function getRoundAssessments() { return selectedCase === 'B' ? ROUND_ASSESSMENTS_ARC : (selectedCase === 'demo' ? ROUND_ASSESSMENTS_DEMO : ROUND_ASSESSMENTS); }
 
 function renderCurveballBank() {
   var grid = document.getElementById('cbBankGrid');
@@ -1969,36 +2066,40 @@ async function handleLogin() {
     err.textContent = ''; showApp(); return;
   }
 
-  // Team login — requires active session
-  if (!currentSession) {
-    err.textContent = 'No active session. Use the session link from your facilitator.'; return;
+  // Team login — try local codes first (works without session for demo/testing)
+  var localCodes = TEAM_CODES;
+  if (localCodes[teamSlot] && code === localCodes[teamSlot]) {
+    var tname = (TEAM_NAMES && TEAM_NAMES[teamSlot]) || teamSlot;
+    currentUser = { teamId: teamSlot, teamName: tname, isAdmin: false };
+    if (currentSession) {
+      if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+      var dbTeam = await dbGetTeam(currentSession.id, teamSlot);
+      if (btn) { btn.textContent = 'Enter Simulation →'; btn.disabled = false; }
+      if (dbTeam) {
+        currentTeam = dbTeam;
+        currentUser.teamName = dbTeam.display_name;
+      }
+    }
+    err.textContent = ''; showApp(); return;
   }
 
-  // Validate against DB
+  // If no local match, need session to validate
+  if (!currentSession) {
+    err.textContent = 'Incorrect access code. Check with your facilitator.'; return;
+  }
+
   if (btn) { btn.textContent = 'Verifying...'; btn.disabled = true; }
-  const team = await dbGetTeam(currentSession.id, teamSlot);
+  var teamFromDB = await dbGetTeam(currentSession.id, teamSlot);
   if (btn) { btn.textContent = 'Enter Simulation →'; btn.disabled = false; }
 
-  if (!team) { err.textContent = 'Team not found in this session.'; return; }
-  if (team.access_code !== code) { err.textContent = 'Incorrect access code.'; return; }
-
-  // Check expiry
-  if (team.expires_at && new Date(team.expires_at) < new Date()) {
-    err.textContent = 'Your access to this session has expired.'; return;
+  if (!teamFromDB) { err.textContent = 'Team not found in this session.'; return; }
+  if (teamFromDB.access_code !== code) { err.textContent = 'Incorrect access code.'; return; }
+  if (teamFromDB.expires_at && new Date(teamFromDB.expires_at) < new Date()) {
+    err.textContent = 'Your access has expired. Contact your facilitator.'; return;
   }
 
-  currentTeam = team;
-  currentUser = { teamId: teamSlot, teamName: team.display_name, isAdmin: false };
-
-  // Mark activated if first login
-  if (!team.activated_at) {
-    const exp = new Date(); exp.setDate(exp.getDate() + 30);
-    await getSupabase().from('teams').update({
-      activated_at: new Date().toISOString(),
-      expires_at: exp.toISOString()
-    }).eq('id', team.id);
-  }
-
+  currentTeam = teamFromDB;
+  currentUser = { teamId: teamSlot, teamName: teamFromDB.display_name, isAdmin: false };
   err.textContent = ''; showApp();
 }
 
@@ -2059,12 +2160,13 @@ function navigate(page) {
   if (navEl) navEl.classList.add('active');
 
   const titles = {
-    dashboard: 'Dashboard', curveball: 'Curveballs', decisions: 'Decisions',
+    dashboard: 'Dashboard', case: 'Case Brief', curveball: 'Curveballs', decisions: 'Decisions',
     assessment: 'Assessment', history: 'Decision Log', leaderboard: 'Leaderboard', admin: 'Admin Panel'
   };
   document.getElementById('topbarSubtitle').textContent = '/ ' + (titles[page] || page);
 
   // Render page-specific content
+  if (page === 'case') renderCase();
   if (page === 'curveball') renderCurveballs();
   if (page === 'decisions') renderDecisions();
   if (page === 'assessment') renderAssessments();
@@ -2178,6 +2280,132 @@ function renderMetrics() {
       </div>
     `;
   });
+}
+
+
+// ═══════════════════════════════════════════════
+//  CASE VIEWER
+// ═══════════════════════════════════════════════
+
+var CASE_CONTENT = {
+  A: {
+    title: 'VOLTA Motors',
+    subtitle: 'Navigating the Inflection: Scale, Survival, and the Weight of Decisions',
+    situation: 'It is April 2024. Arjun Mehta, CEO of VOLTA Motors, has 48 hours to countersign a Rs 320 Cr Series C term sheet. The covenant: demonstrate positive gross margin (≥2%) on the VOLTA Edge within 18 months. VOLTA has never had positive unit economics on any product in its six-year history.',
+    products: [
+      { name: 'VOLTA Edge', price: 'Rs 1,42,000', units: '4,200/month', margin: '-3.1%', note: 'Performance scooter — closest to breakeven' },
+      { name: 'VOLTA Go', price: 'Rs 89,000', units: '7,800/month', margin: '-7.8%', note: 'Mass market — aggressively priced, thin margin' }
+    ],
+    financials: { revenue: 'Rs 16.8 Cr/month', burn: 'Rs 4.2 Cr/month', runway: '22 months (post Series C)', headcount: '487' },
+    challenges: [
+      { num: '01', title: 'Unit Economics Clock', body: 'Edge COGS is Rs 1,46,400 vs ASP of Rs 1,42,000. Need Rs 4,400/unit reduction. The 18-month covenant tranche 2 (Rs 140 Cr) depends on this.' },
+      { num: '02', title: 'VoltaOS Technical Debt', body: 'BLE memory leak affecting 6.2% of Edge fleet. Fast-charge integration blocked. Fleet management API paused. 18 months behind roadmap.' },
+      { num: '03', title: 'Supply Chain Fragility', body: 'Single-source LFP cells from CellPro. ChipAxis SoC has no alternate vendor (9-14 month switch time). Spot price volatility risk.' },
+      { num: '04', title: 'Manufacturing Quality Gap', body: 'Hosur contract manufacturing has 2.3x higher warranty claims vs Pune. Costing Rs 38 Lakhs/month and growing.' },
+      { num: '05', title: 'Engineering Attrition', body: '22% annualised attrition. Each 1% increase = 3 weeks roadmap delay. Two senior engineers received competing offers last month.' }
+    ],
+    covenant: 'Achieve ≥2% gross margin on the VOLTA Edge for two consecutive months within 18 months of Series C close. Failure forfeits the Rs 140 Cr second tranche.'
+  },
+  B: {
+    title: 'ARC Motors',
+    subtitle: "The Velocity Trap: When the Road Changes and the Product Hasn't",
+    situation: "It is September 2025. ARC Motors is 12 months from launching the Nimbus. Three competitors launched in the past 8 months with features the Nimbus lacks. Continue as planned, adapt the spec, or pause development?",
+    products: [
+      { name: 'ARC Drift', price: 'Rs 1,08,000', units: '6,400/month', margin: '+4.2%', note: 'In market Year 2 — first positive unit economics' },
+      { name: 'ARC Nimbus', price: 'Rs 1,18,000 (target)', units: '— (12 months to launch)', margin: '+6.8% projected', note: 'Missing: removable battery, large display, fast-charge, gamification app' }
+    ],
+    financials: { revenue: 'Rs 6.9 Cr/month', burn: 'Rs 2.8 Cr/month', runway: '24 months', headcount: '312' },
+    challenges: [
+      { num: '01', title: 'The Velocity Trap', body: 'Nimbus was specced 18 months ago. Market has moved. Three competitors launched with features it lacks. Continue, adapt, or pause?' },
+      { num: '02', title: 'Feature Prioritisation', body: 'App+display: Rs 5Cr, +4 months. Fast-charge: +Rs 5.4Cr, +5-6 months. Removable battery: +Rs 9.8Cr, +7-9 months. Cannot do all.' },
+      { num: '03', title: 'Cash & Runway', body: 'Rs 68 Cr on hand. Every month of Nimbus delay costs Rs 0.9 Cr foregone contribution. Scope additions eat directly into reserve.' },
+      { num: '04', title: 'Drift Holding Position', body: 'NPS declining (68→61). Wait-and-see slowing bookings -8%. Drift cannot be refreshed — platform is end-of-life.' },
+      { num: '05', title: 'Team Stability', body: 'Engineering team at capacity on Nimbus. Scope uncertainty causing attrition risk. Two senior engineers received competing offers citing unclear direction.' }
+    ],
+    covenant: 'No formal investor covenant — but the company must demonstrate a credible path to Nimbus launch and revenue ramp before Series B runway expires.'
+  },
+  demo: {
+    title: 'ShopPulse',
+    subtitle: 'The Last Mile Problem: Growth vs. Margin in Quick Commerce',
+    situation: 'It is January 2026. ShopPulse, a Bengaluru-based quick-commerce startup, has just closed a Seed round of Rs 18 Cr. The board wants 3x GMV growth in 12 months. The CFO wants unit economics positive by Q3. You cannot have both. This is a demo case — use it to learn the Praxis format before running a full simulation.',
+    products: [
+      { name: 'Core Delivery (10-min)', price: 'Rs 30 delivery fee', units: '8,200 orders/day', margin: '-12%', note: 'Loss leader — builds habit and market share' },
+      { name: 'ShopPulse Plus (subscription)', price: 'Rs 199/month', units: '4,400 subscribers', margin: '+34%', note: 'High margin but slow to acquire' }
+    ],
+    financials: { revenue: 'Rs 1.1 Cr/month', burn: 'Rs 1.1 Cr/month', runway: '~11 months (Seed)', headcount: '84' },
+    challenges: [
+      { num: '01', title: 'Growth vs. Margin', body: 'Every incremental order loses Rs 18. Scaling losses faster. But without scale, the unit economics never improve. Classic quick-commerce trap.' },
+      { num: '02', title: 'Dark Store Expansion', body: 'Each new dark store costs Rs 45L to set up, 3 months to break even on fixed costs. How many do you open and when?' },
+      { num: '03', title: 'Rider Economics', body: 'Riders are gig workers. As order density increases, per-delivery cost drops. But during low-density periods, fixed guarantees drain cash.' },
+      { num: '04', title: 'Category Mix', body: 'Grocery = high frequency, low margin. Electronics = low frequency, high margin. How do you build a basket that works for both customer and unit economics?' },
+      { num: '05', title: 'Retention vs. Acquisition', body: 'CAC is Rs 420. LTV is Rs 680 (if subscriber) or Rs 210 (if not). The entire business model depends on converting delivery users to subscribers.' }
+    ],
+    covenant: 'Demonstrate positive contribution margin on core delivery in at least 2 cities by end of Q4. Otherwise the Series A conversation becomes very difficult.'
+  }
+};
+
+function renderCase() {
+  var cont = document.getElementById('caseViewerContent');
+  var cfg = CASE_CTX[selectedCase] || CASE_CTX['A'];
+  var caseData = CASE_CONTENT[selectedCase] || CASE_CONTENT['A'];
+
+  var html = '<div class="card" style="margin-bottom:20px;background:var(--ink);color:white;border:none;">' +
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;">' +
+    '<div>' +
+    '<div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--volt);margin-bottom:8px">Case Brief</div>' +
+    '<div style="font-family:var(--serif);font-size:28px;color:white;margin-bottom:4px">' + caseData.title + '</div>' +
+    '<div style="font-size:13px;color:rgba(255,255,255,0.5);font-style:italic">' + caseData.subtitle + '</div>' +
+    '</div>' +
+    '<span class="case-badge ' + cfg.badgeClass + '" style="flex-shrink:0;margin-top:4px">' + cfg.badgeText + '</span>' +
+    '</div>' +
+    '<div style="margin-top:20px;padding:16px;background:rgba(255,255,255,0.06);border-radius:8px;border-left:3px solid var(--volt)">' +
+    '<div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.7">' + caseData.situation + '</div>' +
+    '</div>' +
+    '</div>';
+
+  // Products table
+  html += '<div class="card"><div class="card-header"><div class="card-icon green">📦</div><div><div class="card-title">Products</div></div></div>';
+  html += '<table style="width:100%;border-collapse:collapse">';
+  html += '<tr style="background:var(--wire-2)"><th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Product</th><th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Price</th><th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Volume</th><th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Gross Margin</th><th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Note</th></tr>';
+  caseData.products.forEach(function(p, i) {
+    var bg = i % 2 === 0 ? 'var(--surface)' : 'white';
+    var mc = parseFloat(p.margin) >= 0 ? 'var(--volt-dim)' : 'var(--red)';
+    html += '<tr style="background:' + bg + '">' +
+      '<td style="padding:10px 12px;font-weight:700;font-size:13px">' + p.name + '</td>' +
+      '<td style="padding:10px 12px;font-size:13px;font-family:var(--mono)">' + p.price + '</td>' +
+      '<td style="padding:10px 12px;font-size:13px">' + p.units + '</td>' +
+      '<td style="padding:10px 12px;font-size:14px;font-weight:700;color:' + mc + ';font-family:var(--mono)">' + p.margin + '</td>' +
+      '<td style="padding:10px 12px;font-size:12px;color:var(--muted);font-style:italic">' + p.note + '</td>' +
+      '</tr>';
+  });
+  html += '</table></div>';
+
+  // Financials strip
+  var fin = caseData.financials;
+  html += '<div class="grid-4" style="margin-bottom:20px">';
+  [['Revenue', fin.revenue], ['Monthly Burn', fin.burn], ['Runway', fin.runway], ['Headcount', fin.headcount]].forEach(function(item) {
+    html += '<div class="stat-tile"><div class="stat-label">' + item[0] + '</div><div class="stat-value" style="font-size:18px">' + item[1] + '</div></div>';
+  });
+  html += '</div>';
+
+  // Covenant
+  html += '<div style="background:var(--amber-pale);border:1px solid var(--amber);border-radius:var(--radius);padding:16px;margin-bottom:20px">' +
+    '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--amber);margin-bottom:6px">The Covenant</div>' +
+    '<div style="font-size:13px;color:var(--darkGray);line-height:1.65">' + caseData.covenant + '</div>' +
+    '</div>';
+
+  // Strategic challenges
+  html += '<div class="card"><div class="card-header"><div class="card-icon red">⚠️</div><div><div class="card-title">Five Strategic Challenges</div><div class="card-subtitle">These challenges are interconnected — decisions on one affect all others</div></div></div>';
+  caseData.challenges.forEach(function(c) {
+    html += '<div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--wire-2)">' +
+      '<div style="background:var(--ink);color:white;border-radius:6px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:700;flex-shrink:0">' + c.num + '</div>' +
+      '<div><div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:4px">' + c.title + '</div>' +
+      '<div style="font-size:12.5px;color:var(--muted);line-height:1.6">' + c.body + '</div></div>' +
+      '</div>';
+  });
+  html += '</div>';
+
+  cont.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════
@@ -2480,6 +2708,7 @@ function renderDecisions() {
   `;
 
   // Render each domain
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
   getDecisionDomains().forEach(domain => {
     html += `
       <div class="decision-domain">
@@ -2524,6 +2753,7 @@ function renderDecisions() {
 
     html += `</div></div>`;
   });
+  html += '</div>';
 
   html += `
     <div class="submit-row">
