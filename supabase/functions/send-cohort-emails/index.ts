@@ -6,11 +6,16 @@
 // owning Game Master (or master admin) can read the credentials, and
 // therefore only they can send them.
 //
+// Transport: Brevo (formerly Sendinblue) transactional API. Brevo allows
+// single-sender verification (no domain required), so PRAXIS_FROM_EMAIL
+// just needs to be an address you've verified in the Brevo dashboard.
+//
 // Required env vars (Supabase project secrets):
 //   SUPABASE_URL                — auto-populated by Supabase
 //   SUPABASE_ANON_KEY           — auto-populated
-//   RESEND_API_KEY              — your Resend API key
-//   PRAXIS_FROM_EMAIL           — verified Resend sender, e.g. praxis@your-domain.com
+//   BREVO_API_KEY               — your Brevo API key (Brevo → SMTP & API → API Keys)
+//   PRAXIS_FROM_EMAIL           — verified Brevo sender, e.g. you@your-domain.com
+//   PRAXIS_FROM_NAME            — display name on outgoing emails (optional; defaults to "Praxis")
 //   PRAXIS_APP_BASE_URL         — public URL the email links into,
 //                                 e.g. https://yaswant46.github.io/praxis
 //
@@ -23,7 +28,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
+const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin":  "*",
@@ -137,12 +142,13 @@ Deno.serve(async (req: Request) => {
 
   const SUPABASE_URL      = Deno.env.get("SUPABASE_URL");
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-  const RESEND_API_KEY    = Deno.env.get("RESEND_API_KEY");
+  const BREVO_API_KEY     = Deno.env.get("BREVO_API_KEY");
   const FROM_EMAIL        = Deno.env.get("PRAXIS_FROM_EMAIL");
+  const FROM_NAME         = Deno.env.get("PRAXIS_FROM_NAME") || "Praxis";
   const APP_BASE_URL      = Deno.env.get("PRAXIS_APP_BASE_URL");
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return jsonResponse({ error: "Supabase env not configured" }, 500);
-  if (!RESEND_API_KEY)                     return jsonResponse({ error: "RESEND_API_KEY not set"     }, 500);
+  if (!BREVO_API_KEY)                      return jsonResponse({ error: "BREVO_API_KEY not set"      }, 500);
   if (!FROM_EMAIL)                         return jsonResponse({ error: "PRAXIS_FROM_EMAIL not set"  }, 500);
   if (!APP_BASE_URL)                       return jsonResponse({ error: "PRAXIS_APP_BASE_URL not set"}, 500);
 
@@ -220,18 +226,19 @@ Deno.serve(async (req: Request) => {
 
     const subject = `Praxis — ${cohortName} · ${t.display_name} login`;
 
-    const resp = await fetch(RESEND_ENDPOINT, {
+    const resp = await fetch(BREVO_ENDPOINT, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${RESEND_API_KEY}`,
-        "Content-Type":  "application/json",
+        "api-key":      BREVO_API_KEY,
+        "Content-Type": "application/json",
+        "accept":       "application/json",
       },
       body: JSON.stringify({
-        from: FROM_EMAIL,
-        to:   [t.representative_email],
+        sender:      { email: FROM_EMAIL, name: FROM_NAME },
+        to:          [{ email: t.representative_email, name: t.display_name }],
         subject,
-        html,
-        text,
+        htmlContent: html,
+        textContent: text,
       }),
     });
     if (resp.ok) {
@@ -239,7 +246,7 @@ Deno.serve(async (req: Request) => {
       sentTeamIds.push(t.id);
     } else {
       const err = await resp.text();
-      results.push({ team_id: t.id, ok: false, error: `Resend ${resp.status}: ${err.slice(0, 240)}` });
+      results.push({ team_id: t.id, ok: false, error: `Brevo ${resp.status}: ${err.slice(0, 240)}` });
     }
   }
 
