@@ -19,7 +19,7 @@ password and runs the simulation in real time.
 | Realtime    | Supabase Realtime (WebSockets)             |
 | Auth (GM)   | Supabase OTP (email)                       |
 | Auth (team) | `verify_team_login` RPC (session + creds)  |
-| Email       | Supabase Edge Function → Resend            |
+| Email       | Supabase Edge Function → Brevo             |
 
 ---
 
@@ -32,20 +32,47 @@ You only do this once per Supabase project.
 Go to **Supabase → SQL Editor → New Query**, paste `supabase_schema.sql`, and
 **Run**. Idempotent — safe to re-run if you change the file later.
 
-### 2. Set up Resend
+### 2. Set up Brevo
 
-1. Sign up at [resend.com](https://resend.com).
-2. Verify a sender domain (or use the resend.dev sandbox for testing).
-3. Copy your API key from the Resend dashboard.
+1. Sign up at [brevo.com](https://www.brevo.com) (free plan: 300 emails/day, no card).
+2. **Senders & IP → Senders → Add a sender** → enter an email you control
+   (e.g. `you@your-email.com`) → click the verification link Brevo emails
+   to that address. From now on this address is your `From:`.
+3. **SMTP & API → API Keys → Generate a new API key** → copy it.
 
 ### 3. Configure Supabase secrets
 
+In the Supabase dashboard: **Project Settings → Edge Functions → Secrets**, add:
+
+| Key                   | Value                                                          |
+|-----------------------|----------------------------------------------------------------|
+| `BREVO_API_KEY`       | The API key from step 2                                        |
+| `PRAXIS_FROM_EMAIL`   | The sender email you verified in Brevo                         |
+| `PRAXIS_FROM_NAME`    | Display name on outgoing emails (optional, defaults to `Praxis`) |
+| `PRAXIS_APP_BASE_URL` | `https://yaswant46.github.io/praxis`                            |
+
+Or via the CLI:
+
 ```bash
 supabase secrets set \
-  RESEND_API_KEY=re_...your_key... \
-  PRAXIS_FROM_EMAIL=praxis@your-verified-domain.com \
+  BREVO_API_KEY=xkeysib-...your_key... \
+  PRAXIS_FROM_EMAIL=you@your-email.com \
+  PRAXIS_FROM_NAME="Praxis" \
   PRAXIS_APP_BASE_URL=https://yaswant46.github.io/praxis
 ```
+
+### 3a. Configure Supabase Auth SMTP (so OTP login emails also use Brevo)
+
+In the Supabase dashboard: **Project Settings → Authentication → SMTP Settings → Enable custom SMTP**.
+
+| Field        | Value                                                           |
+|--------------|-----------------------------------------------------------------|
+| Sender email | Same as `PRAXIS_FROM_EMAIL`                                     |
+| Sender name  | `Praxis`                                                        |
+| Host         | `smtp-relay.brevo.com`                                          |
+| Port         | `587`                                                           |
+| Username     | Your Brevo SMTP login (find in Brevo → **SMTP & API → SMTP**)   |
+| Password     | Your Brevo SMTP key (same screen)                               |
 
 ### 4. Deploy the Edge Function
 
@@ -76,7 +103,7 @@ Live at `https://yaswant46.github.io/praxis`.
    (2–6), rounds (1..max for the chosen case), GM email.
 4. **Step 2 — Team representatives**: enter one rep email per team. Themed
    names + passwords are pre-generated; click ↻ to regenerate, or just edit.
-5. Click **Create cohort & send emails**. The Edge Function fires one Resend
+5. Click **Create cohort & send emails**. The Edge Function fires one Brevo
    email per team rep with username, password, and a unique URL.
 6. Each rep forwards the email to teammates. Anyone on the team can then
    open the URL, enter the username + password, and play.
@@ -95,7 +122,7 @@ from the Manage panel at any time.
 | `index.html`                                  | Landing page (redirects to `app.html`)      |
 | `app.html`                                    | The whole app — UI, JS, Supabase client     |
 | `supabase_schema.sql`                         | Tables, RLS policies, RPCs, realtime config |
-| `supabase/functions/send-cohort-emails/`      | Deno Edge Function (Resend transport)       |
+| `supabase/functions/send-cohort-emails/`      | Deno Edge Function (Brevo transport)        |
 | `404.html`                                    | GitHub Pages SPA fallback                   |
 
 ---
