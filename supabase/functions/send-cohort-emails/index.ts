@@ -137,6 +137,19 @@ function buildEmailText(opts: {
 }
 
 Deno.serve(async (req: Request) => {
+  // Top-level guard: any unhandled error becomes a JSON 500 with the error
+  // message — otherwise Supabase Edge Runtime swallows it as EDGE_FUNCTION_ERROR
+  // and the wizard's notification is unhelpful.
+  try {
+    return await handleRequest(req);
+  } catch (err) {
+    console.error("send-cohort-emails uncaught:", err);
+    const message = err instanceof Error ? (err.stack || err.message || String(err)) : String(err);
+    return jsonResponse({ error: "Unhandled error: " + message.slice(0, 500) }, 500);
+  }
+});
+
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   if (req.method !== "POST")    return jsonResponse({ error: "Method not allowed" }, 405);
 
@@ -180,7 +193,7 @@ Deno.serve(async (req: Request) => {
     .eq("id", sessionId)
     .single();
   if (sessErr || !session) {
-    return jsonResponse({ error: "Session not found or not authorized" }, 404);
+    return jsonResponse({ error: "Session not found or not authorized: " + (sessErr?.message || "no row") }, 404);
   }
 
   let teamsQuery = supabase
@@ -201,64 +214,69 @@ Deno.serve(async (req: Request) => {
   const baseUrl     = APP_BASE_URL.replace(/\/+$/, "");
 
   const results: Array<{ team_id: string; ok: boolean; error?: string }> = [];
-  let sentTeamIds: string[] = [];
+  const sentTeamIds: string[] = [];
 
   for (const t of teams) {
     if (!t.representative_email) {
       results.push({ team_id: t.id, ok: false, error: "no representative_email" });
       continue;
     }
-    const loginUrl = `${baseUrl}/#/session/${session.code}/team/${t.slot}`;
-    const html     = buildEmailHtml({
-      cohortName, caseName, totalRounds,
-      teamDisplayName: t.display_name,
-      username: t.username,
-      password: t.password,
-      loginUrl,
-    });
-    const text     = buildEmailText({
-      cohortName, caseName, totalRounds,
-      teamDisplayName: t.display_name,
-      username: t.username,
-      password: t.password,
-      loginUrl,
-    });
+    try {
+      const loginUrl = `${baseUrl}/#/session/${session.code}/team/${t.slot}`;
+      const opts = {
+        cohortName, caseName, totalRounds,
+        teamDisplayName: t.display_name,
+        username: t.username,
+        password: t.password,
+        loginUrl,
+      };
+      const html    = buildEmailHtml(opts);
+      const text    = buildEmailText(opts);
+      const subject = `Praxis — ${cohortName} · ${t.display_name} login`;
 
-    const subject = `Praxis — ${cohortName} · ${t.display_name} login`;
-
-    const resp = await fetch(BREVO_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "api-key":      BREVO_API_KEY,
-        "Content-Type": "application/json",
-        "accept":       "application/json",
-      },
-      body: JSON.stringify({
-        sender:      { email: FROM_EMAIL, name: FROM_NAME },
-        to:          [{ email: t.representative_email, name: t.display_name }],
-        subject,
-        htmlContent: html,
-        textContent: text,
-      }),
-    });
-    if (resp.ok) {
-      results.push({ team_id: t.id, ok: true });
-      sentTeamIds.push(t.id);
-    } else {
-      const err = await resp.text();
-      results.push({ team_id: t.id, ok: false, error: `Brevo ${resp.status}: ${err.slice(0, 240)}` });
+      const resp = await fetch(BREVO_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "api-key":      BREVO_API_KEY,
+          "Content-Type": "application/json",
+          "accept":       "application/json",
+        },
+        body: JSON.stringify({
+          sender:      { email: FROM_EMAIL, name: FROM_NAME },
+          to:          [{ email: t.representative_email, name: t.display_name }],
+          subject,
+          htmlContent: html,
+          textContent: text,
+        }),
+      });
+      // Brevo returns 201 on success with a JSON body containing messageId.
+      if (resp.status >= 200 && resp.status < 300) {
+        results.push({ team_id: t.id, ok: true });
+        sentTeamIds.push(t.id);
+      } else {
+        const errText = await safeReadText(resp);
+        results.push({ team_id: t.id, ok: false, error: `Brevo ${resp.status}: ${errText.slice(0, 240)}` });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? (e.message || String(e)) : String(e);
+      results.push({ team_id: t.id, ok: false, error: "fetch threw: " + msg.slice(0, 240) });
     }
   }
 
   // Stamp credentials_sent_at on every team that succeeded.
   if (sentTeamIds.length) {
-    await supabase
+    const { error: updErr } = await supabase
       .from("teams")
       .update({ credentials_sent_at: new Date().toISOString() })
       .in("id", sentTeamIds);
+    if (updErr) console.error("credentials_sent_at update failed:", updErr.message);
   }
 
   const sent   = results.filter(r => r.ok).length;
   const failed = results.length - sent;
   return jsonResponse({ sent, failed, results });
-});
+}
+
+async function safeReadText(resp: Response): Promise<string> {
+  try { return await resp.text(); } catch { return "<could not read body>"; }
+}
