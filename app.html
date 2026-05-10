@@ -1632,14 +1632,16 @@ async function dbGetAllDecisions(sessionId) {
     .eq('session_id', sessionId).order('submitted_at');
   return data || [];
 }
-async function dbPublishOutcome(sessionId, teamId, round, metrics, score) {
+async function dbPublishOutcome(sessionId, teamId, round, metrics, score, narratives) {
   const sb = getSupabase(); if (!sb) return false;
   const { error } = await sb.from('outcomes').upsert({
     session_id: sessionId, team_id: teamId, round,
     revenue: metrics.revenue, gross_margin: metrics.grossMargin,
     cash_runway: metrics.cashRunway, market_share: metrics.marketShare,
     product_health: metrics.productHealth, team_capability: metrics.teamCapability,
-    score, published_at: new Date().toISOString()
+    score,
+    narratives: Array.isArray(narratives) ? narratives : [],
+    published_at: new Date().toISOString()
   }, { onConflict: 'session_id,team_id,round' });
   return !error;
 }
@@ -1913,17 +1915,20 @@ async function _doLoadState() {
   });
 
   const outcomes = await dbGetOutcomes(currentSession.id);
+  state.narratives = {};   // { round: { teamKey: [ narrative... ] } }
   outcomes.forEach(o => {
     const tSlot = o.teams ? o.teams.slot : null;
     const key   = tSlot ? slotToKey[tSlot] : null;
     if (!key) return;
     if (!state.outcomes[o.round]) state.outcomes[o.round] = {};
+    if (!state.narratives[o.round]) state.narratives[o.round] = {};
     const m = {
       revenue: parseFloat(o.revenue)||0, grossMargin: parseFloat(o.gross_margin)||0,
       cashRunway: parseFloat(o.cash_runway)||0, marketShare: parseFloat(o.market_share)||50,
       productHealth: parseFloat(o.product_health)||60, teamCapability: parseFloat(o.team_capability)||65
     };
     state.outcomes[o.round][key] = m;
+    state.narratives[o.round][key] = Array.isArray(o.narratives) ? o.narratives : [];
     state.metrics[key] = m;
     state.scores[key].history[o.round-1] = o.score || 0;
     state.scores[key].total = state.scores[key].history.reduce((a,b)=>a+(b||0),0);
@@ -2809,6 +2814,339 @@ function getDecisionDomains() {
   if (selectedCase==='demo') return DECISION_DOMAINS_DEMO;
   return DECISION_DOMAINS;
 }
+function getDecisionDomainsForCaseSlug(slug) {
+  if (slug === 'arc')  return DECISION_DOMAINS_ARC;
+  if (slug === 'demo') return DECISION_DOMAINS_DEMO;
+  return DECISION_DOMAINS;
+}
+
+// =================================================
+//  ROUND SCORING ENGINE
+//
+//  When the GM clicks "Close round & publish results" on the admin
+//  panel, we compute each team's new metrics from their submitted
+//  decisions using DECISION_IMPACTS as the impact lookup, generate a
+//  per-decision narrative, and write everything to the outcomes table.
+//
+//  Each entry in DECISION_IMPACTS[caseSlug][field_id] is an array
+//  indexed by the option's position in the DECISION_DOMAINS option
+//  list. Re-ordering options without updating impacts will desync the
+//  results — keep these two in step.
+//
+//  Score formula: weighted normalised metric mix, clamped 0–100.
+// =================================================
+const DECISION_IMPACTS = {
+  volta: {
+    eng_priority: [
+      { d: { productHealth: 8,  teamCapability: 2, revenue: -2, marketShare: -1 },
+        s: "Fixing the BLE memory leak stabilised VoltaOS and cut support tickets. Bandwidth pulled from feature work meant the roadmap stayed flat this quarter." },
+      { d: { revenue: 5, productHealth: 2, cashRunway: -1, grossMargin: -1 },
+        s: "Fast-Charge integration positioned the Edge against premium competitors. Integration cost nibbled at runway and margin." },
+      { d: { revenue: 7, marketShare: 2, grossMargin: -2, productHealth: -1 },
+        s: "The Fleet Management API opened the B2B channel — early wins added top-line, but at lower per-unit margin than retail." },
+      { d: { teamCapability: 5, productHealth: -2, cashRunway: -1 },
+        s: "Starting VoltaOS 2.0 grew the team's long-term capability. Product polish on the current generation slipped a notch." },
+      { d: { productHealth: 5, grossMargin: 1, revenue: -1, teamCapability: -1 },
+        s: "Core maintenance reduced warranty exposure. The team did not visibly progress the roadmap." },
+    ],
+    mfg_hosur: [
+      { d: { productHealth: 6, grossMargin: -1, cashRunway: -2 },
+        s: "Investing ₹2.2 Cr in Hosur quality cut field failures; cash dipped on the audit + tooling." },
+      { d: { grossMargin: -3, productHealth: -3, cashRunway: 1 },
+        s: "Maintaining Hosur preserved cash but warranty costs kept eroding margin and brand." },
+      { d: { revenue: -3, grossMargin: 2, cashRunway: 1 },
+        s: "Reducing Hosur volume protected margin per unit but lost top-line." },
+      { d: { productHealth: 4, cashRunway: -4, grossMargin: 1, teamCapability: 1 },
+        s: "Exiting Hosur and expanding Pune (₹8.5 Cr capex) resolved the quality risk for good — at a real cash cost." },
+    ],
+    sc_battery: [
+      { d: { grossMargin: 1 },
+        s: "Staying spot on cells protected cash if prices fall but exposes you to a price shock if lithium tightens." },
+      { d: { grossMargin: 2, cashRunway: -1 },
+        s: "A 50% forward hedge locked in some margin certainty without fully committing capital." },
+      { d: { grossMargin: 4, cashRunway: -3 },
+        s: "100% forward hedge fixed margin but consumed cash on upfront commitment." },
+    ],
+    sc_chipaxis: [
+      { d: {},
+        s: "Status quo on ChipAxis — vendor concentration risk remains. Any future ChipAxis disruption hits you with no fallback." },
+      { d: { teamCapability: 3, productHealth: 1, cashRunway: -1 },
+        s: "Qualifying an alternate SoC vendor is a 6-month bet that grows resilience; cash impact is modest." },
+      { d: { teamCapability: 5, cashRunway: -3, productHealth: -1 },
+        s: "An in-house SoC track is a capital-intensive 18-month bet on long-term capability. Near-term roadmap may slow." },
+      { d: { grossMargin: 2, cashRunway: 1 },
+        s: "Renegotiated ChipAxis terms improved unit cost; vendor concentration unchanged." },
+    ],
+    com_edge: [
+      { d: {},
+        s: "Holding Edge pricing kept positioning stable but did not respond to competitor moves." },
+      { d: { grossMargin: 3, marketShare: -2, revenue: 1 },
+        s: "+₹5K on Edge improved per-unit margin and tested elasticity — price-sensitive buyers churned." },
+      { d: { marketShare: 3, grossMargin: -3, revenue: 2 },
+        s: "-₹5K bought share against ArcMotion, but margin contracted." },
+      { d: { revenue: 4, marketShare: 2, grossMargin: -2 },
+        s: "Launching the B2B fleet variant opened a new commercial vector. Volumes look promising at slightly thinner margin." },
+    ],
+    com_go: [
+      { d: {},
+        s: "No change on Go — steady contribution, no surprise." },
+      { d: { revenue: -2, grossMargin: 2 },
+        s: "Reducing Go production focused Edge margin — top-line softer." },
+      { d: { revenue: 5, marketShare: 3, cashRunway: -2 },
+        s: "Expanded Go to 5 new cities — top-line + share growth at the cost of dealer-investment cash." },
+      { d: { marketShare: 3, grossMargin: -3 },
+        s: "Cutting Go price defended share against Zephyr; margin loss is real." },
+    ],
+    ppl_retention: [
+      { d: { teamCapability: 5, cashRunway: -2 },
+        s: "ESOP acceleration retained senior engineers; cash dipped." },
+      { d: { teamCapability: 4, cashRunway: -1, productHealth: 1 },
+        s: "IIT Bombay programme upskilled the team — slow-burn capability, modest cash cost." },
+      { d: { teamCapability: -2, productHealth: -1 },
+        s: "Engineering leadership pushed back on hybrid policy — friction shaved capability." },
+      { d: { teamCapability: 8, cashRunway: -3, productHealth: 1 },
+        s: "ESOP + IIT combo strongly boosted capability at meaningful cash cost." },
+      { d: { teamCapability: -3, productHealth: -1 },
+        s: "Skipping retention saved cash but capability slipped — turnover risk grew." },
+    ],
+  },
+  arc: {
+    pd_path: [
+      { d: { revenue: -2, marketShare: -3, productHealth: -2 },
+        s: "Holding Nimbus's current spec preserved schedule discipline — but the market moved without you." },
+      { d: { productHealth: 3, marketShare: 2, cashRunway: -2 },
+        s: "Adding the companion app and 7-inch display brought Nimbus closer to parity. Schedule slipped 4 months." },
+      { d: { productHealth: 5, marketShare: 3, cashRunway: -4 },
+        s: "Three feature additions made Nimbus competitive — schedule and cash both took real hits." },
+      { d: { productHealth: 6, marketShare: 4, cashRunway: -7 },
+        s: "Full parity puts Nimbus at the front of the segment. Cash and schedule consumed." },
+      { d: { teamCapability: 1, marketShare: -2, revenue: -1 },
+        s: "A 6-week market research sprint bought clarity but slowed forward motion." },
+    ],
+    pd_comms: [
+      { d: { marketShare: -1 },
+        s: "Silence kept options open; dealers grew nervous." },
+      { d: { teamCapability: 1 },
+        s: "Controlled-channel dealer comms preserved trust without alerting competitors." },
+      { d: { teamCapability: -2, marketShare: -2 },
+        s: "Public delay announcement was honest — and gave competitors ammunition." },
+      { d: { marketShare: 2, productHealth: -1, cashRunway: -1 },
+        s: "Aggressive Nimbus PR built buzz but raised expectations beyond current spec." },
+    ],
+    fp_top: [
+      { d: { productHealth: -2 },
+        s: "Not adapting means Nimbus ships under-featured." },
+      { d: { productHealth: 3, cashRunway: -1, marketShare: 1 },
+        s: "App + gamification adds Gen-Z-aligned features at moderate cost." },
+      { d: { productHealth: 2, cashRunway: -1 },
+        s: "Larger display closes a clear visual feature gap." },
+      { d: { productHealth: 4, cashRunway: -3, marketShare: 2 },
+        s: "Fast-charge is the headline feature — expensive but moves the needle." },
+      { d: { productHealth: 5, cashRunway: -5, marketShare: 3 },
+        s: "Removable battery is the most ambitious option — biggest moat, biggest cost and schedule risk." },
+    ],
+    cm_budget: [
+      { d: { cashRunway: 2, productHealth: -2 },
+        s: "Holding budget preserves runway — but features dependent on additional spend will not happen." },
+      { d: { productHealth: 2, cashRunway: -1 },
+        s: "₹5 Cr funded software + display scope. Moderate impact on cash." },
+      { d: { productHealth: 3, cashRunway: -3 },
+        s: "₹10 Cr enabled broader feature scope at meaningful cash cost." },
+      { d: { productHealth: 5, cashRunway: -6 },
+        s: "₹20 Cr lets you do everything but burns reserves — capital-raise conversation gets urgent." },
+    ],
+    cr_drift: [
+      { d: {},
+        s: "Drift stays the course — predictable contribution, no surprises." },
+      { d: { revenue: 2, grossMargin: 1 },
+        s: "Drift SE bundle generated modest incremental revenue and signalled product care." },
+      { d: { marketShare: 2, grossMargin: -3 },
+        s: "Drift price cut defended volume against SwiftEV; margin contracted." },
+      { d: { revenue: 1, marketShare: 1, cashRunway: -1 },
+        s: "Tier 2 expansion opened a less-contested market; rollout consumed some cash." },
+      { d: { cashRunway: 1, marketShare: -2 },
+        s: "Pulling Drift marketing saved cash but ceded share." },
+    ],
+    cr_dealer: [
+      { d: {},
+        s: "Standard dealer support — no notable signal." },
+      { d: { revenue: 2, grossMargin: -1, marketShare: 1 },
+        s: "Sell-through incentives moved Drift inventory; margin per unit slipped slightly." },
+      { d: { teamCapability: 1, marketShare: 1 },
+        s: "NDA briefing preserved dealer alignment; some risk of leakage." },
+      { d: { cashRunway: 1, marketShare: -1 },
+        s: "Pausing dealer onboarding cut investment; growth slowed." },
+    ],
+    ps_ret: [
+      { d: { teamCapability: -2 },
+        s: "No retention play this quarter — capability slipped." },
+      { d: { teamCapability: 2, productHealth: 1 },
+        s: "A clear Nimbus direction brief restored team focus." },
+      { d: { teamCapability: 3, cashRunway: -1 },
+        s: "ESOP acceleration held senior engineers — modest cash impact." },
+      { d: { teamCapability: 5, cashRunway: -1, productHealth: 1 },
+        s: "Direction + ESOP combo gave both clarity and stickiness." },
+      { d: { teamCapability: 2, cashRunway: -2, productHealth: -1 },
+        s: "Hiring 4–6 new engineers added capacity but onboarding load slowed near-term throughput." },
+    ],
+  },
+  demo: {
+    gr_pace: [
+      { d: { revenue: -1, grossMargin: 2, cashRunway: 1 },
+        s: "Flat growth protected unit economics — but you give up the option to dominate." },
+      { d: { revenue: 2 },
+        s: "15% growth balanced expansion with economics." },
+      { d: { revenue: 5, grossMargin: -3, cashRunway: -2, marketShare: 3 },
+        s: "30% growth pushed share but eroded margin — losses widened." },
+      { d: { revenue: 8, grossMargin: -6, cashRunway: -4, marketShare: 5 },
+        s: "Aggressive growth bought market share at meaningful cost to unit economics — investor conversation looms." },
+    ],
+    ue_delivery: [
+      { d: {},
+        s: "Held delivery fee at ₹30 — predictable, no surprise." },
+      { d: { grossMargin: 3, revenue: -2, marketShare: -2 },
+        s: "Delivery fee hike improved margin; price-sensitive users churned." },
+      { d: { grossMargin: 2, revenue: 1 },
+        s: "Dynamic surge pricing captured peak-hour value; complaints rose." },
+      { d: { revenue: 1, marketShare: 1, grossMargin: 1 },
+        s: "Free-delivery-for-Plus lifted subscriber conversions and improved blended margin." },
+    ],
+    pr_focus: [
+      { d: { productHealth: 2, grossMargin: 1 },
+        s: "Doubling down on grocery deepened density; operationally simpler." },
+      { d: { grossMargin: 2, revenue: 2, productHealth: -2 },
+        s: "Electronics raised margin per order but added inventory complexity." },
+      { d: { revenue: 3, grossMargin: 1, productHealth: -1 },
+        s: "Pharmacy is high-repeat and decent margin — compliance overhead is real." },
+      { d: { revenue: 4, marketShare: 2, grossMargin: -3, productHealth: -3 },
+        s: "Full catalogue expansion drew users but operational load rose faster than margin." },
+    ],
+    pr_plus: [
+      { d: {},
+        s: "No Plus push — slow but free growth." },
+      { d: { revenue: 2, marketShare: 1 },
+        s: "Trial offer accelerated Plus conversions." },
+      { d: { revenue: 3, marketShare: 2, grossMargin: -1 },
+        s: "Referral bundle moved the needle on subscribers." },
+      { d: { revenue: 4, grossMargin: 2, marketShare: -3 },
+        s: "Mandatory Plus for free delivery boosted subscribers but lost casual users." },
+    ],
+    op_riders: [
+      { d: { grossMargin: 1, productHealth: -2 },
+        s: "Gig riders are cheap and variable — reliability inconsistent." },
+      { d: { productHealth: 2 },
+        s: "Hybrid model balanced cost and reliability." },
+      { d: { productHealth: 3, grossMargin: -1 },
+        s: "Full-time riders in dense zones lifted reliability; cost rose." },
+      { d: { grossMargin: -2, productHealth: -1, teamCapability: -1 },
+        s: "Outsourcing delivery simplified ops but you lost the customer touchpoint and margin." },
+    ],
+  },
+};
+
+function _scoringApplyDelta(m, d) {
+  Object.entries(d || {}).forEach(([k, v]) => {
+    if (typeof m[k] === 'number') m[k] = Number(m[k]) + Number(v);
+  });
+}
+function _scoringClamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function _scoringNormaliseScore(m) {
+  const r = _scoringClamp((m.revenue ?? 0) / 30 * 100, 0, 100);
+  const g = _scoringClamp(((m.grossMargin ?? 0) + 20) / 50 * 100, 0, 100);
+  const c = _scoringClamp((m.cashRunway ?? 0) / 30 * 100, 0, 100);
+  const s = _scoringClamp(m.marketShare ?? 0, 0, 100);
+  const p = _scoringClamp(m.productHealth ?? 0, 0, 100);
+  const t = _scoringClamp(m.teamCapability ?? 0, 0, 100);
+  return Math.round(0.25*r + 0.20*g + 0.15*c + 0.15*s + 0.15*p + 0.10*t);
+}
+
+// Compute a single team's outcome from their decisions this round.
+//   decisions: rows from the decisions table for this (session, team, round)
+//   prevMetrics: starting metrics (last round's outcome or defaultMetrics)
+//   caseSlug: 'volta' | 'arc' | 'demo'
+// Returns { metrics, narratives, score }.
+function computeTeamOutcome(decisions, prevMetrics, caseSlug) {
+  const metrics = Object.assign({
+    revenue: 0, grossMargin: 0, cashRunway: 0,
+    marketShare: 0, productHealth: 0, teamCapability: 0,
+  }, prevMetrics);
+
+  const rules = DECISION_IMPACTS[caseSlug] || {};
+  const fieldById = {};
+  getDecisionDomainsForCaseSlug(caseSlug).forEach(dom => {
+    dom.fields.forEach(f => { fieldById[f.id] = { domain: dom, field: f }; });
+  });
+
+  const narratives = [];
+  (decisions || []).forEach(dec => {
+    const fi = fieldById[dec.field_id];
+    if (!fi) return;
+    const f = fi.field;
+    const dom = fi.domain;
+
+    if (f.type === 'select') {
+      const options = f.options || [];
+      const idx     = options.indexOf(dec.value);
+      const rule    = (rules[dec.field_id] || [])[idx];
+      if (rule) {
+        _scoringApplyDelta(metrics, rule.d);
+        narratives.push({
+          domain_id:    dec.domain_id,
+          domain_title: dom.title,
+          field_id:     dec.field_id,
+          field_label:  f.label,
+          option:       dec.value,
+          delta:        rule.d,
+          summary:      rule.s,
+        });
+      } else {
+        narratives.push({
+          domain_id: dec.domain_id, domain_title: dom.title,
+          field_id: dec.field_id, field_label: f.label,
+          option: dec.value, delta: {},
+          summary: "Choice recorded — no scoring rule available for this option.",
+        });
+      }
+    } else if (f.type === 'slider') {
+      narratives.push({
+        domain_id: dec.domain_id, domain_title: dom.title,
+        field_id: dec.field_id, field_label: f.label,
+        option: String(dec.value) + (f.unit ? f.unit : ''),
+        delta: {},
+        summary: `Set ${f.label.toLowerCase()} to ${dec.value}${f.unit||''}.`,
+      });
+    }
+    // textareas: rationale is qualitative; not scored, not echoed here.
+  });
+
+  metrics.revenue        = Math.max(0, Number(metrics.revenue.toFixed(1)));
+  metrics.grossMargin    = Number(metrics.grossMargin.toFixed(1));
+  metrics.cashRunway     = Math.max(0, Number(metrics.cashRunway.toFixed(1)));
+  metrics.marketShare    = _scoringClamp(Math.round(metrics.marketShare),    0, 100);
+  metrics.productHealth  = _scoringClamp(Math.round(metrics.productHealth),  0, 100);
+  metrics.teamCapability = _scoringClamp(Math.round(metrics.teamCapability), 0, 100);
+
+  return { metrics, narratives, score: _scoringNormaliseScore(metrics) };
+}
+
+// Compute outcomes for every submitting team in a round.
+//   decisionsByTeam:     { teamId: [decisions...] }
+//   prevMetricsByTeam:   { teamId: metrics } (round-1 outcome; falls back to defaultMetrics)
+function computeRoundOutcomes(decisionsByTeam, prevMetricsByTeam, caseSlug) {
+  const out = {};
+  Object.entries(decisionsByTeam).forEach(([teamId, decisions]) => {
+    const prev = (prevMetricsByTeam && prevMetricsByTeam[teamId])
+      || defaultMetricsForCaseSlug(caseSlug);
+    out[teamId] = computeTeamOutcome(decisions, prev, caseSlug);
+  });
+  return out;
+}
+
+function defaultMetricsForCaseSlug(slug) {
+  if (slug === 'arc')  return { revenue:6.9,  grossMargin:4.2,  cashRunway:24, marketShare:52, productHealth:72, teamCapability:74 };
+  if (slug === 'demo') return { revenue:1.1,  grossMargin:-12,  cashRunway:11, marketShare:18, productHealth:45, teamCapability:60 };
+  return { revenue:16.8, grossMargin:-5.8, cashRunway:22, marketShare:42, productHealth:58, teamCapability:65 };
+}
 
 // =================================================
 //  DRAFT AUTOSAVE — P1 FIX
@@ -3129,49 +3467,99 @@ function renderAssessments() {
     const scoreData  = state.scores[teamId];
     const roundScore = scoreData && scoreData.history[round-1] ? scoreData.history[round-1] : null;
     const assessment = getRoundAssessments()[round];
-    if (!assessment) return;
     const teamMetrics = outcome && outcome[teamId] ? outcome[teamId] : defaultMetrics();
+    const prev        = (round > 1 && state.outcomes && state.outcomes[round-1] && state.outcomes[round-1][teamId])
+      ? state.outcomes[round-1][teamId]
+      : defaultMetrics();
+    const narratives  = (state.narratives && state.narratives[round] && state.narratives[round][teamId]) || [];
 
     let html = `
       <div class="assessment-card">
         <div class="assessment-header">
           <div class="assessment-q-badge">Q${round}</div>
-          <div class="assessment-title">${assessment.title}</div>
+          <div class="assessment-title">${escapeHtml(assessment ? assessment.title : ('Quarter ' + round + ' — Results'))}</div>
           ${roundScore ? `<div class="assessment-score-badge"><div class="assessment-score-num">${roundScore}</div><div class="assessment-score-label">/ 100 pts</div></div>` : ''}
         </div>
         <div class="assessment-body">
           <div class="assessment-metrics-row">
-            <div class="assess-metric">
-              <span class="assess-metric-val ${teamMetrics.revenue>16?'good':'neutral'}">₹${teamMetrics.revenue}Cr</span>
-              <span class="assess-metric-label">Monthly Revenue</span>
-            </div>
-            <div class="assess-metric">
-              <span class="assess-metric-val ${teamMetrics.grossMargin>=0?'good':'bad'}">${teamMetrics.grossMargin>0?'+':''}${teamMetrics.grossMargin}%</span>
-              <span class="assess-metric-label">Gross Margin</span>
-            </div>
-            <div class="assess-metric">
-              <span class="assess-metric-val ${teamMetrics.cashRunway>15?'good':'neutral'}">${teamMetrics.cashRunway}mo</span>
-              <span class="assess-metric-label">Cash Runway</span>
-            </div>
+            ${_assessMetricCell('Monthly Revenue', '₹' + teamMetrics.revenue + 'Cr', teamMetrics.revenue - prev.revenue, '₹', 'Cr')}
+            ${_assessMetricCell('Gross Margin',    (teamMetrics.grossMargin>0?'+':'') + teamMetrics.grossMargin + '%', teamMetrics.grossMargin - prev.grossMargin, '', '%')}
+            ${_assessMetricCell('Cash Runway',     teamMetrics.cashRunway + 'mo', teamMetrics.cashRunway - prev.cashRunway, '', 'mo')}
+            ${_assessMetricCell('Market Share',    teamMetrics.marketShare + '%', teamMetrics.marketShare - prev.marketShare, '', '%')}
+            ${_assessMetricCell('Product Health',  teamMetrics.productHealth, teamMetrics.productHealth - prev.productHealth, '', '')}
+            ${_assessMetricCell('Team Capability', teamMetrics.teamCapability, teamMetrics.teamCapability - prev.teamCapability, '', '')}
           </div>
-          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+    `;
+
+    if (narratives.length) {
+      html += `
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:20px 0 12px;display:flex;align-items:center;gap:8px;">
+          <span style="width:20px;height:1px;background:var(--wire);display:inline-block;"></span>
+          What happened this quarter
+          <span style="flex:1;height:1px;background:var(--wire);display:inline-block;"></span>
+        </div>
+        <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px">
+      `;
+      narratives.forEach(n => {
+        if (!n || !n.summary) return;
+        html += `
+          <li style="border:1px solid var(--wire);border-radius:var(--radius-sm);padding:12px 14px;background:white">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">${escapeHtml(n.domain_title || n.domain_id || '')}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px">${escapeHtml(n.field_label || n.field_id || '')}: <span style="font-weight:500;color:var(--muted)">${escapeHtml(n.option || '')}</span></div>
+            <div style="font-size:13px;line-height:1.55;color:var(--ink)">${escapeHtml(n.summary)}</div>
+            ${_renderDeltaChips(n.delta)}
+          </li>
+        `;
+      });
+      html += `</ul>`;
+    }
+
+    if (assessment && assessment.considerations && assessment.considerations.length) {
+      html += `
+          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:24px 0 12px;display:flex;align-items:center;gap:8px;">
             <span style="width:20px;height:1px;background:var(--wire);display:inline-block;"></span>
-            Considerations for Reflection
+            Considerations for reflection
             <span style="flex:1;height:1px;background:var(--wire);display:inline-block;"></span>
           </div>
           <ul class="consideration-list">
-    `;
-    assessment.considerations.forEach(item => {
-      html += `
-        <li class="consideration-item">
-          <div class="consid-icon ${item.type}">${item.icon}</div>
-          <div class="consid-text">${item.text}</div>
-        </li>
       `;
-    });
-    html += `</ul></div></div>`;
+      assessment.considerations.forEach(item => {
+        html += `
+          <li class="consideration-item">
+            <div class="consid-icon ${item.type}">${item.icon}</div>
+            <div class="consid-text">${item.text}</div>
+          </li>
+        `;
+      });
+      html += `</ul>`;
+    }
+
+    html += `</div></div>`;
     cont.innerHTML += html;
   });
+}
+
+function _assessMetricCell(label, valDisplay, delta, prefix, suffix) {
+  const deltaNum = Number(delta || 0);
+  const deltaStr = deltaNum === 0 ? '' :
+    `<span style="font-size:11px;color:${deltaNum>0?'var(--volt-dim)':'var(--red)'};font-weight:600;margin-left:6px">${deltaNum>0?'+':''}${Number(deltaNum.toFixed(1))}${suffix}</span>`;
+  return `<div class="assess-metric">
+    <span class="assess-metric-val ${deltaNum>0?'good':deltaNum<0?'bad':'neutral'}">${escapeHtml(valDisplay)}${deltaStr}</span>
+    <span class="assess-metric-label">${escapeHtml(label)}</span>
+  </div>`;
+}
+
+function _renderDeltaChips(delta) {
+  if (!delta || typeof delta !== 'object') return '';
+  const labels = {
+    revenue: 'revenue', grossMargin: 'margin', cashRunway: 'runway',
+    marketShare: 'share', productHealth: 'product health', teamCapability: 'team capability',
+  };
+  const chips = Object.entries(delta).filter(([_, v]) => Number(v) !== 0).map(([k, v]) => {
+    const positive = Number(v) > 0;
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-right:6px;margin-top:6px;background:${positive?'var(--volt-pale)':'var(--red-pale)'};color:${positive?'var(--volt-dim)':'var(--red)'}">${positive?'+':''}${v} ${labels[k] || k}</span>`;
+  });
+  return chips.length ? `<div style="margin-top:4px">${chips.join('')}</div>` : '';
 }
 
 // =================================================
@@ -3503,26 +3891,26 @@ async function renderAdmin() {
       </div>
     </div>
 
-    <!-- OUTCOME SCORING -->
+    <!-- ROUND CLOSE & PUBLISH -->
     <div class="card">
-      <div class="admin-section-title">Post-Round Outcome Scoring</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6;">
-        After reviewing team submissions, enter the simulated outcomes for each team. These populate their dashboards and leaderboard.
+      <div class="admin-section-title">Close Round & Publish Results</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        When you click <strong>Close round & publish</strong>, the scoring engine reads each team's submitted decisions, computes new metrics from the impact rules for ${escapeHtml((currentSession?.cases?.name) || 'this case')}, and writes the per-decision narratives. Round ${state.currentRound} closes immediately and teams see their results.
       </p>
-      <div id="scoringPanelContent">
-        ${(teams.length > 0 ? teams : LB_TEAMS.map(t=>({id:t.id,display_name:t.name}))).map(t => `
-          <div style="border:1px solid var(--wire);border-radius:var(--radius-sm);padding:16px;margin-bottom:12px;">
-            <div style="font-weight:700;font-size:14px;margin-bottom:12px;">${t.display_name||t.name}</div>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
-              <div><label class="field-label">Revenue (₹Cr)</label><input type="number" id="score_revenue_${t.id}" placeholder="16.8" style="border:1.5px solid var(--wire);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;width:100%;background:white"></div>
-              <div><label class="field-label">Gross Margin (%)</label><input type="number" id="score_gm_${t.id}" placeholder="-5.8" style="border:1.5px solid var(--wire);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;width:100%;background:white"></div>
-              <div><label class="field-label">Cash Runway (mo)</label><input type="number" id="score_runway_${t.id}" placeholder="22" style="border:1.5px solid var(--wire);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;width:100%;background:white"></div>
-              <div><label class="field-label">Score (/100)</label><input type="number" id="score_pts_${t.id}" placeholder="70" style="border:1.5px solid var(--wire);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;width:100%;background:white"></div>
+      <div id="closeRoundPanel">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          ${submissionStatus.map(t => `
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--wire);border-radius:var(--radius-sm);background:${t.submitted?'var(--volt-pale)':'white'}">
+              <span style="font-weight:700;font-size:13px;flex:1">${escapeHtml(t.name||t.slot)}</span>
+              <span class="tag ${t.submitted?'green':'amber'}">${t.submitted?'Submitted':'Pending'}</span>
             </div>
-          </div>
-        `).join('')}
+          `).join('')}
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn-primary" onclick="adminCloseAndPublishRound()">Close round &amp; publish →</button>
+          <span style="font-size:12px;color:var(--muted)">${submittedCount} of ${submissionStatus.length} teams submitted.</span>
+        </div>
       </div>
-      <button class="btn-primary" onclick="adminPublishOutcomes()" style="margin-top:8px;">Publish Outcomes to All Teams →</button>
     </div>
 
     <!-- CURVEBALL BANK -->
@@ -3649,36 +4037,78 @@ async function adminInjectCurveball() {
   document.getElementById('cbBody').value  = '';
 }
 
-async function adminPublishOutcomes() {
+// Engine-driven round close. Reads every team's submitted decisions for the
+// current round, computes their outcome via the scoring engine, writes
+// metrics + narratives + score to the outcomes table, then closes the round.
+async function adminCloseAndPublishRound() {
   if (!currentSession) { showNotification('No active session.', 'error'); return; }
-  const state  = getState();
-  const round  = currentSession.current_round;
-  const teams  = state._teams || [];
-  const btn    = document.querySelector('[onclick="adminPublishOutcomes()"]');
-  if (btn) { btn.textContent = 'Publishing...'; btn.disabled = true; }
+  const round = currentSession.current_round;
+  const sb = getSupabase(); if (!sb) { showNotification('Supabase not connected.', 'error'); return; }
 
-  const promises = (teams.length > 0 ? teams : LB_TEAMS.map(t=>({id:t.id,slot:t.id.replace('team','')}))).map(async t => {
-    const revenue = parseFloat(document.getElementById('score_revenue_'+t.id)?.value) || state.metrics[t.slot]?.revenue || 0;
-    const gm      = parseFloat(document.getElementById('score_gm_'+t.id)?.value)      || state.metrics[t.slot]?.grossMargin || 0;
-    const runway  = parseFloat(document.getElementById('score_runway_'+t.id)?.value)  || state.metrics[t.slot]?.cashRunway || 0;
-    const pts     = parseFloat(document.getElementById('score_pts_'+t.id)?.value)     || 65;
-    const slotToKey = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
-    const teamKey = slotToKey[t.slot] || t.id;
-    const metrics = {
-      revenue, grossMargin: gm, cashRunway: runway,
-      marketShare: state.metrics[teamKey]?.marketShare || 50,
-      productHealth: state.metrics[teamKey]?.productHealth || 60,
-      teamCapability: state.metrics[teamKey]?.teamCapability || 65
-    };
-    return dbPublishOutcome(currentSession.id, t.id, round, metrics, pts);
+  const state = getState();
+  const teams = state._teams || [];
+  if (!teams.length) { showNotification('No teams in this session.', 'error'); return; }
+
+  if (!confirm(`Close Round ${round} and publish results for all submitting teams? Teams will see their new metrics and per-decision narratives immediately.`)) return;
+
+  const btn = document.querySelector('[onclick="adminCloseAndPublishRound()"]');
+  if (btn) { btn.textContent = 'Computing...'; btn.disabled = true; }
+
+  // 1. Pull every decision row for (session, round).
+  const { data: decisionRows, error: decErr } = await sb
+    .from('decisions').select('*')
+    .eq('session_id', currentSession.id)
+    .eq('round', round);
+  if (decErr) {
+    if (btn) { btn.textContent = 'Close round & publish →'; btn.disabled = false; }
+    showNotification('Failed to load decisions: ' + decErr.message, 'error');
+    return;
+  }
+  const decisionsByTeam = {};
+  (decisionRows || []).forEach(d => {
+    (decisionsByTeam[d.team_id] = decisionsByTeam[d.team_id] || []).push(d);
   });
 
-  await Promise.all(promises);
-  if (btn) { btn.textContent = 'Publish Outcomes to All Teams →'; btn.disabled = false; }
+  // 2. Previous round's outcomes are the starting metrics for this round.
+  const prevMetricsByTeam = {};
+  if (round > 1 && state.outcomes && state.outcomes[round - 1]) {
+    const slotToKey = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
+    teams.forEach(t => {
+      const key = slotToKey[t.slot];
+      if (key && state.outcomes[round - 1][key]) {
+        prevMetricsByTeam[t.id] = state.outcomes[round - 1][key];
+      }
+    });
+  }
+
+  // 3. Run the engine.
+  const caseSlug = (currentSession.cases && currentSession.cases.slug) ||
+                   (selectedCase === 'A' ? 'volta' : selectedCase === 'B' ? 'arc' : 'demo');
+  const computed = computeRoundOutcomes(decisionsByTeam, prevMetricsByTeam, caseSlug);
+
+  // 4. Persist one outcome row per team (only those who submitted).
+  const teamsToPublish = teams.filter(t => computed[t.id]);
+  const teamsSkipped   = teams.length - teamsToPublish.length;
+  await Promise.all(teamsToPublish.map(t => {
+    const r = computed[t.id];
+    return dbPublishOutcome(currentSession.id, t.id, round, r.metrics, r.score, r.narratives);
+  }));
+
+  // 5. Close the round; GM advances to the next round separately.
+  await dbUpdateSession(currentSession.id, { round_open: false });
+  currentSession.round_open = false;
+
   _stateCache = null;
   await loadStateFromDB();
+  renderApp();
   renderAdmin();
-  showNotification('Outcomes published — all team dashboards updated.', 'success');
+
+  if (btn) { btn.textContent = 'Close round & publish →'; btn.disabled = false; }
+  showNotification(
+    `Q${round} closed. Published ${teamsToPublish.length} outcome${teamsToPublish.length===1?'':'s'}` +
+    (teamsSkipped ? `; ${teamsSkipped} team${teamsSkipped===1?'':'s'} had no submission and were skipped.` : '.'),
+    'success'
+  );
 }
 
 function adminResetGame() {

@@ -141,9 +141,12 @@ CREATE TABLE IF NOT EXISTS outcomes (
   product_health  NUMERIC(6,1),
   team_capability NUMERIC(6,1),
   score           INTEGER,
+  narratives      JSONB DEFAULT '[]'::jsonb,
   published_at    TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(session_id, team_id, round)
 );
+
+ALTER TABLE outcomes ADD COLUMN IF NOT EXISTS narratives JSONB DEFAULT '[]'::jsonb;
 
 
 -- =============================================================
