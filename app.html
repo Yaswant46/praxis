@@ -1218,14 +1218,14 @@ input, select, textarea { font-family: var(--sans); }
         <button class="login-back-btn" onclick="backToGmEmail()">&larr; Back</button>
         <span style="font-size:12px;font-weight:600;color:var(--volt)">Game Master Login</span>
       </div>
-      <div class="login-step-indicator">Enter the 6-digit code sent to your email</div>
-      <div class="otp-inputs" id="otpInputs">
-        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
-        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
-        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
-        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
-        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
-        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      <div class="login-step-indicator">Enter the verification code sent to your email</div>
+      <input id="otpInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10"
+             autocomplete="one-time-code"
+             class="login-input"
+             style="text-align:center;letter-spacing:0.4em;font-family:var(--mono);font-size:18px;font-weight:700"
+             placeholder="••••••">
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">
+        Supports 6 to 10-digit codes — paste it whole if your email client supports it.
       </div>
       <button class="login-btn" id="gmVerifyBtn" onclick="gmVerifyOTP()">Verify &amp; Enter &rarr;</button>
       <div id="gmOtpError" class="login-error"></div>
@@ -2005,37 +2005,42 @@ async function gmSendOTP() {
   _gmEmailForOTP = email;
   showLoginStep('gmOtpStep');
   document.getElementById('gmOtpError').textContent = '';
-  const inputs = document.querySelectorAll('#otpInputs input');
-  if (inputs[0]) inputs[0].focus();
+  const otp = document.getElementById('otpInput');
+  if (otp) { otp.value = ''; setTimeout(() => otp.focus(), 60); }
 }
 
 function backToGmEmail() { showLoginStep('gmEmailStep'); }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const otpBox = document.getElementById('otpInputs');
-  if (!otpBox) return;
-  otpBox.addEventListener('input', e => {
-    if (e.target.value.length === 1 && e.target.nextElementSibling) e.target.nextElementSibling.focus();
+  const otp = document.getElementById('otpInput');
+  if (!otp) return;
+  // Strip any non-digits (some email clients wrap the code in punctuation).
+  otp.addEventListener('input', () => {
+    const cleaned = otp.value.replace(/\D/g, '');
+    if (cleaned !== otp.value) otp.value = cleaned;
+    // Auto-submit once we have at least 6 digits and the user pasted the whole code in.
+    if (cleaned.length >= 6 && cleaned.length === otp.value.length) {
+      // small debounce so very-fast typing doesn't fire mid-stream
+      clearTimeout(otp._autoSubmitTimer);
+      otp._autoSubmitTimer = setTimeout(() => {
+        if (otp.value.replace(/\D/g, '').length >= 6) gmVerifyOTP();
+      }, 220);
+    }
   });
-  otpBox.addEventListener('keydown', e => {
-    if (e.key === 'Backspace' && !e.target.value && e.target.previousElementSibling) e.target.previousElementSibling.focus();
-    if (e.key === 'Enter') gmVerifyOTP();
-  });
-  otpBox.addEventListener('paste', e => {
-    e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
-    const inputs = otpBox.querySelectorAll('input');
-    for (let i=0; i<text.length && i<inputs.length; i++) inputs[i].value = text[i];
-    if (text.length >= 6) gmVerifyOTP();
+  otp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); gmVerifyOTP(); }
   });
 });
 
 async function gmVerifyOTP() {
-  const inputs = document.querySelectorAll('#otpInputs input');
-  const token  = Array.from(inputs).map(i=>i.value).join('').replace(/\D/g,'');
+  const otp    = document.getElementById('otpInput');
+  const token  = (otp ? otp.value : '').replace(/\D/g, '');
   const err    = document.getElementById('gmOtpError');
   const btn    = document.getElementById('gmVerifyBtn');
-  if (token.length !== 6) { err.textContent = 'Please enter the full 6-digit code.'; return; }
+  if (token.length < 6 || token.length > 10) {
+    err.textContent = 'Enter the full code from your email (6–10 digits).';
+    return;
+  }
   btn.textContent = 'Verifying...'; btn.disabled = true; err.textContent = '';
   const sb = getSupabase();
   const { error } = await sb.auth.verifyOtp({ email: _gmEmailForOTP, token, type: 'email' });
