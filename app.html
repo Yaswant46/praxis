@@ -1480,10 +1480,11 @@ input, select, textarea { font-family: var(--sans); }
 const SUPA_URL = 'https://towyztagdudjbxfevnus.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvd3l6dGFnZHVkamJ4ZmV2bnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NzA0NzQsImV4cCI6MjA5MTE0NjQ3NH0.57SNbO6ZtxxZOgd1OPlE3mT92F62-dTSavqVEWK2ENA';
 
-var supabase = null;
+// Local client; named `_sbClient` (NOT `supabase`) to avoid clobbering window.supabase (the SDK)
+var _sbClient = null;
 function initSupabase() {
   if (window.supabase && window.supabase.createClient) {
-    supabase = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+    _sbClient = window.supabase.createClient(SUPA_URL, SUPA_KEY);
     return true;
   }
   return false;
@@ -1515,7 +1516,7 @@ function setSessionInURL(code) {
 // =================================================
 //  DB LAYER
 // =================================================
-function getSupabase() { if (!supabase) initSupabase(); return supabase; }
+function getSupabase() { if (!_sbClient) initSupabase(); return _sbClient; }
 
 async function dbGetSession(code) {
   const sb = getSupabase(); if (!sb) return null;
@@ -1629,7 +1630,7 @@ async function dbGetSubmissionCounts(sessionId, round) {
 // =================================================
 var realtimeChannel = null;
 function subscribeToSession(sessionId) {
-  if (realtimeChannel && supabase) { supabase.removeChannel(realtimeChannel); }
+  if (realtimeChannel && _sbClient) { _sbClient.removeChannel(realtimeChannel); }
   const sb = getSupabase(); if (!sb) return;
   realtimeChannel = sb.channel('session:' + sessionId)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions', filter: 'id=eq.'+sessionId },
@@ -3582,9 +3583,59 @@ function adminResetGame() {
 }
 
 // =================================================
-//  MASTER ADMIN
+//  HTML escaping (used everywhere user-controlled data hits innerHTML)
+// =================================================
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// =================================================
+//  MASTER ADMIN — Cohort wizard + session management
 // =================================================
 var _masterSessions = [];
+var _maMode  = 'list';   // 'list' | 'wizard' | 'review' | 'sent'
+var _maDraft = null;     // wizard state, persists across re-renders
+
+// Curated, easy-to-spell password words (110, 3-7 chars). 3 random = ~22-bit pool, paired with throwaway scope is fine.
+const _PWD_WORDS = ['amber','anchor','azure','badger','beacon','birch','breeze','cedar','cliff','cobra','copper','crane','crimson','cypher','dawn','drift','eagle','ember','fern','finch','flint','focus','forest','frost','gale','ginger','glacier','glow','gold','granite','grove','harbor','hawk','hazel','helix','heron','honey','ibex','indigo','iris','iron','ivory','jade','juniper','koala','lark','laurel','lily','lynx','maple','marble','mint','momentum','moss','mountain','navy','nimbus','oak','ocean','olive','onyx','opal','orbit','oryx','otter','owl','panda','pearl','pebble','pine','pivot','prairie','pulse','quartz','quasar','quill','raven','reef','river','robin','rust','sable','sage','sapphire','scarlet','silver','sky','slate','snow','sparrow','spire','spruce','steel','storm','stride','summit','swift','tiger','topaz','tundra','valley','vector','vine','violet','willow','wolf','zenith'];
+
+// Themed team-name pools per case slug. Pulled from in random order; max 6 teams so 12+ names is plenty.
+const _TEAM_NAME_POOLS = {
+  volta: ['Quasar','Helix','Voltage','Surge','Pulse','Ignite','Spark','Photon','Dynamo','Catalyst','Flux','Flare','Plasma','Kelvin','Tesla','Beacon'],
+  arc:   ['Vector','Trajectory','Apex','Vertex','Glide','Compass','Orbit','Tangent','Axis','Pivot','Vortex','Slipstream','Mach','Velocity','Drift','Span'],
+  demo:  ['Nimbus','Cipher','Vault','Gateway','Tempo','Cargo','Conduit','Express','Relay','Dispatch','Cascade','Threshold','Spire','Atlas','Pioneer','Summit'],
+};
+
+function _shuffleSlice(arr, n) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
+function _genPassword() { return _shuffleSlice(_PWD_WORDS, 3).join('-'); }
+function _genTeamNames(slug, n) { return _shuffleSlice(_TEAM_NAME_POOLS[slug] || _TEAM_NAME_POOLS.volta, n); }
+function _slugify(s) { return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24) || 'team'; }
+function _maxRoundsForCase(slug) { return slug === 'demo' ? 4 : 5; }
+function _caseLabel(slug) { return slug==='volta' ? 'VOLTA Motors' : slug==='arc' ? 'ARC Motors' : 'ShopPulse (Demo)'; }
+
+function _genSessionCode() {
+  // Skip 0/O/1/I/L to avoid read-aloud confusion. crypto-random when available.
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let out = '';
+  if (window.crypto && window.crypto.getRandomValues) {
+    const buf = new Uint32Array(6);
+    crypto.getRandomValues(buf);
+    for (let i = 0; i < 6; i++) out += alphabet[buf[i] % alphabet.length];
+  } else {
+    for (let i = 0; i < 6; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return out;
+}
 
 async function dbGetAllSessions() {
   const sb = getSupabase(); if (!sb) return [];
@@ -3603,32 +3654,29 @@ async function renderMasterAdmin() {
     cont.innerHTML = '<div class="locked-overlay"><span class="lock-icon">🔒</span><h3>Access Denied</h3><p>Master Admin is restricted to the superuser account.</p></div>';
     return;
   }
+  if (_maMode === 'wizard') return renderCohortWizard();
+  if (_maMode === 'review') return renderCohortReview();
+  if (_maMode === 'sent')   return renderCohortSent();
+
   cont.innerHTML = '<div class="empty-state"><h3 style="color:var(--muted)">Loading sessions...</h3></div>';
   _masterSessions = await dbGetAllSessions();
 
-  let html = '';
-  html += `<div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+  let html = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
     <div class="card-title" style="font-size:20px">Master Admin Panel</div>
     <span class="admin-chip" style="background:var(--red-pale);color:var(--red);border-color:var(--red)">🔑 Superuser</span>
   </div>`;
 
-  // Create session
-  html += `<div class="card" style="border-left:3px solid var(--volt);margin-bottom:20px">
-    <div class="admin-section-title">Create New Session</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
-      <div><label class="field-label">Cohort Name</label><input type="text" id="maNewCohort" class="login-input" placeholder="e.g. Catalyst Batch 4" style="background:var(--surface);border-color:var(--wire);color:var(--ink);margin:0;padding:11px 14px;font-size:13px;width:100%"></div>
-      <div><label class="field-label">Case</label><select id="maNewCase" class="field-select" style="margin:0"><option value="volta">Case A — VOLTA Motors</option><option value="arc">Case B — ARC Motors</option><option value="demo">Demo — ShopPulse</option></select></div>
-      <div><label class="field-label">Number of Teams</label><select id="maNewTeamCount" class="field-select" style="margin:0" onchange="maRenderTeamInputs()"><option value="2">2 Teams</option><option value="3">3 Teams</option><option value="4">4 Teams</option><option value="5">5 Teams</option><option value="6" selected>6 Teams</option></select></div>
+  html += `<div class="card" style="border-left:3px solid var(--volt);margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div>
+      <div class="admin-section-title" style="margin-bottom:6px">Start a new cohort</div>
+      <div style="font-size:13px;color:var(--muted);max-width:480px">Pick a case, set up teams, generate creative names + passwords, and send invites — all in one flow.</div>
     </div>
-    <div><label class="field-label">Session Admin Email (Game Master)</label><input type="email" id="maNewAdminEmail" class="login-input" placeholder="gm@example.com" style="background:var(--surface);border-color:var(--wire);color:var(--ink);margin:0 0 16px;padding:11px 14px;font-size:13px;width:100%"></div>
-    <div id="maTeamInputs"></div>
-    <button class="btn-volt" onclick="maCreateSession()" style="margin-top:12px">Create Session &rarr;</button>
+    <button class="btn-volt" onclick="maStartWizard()">+ New Cohort</button>
   </div>`;
 
-  // All sessions
   html += `<div class="card"><div class="admin-section-title">All Sessions (${_masterSessions.length})</div>`;
   if (_masterSessions.length === 0) {
-    html += '<p style="font-size:13px;color:var(--muted)">No sessions yet. Create your first one above.</p>';
+    html += '<p style="font-size:13px;color:var(--muted)">No sessions yet. Click "+ New Cohort" above to create your first one.</p>';
   } else {
     html += `<table class="ma-sessions-table"><thead><tr>
       <th>Code</th><th>Cohort</th><th>Case</th><th>Round</th><th>Status</th><th>Created</th><th>Actions</th>
@@ -3638,11 +3686,11 @@ async function renderMasterAdmin() {
       const created  = new Date(s.created_at).toLocaleDateString('en-IN');
       const statusColor = s.status==='active' ? 'var(--volt-dim)' : s.status==='ended' ? 'var(--red)' : 'var(--muted)';
       html += `<tr>
-        <td style="font-family:var(--mono);font-weight:700;letter-spacing:1px">${s.code}</td>
-        <td>${s.cohort_name||'—'}</td>
-        <td>${caseName}</td>
+        <td style="font-family:var(--mono);font-weight:700;letter-spacing:1px">${escapeHtml(s.code)}</td>
+        <td>${escapeHtml(s.cohort_name||'—')}</td>
+        <td>${escapeHtml(caseName)}</td>
         <td>Q${s.current_round} ${s.round_open?'<span class="tag green">Open</span>':'<span class="tag amber">Closed</span>'}</td>
-        <td style="color:${statusColor};font-weight:600;text-transform:capitalize">${s.status}</td>
+        <td style="color:${statusColor};font-weight:600;text-transform:capitalize">${escapeHtml(s.status)}</td>
         <td style="font-size:12px;color:var(--muted)">${created}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn-secondary" style="padding:6px 12px;font-size:11px" onclick="maManageSession('${s.id}')">Manage</button>
@@ -3652,59 +3700,289 @@ async function renderMasterAdmin() {
     });
     html += '</tbody></table>';
   }
-  html += '</div>';
-  html += '<div id="maSessionDetail"></div>';
+  html += '</div><div id="maSessionDetail"></div>';
 
   cont.innerHTML = html;
-  maRenderTeamInputs();
 }
 
-function maRenderTeamInputs() {
-  const count = parseInt(document.getElementById('maNewTeamCount')?.value || 6);
-  const slots = ['alpha','beta','gamma','delta','epsilon','zeta'];
-  const names = ['Alpha','Beta','Gamma','Delta','Epsilon','Zeta'];
-  const cont  = document.getElementById('maTeamInputs');
+function maStartWizard() {
+  if (!_maDraft) {
+    _maDraft = {
+      cohort: '', caseSlug: 'volta', teamCount: 4, rounds: 5,
+      gmEmail: (currentUser && currentUser.email) || '',
+      repEmails: [], teams: [], sessionCode: '',
+    };
+  }
+  _maMode = 'wizard';
+  renderMasterAdmin();
+}
+
+function maExitWizard() {
+  _maMode = 'list';
+  _maDraft = null;
+  renderMasterAdmin();
+}
+
+function renderCohortWizard() {
+  const cont = document.getElementById('masterAdminContent');
+  const d = _maDraft;
+  const maxRounds = _maxRoundsForCase(d.caseSlug);
+  if (d.rounds > maxRounds) d.rounds = maxRounds;
+
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+    <div>
+      <div class="admin-section-title" style="margin-bottom:4px">Step 1 of 2 — Cohort details</div>
+      <div class="card-title" style="font-size:20px">New Cohort</div>
+    </div>
+    <button class="btn-ghost" onclick="maExitWizard()">Cancel ✕</button>
+  </div>`;
+
+  html += `<div class="card" style="border-left:3px solid var(--volt)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <label class="field-label">Cohort name</label>
+        <input id="wizCohort" type="text" value="${escapeHtml(d.cohort)}" placeholder="e.g. Catalyst Batch 4" oninput="_maDraft.cohort=this.value" style="background:var(--surface);border:1px solid var(--wire);color:var(--ink);padding:11px 14px;font-size:13px;width:100%;border-radius:8px">
+      </div>
+      <div>
+        <label class="field-label">Game Master email (you)</label>
+        <input id="wizGmEmail" type="email" value="${escapeHtml(d.gmEmail||'')}" placeholder="gm@example.com" oninput="_maDraft.gmEmail=this.value.trim()" style="background:var(--surface);border:1px solid var(--wire);color:var(--ink);padding:11px 14px;font-size:13px;width:100%;border-radius:8px">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <label class="field-label">Case</label>
+        <select class="field-select" style="margin:0" onchange="_maDraft.caseSlug=this.value;renderMasterAdmin()">
+          <option value="volta"${d.caseSlug==='volta'?' selected':''}>Case A — VOLTA Motors (5 rounds max)</option>
+          <option value="arc"${d.caseSlug==='arc'?' selected':''}>Case B — ARC Motors (5 rounds max)</option>
+          <option value="demo"${d.caseSlug==='demo'?' selected':''}>Demo — ShopPulse (4 rounds max)</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Number of teams</label>
+        <select class="field-select" style="margin:0" onchange="_maDraft.teamCount=parseInt(this.value);renderMasterAdmin()">
+          ${[2,3,4,5,6].map(n=>`<option value="${n}"${d.teamCount===n?' selected':''}>${n} teams</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Number of rounds</label>
+        <select class="field-select" style="margin:0" onchange="_maDraft.rounds=parseInt(this.value)">
+          ${Array.from({length:maxRounds},(_,i)=>i+1).map(n=>`<option value="${n}"${d.rounds===n?' selected':''}>${n} round${n>1?'s':''} (Q1–Q${n})</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="admin-section-title" style="font-size:10px;margin-top:8px">Representative email per team</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">One email per team. Credentials will be sent here for the rep to share with their teammates.</div>
+    <div id="wizTeamEmails"></div>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:20px;gap:8px">
+      <button class="btn-secondary" onclick="maExitWizard()">Cancel</button>
+      <button class="btn-volt" onclick="maGenerateCohort()">Generate cohort &rarr;</button>
+    </div>
+  </div>`;
+
+  cont.innerHTML = html;
+  _renderWizTeamEmails();
+}
+
+function _renderWizTeamEmails() {
+  const d = _maDraft;
+  const cont = document.getElementById('wizTeamEmails');
   if (!cont) return;
-  let html = '<div class="admin-section-title" style="font-size:10px;margin-bottom:10px">Team Configuration</div>';
-  for (let i=0; i<count; i++) {
-    html += `<div class="ma-team-row">
-      <div class="slot-label">${names[i]}</div>
-      <input type="text"  id="maTeamName_${i}"  placeholder="Team display name" value="${names[i]}">
-      <input type="email" id="maTeamEmail_${i}" placeholder="participant@email.com">
-      <input type="text"  id="maTeamCode_${i}"  placeholder="Access code" value="${slots[i]}${i<9?'0':''}${i+1}">
+  if (!d.repEmails) d.repEmails = [];
+  while (d.repEmails.length < d.teamCount) d.repEmails.push('');
+  d.repEmails = d.repEmails.slice(0, d.teamCount);
+
+  let html = '';
+  for (let i = 0; i < d.teamCount; i++) {
+    html += `<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;align-items:center;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:1px">Team ${i+1}</div>
+      <input type="email" placeholder="rep@example.com" value="${escapeHtml(d.repEmails[i]||'')}" oninput="_maDraft.repEmails[${i}]=this.value.trim()" style="padding:10px 12px;border:1px solid var(--wire);border-radius:8px;font-size:13px;background:var(--surface);color:var(--ink)">
     </div>`;
   }
   cont.innerHTML = html;
 }
 
-async function maCreateSession() {
-  const cohort     = document.getElementById('maNewCohort')?.value.trim();
-  const caseSlug   = document.getElementById('maNewCase')?.value;
-  const teamCount  = parseInt(document.getElementById('maNewTeamCount')?.value || 6);
-  const adminEmail = document.getElementById('maNewAdminEmail')?.value.trim();
-  if (!cohort)     { showNotification('Please enter a cohort name.', 'error'); return; }
-  if (!adminEmail) { showNotification('Please enter an admin email.', 'error'); return; }
-  const sb = getSupabase(); if (!sb) { showNotification('Supabase not connected.', 'error'); return; }
-  const { data: caseData } = await sb.from('cases').select('id').eq('slug', caseSlug).single();
-  if (!caseData) { showNotification('Case not found.', 'error'); return; }
-  const code = Math.random().toString(36).substring(2,8).toUpperCase();
-  const { data: sess, error } = await sb.from('sessions').insert({
-    code, case_id: caseData.id, cohort_name: cohort,
-    admin_email: adminEmail, current_round: 1, round_open: true, status: 'active'
-  }).select().single();
-  if (error || !sess) { showNotification('Failed to create session: ' + (error?.message||'Unknown'), 'error'); return; }
-  const slots = ['alpha','beta','gamma','delta','epsilon','zeta'];
-  const teams = [];
-  for (let i=0; i<teamCount; i++) {
-    const tname  = document.getElementById('maTeamName_'+i)?.value.trim()  || slots[i];
-    const temail = document.getElementById('maTeamEmail_'+i)?.value.trim() || null;
-    const tcode  = document.getElementById('maTeamCode_'+i)?.value.trim()  || (slots[i]+'0'+(i+1));
-    teams.push({ session_id:sess.id, slot:slots[i], display_name:tname, access_code:tcode, participant_email:temail||null });
+function maGenerateCohort() {
+  const d = _maDraft;
+  if (!d.cohort.trim()) { showNotification('Cohort name is required.', 'error'); return; }
+  if (!d.gmEmail || !d.gmEmail.includes('@')) { showNotification('Valid GM email is required.', 'error'); return; }
+  for (let i = 0; i < d.teamCount; i++) {
+    if (!d.repEmails[i] || !d.repEmails[i].includes('@')) {
+      showNotification(`Team ${i+1} needs a valid rep email.`, 'error'); return;
+    }
   }
-  await sb.from('teams').insert(teams);
-  const link = window.location.origin + window.location.pathname + '#/session/' + code;
-  showNotification('Session ' + code + ' created! Link: ' + link, 'success');
+  const names = _genTeamNames(d.caseSlug, d.teamCount);
+  d.sessionCode = _genSessionCode();
+  d.teams = names.map((name, i) => ({
+    teamName: name,
+    username: _slugify(name),
+    password: _genPassword(),
+    repEmail: d.repEmails[i],
+  }));
+  _maMode = 'review';
   renderMasterAdmin();
+}
+
+function renderCohortReview() {
+  const cont = document.getElementById('masterAdminContent');
+  const d = _maDraft;
+  const baseUrl = window.location.origin + window.location.pathname;
+
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+    <div>
+      <div class="admin-section-title" style="margin-bottom:4px">Step 2 of 2 — Review credentials</div>
+      <div class="card-title" style="font-size:20px">${escapeHtml(d.cohort)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">${d.teamCount} teams · ${d.rounds} round${d.rounds>1?'s':''} · ${escapeHtml(_caseLabel(d.caseSlug))} · session code <span style="font-family:var(--mono);color:var(--ink);font-weight:700;letter-spacing:2px">${escapeHtml(d.sessionCode)}</span></div>
+    </div>
+    <button class="btn-ghost" onclick="_maMode='wizard';renderMasterAdmin()">← Edit details</button>
+  </div>`;
+
+  html += `<div class="card" style="border-left:3px solid var(--volt)">
+    <div class="admin-section-title">Cohort credentials — review &amp; tweak before sending</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Edit any team name or password. Click ↻ to regenerate a single password. Once you click "Send to all reps", each rep gets their team's credentials by email.</div>
+    <div style="overflow-x:auto">
+    <table class="ma-sessions-table" style="width:100%;font-size:13px;min-width:780px">
+      <thead><tr>
+        <th style="width:14%">Team</th>
+        <th style="width:14%">Username</th>
+        <th style="width:24%">Password</th>
+        <th style="width:24%">Rep email</th>
+        <th style="width:24%">Login URL</th>
+      </tr></thead>
+      <tbody>`;
+  d.teams.forEach((t, i) => {
+    const url = `${baseUrl}#/session/${d.sessionCode}/team/${t.username}`;
+    html += `<tr>
+      <td><input type="text" value="${escapeHtml(t.teamName)}" oninput="_maDraft.teams[${i}].teamName=this.value;_maDraft.teams[${i}].username=_slugify(this.value);_maRefreshUsernameCell(${i})" style="padding:6px 8px;border:1px solid var(--wire);border-radius:6px;font-size:13px;background:var(--surface);color:var(--ink);width:100%"></td>
+      <td id="maUserCell_${i}" style="font-family:var(--mono);color:var(--volt-dim);font-weight:600">${escapeHtml(t.username)}</td>
+      <td style="display:flex;gap:6px;align-items:center">
+        <input type="text" value="${escapeHtml(t.password)}" oninput="_maDraft.teams[${i}].password=this.value" style="padding:6px 8px;border:1px solid var(--wire);border-radius:6px;font-size:12px;font-family:var(--mono);background:var(--surface);color:var(--ink);flex:1;min-width:0">
+        <button class="btn-ghost" title="Regenerate password" style="padding:4px 8px;font-size:14px;flex-shrink:0" onclick="_maDraft.teams[${i}].password=_genPassword();renderMasterAdmin()">↻</button>
+      </td>
+      <td><input type="email" value="${escapeHtml(t.repEmail)}" oninput="_maDraft.teams[${i}].repEmail=this.value.trim()" style="padding:6px 8px;border:1px solid var(--wire);border-radius:6px;font-size:13px;background:var(--surface);color:var(--ink);width:100%"></td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all">${escapeHtml(url)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  html += `<div style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;justify-content:flex-end">
+    <button class="btn-secondary" onclick="maSendTestEmail()">Send test to me</button>
+    <button class="btn-secondary" onclick="maCopyAllCreds()">Copy all (TSV)</button>
+    <button class="btn-volt" onclick="maConfirmAndSend()">Send to all reps &amp; create cohort &rarr;</button>
+  </div></div>`;
+
+  cont.innerHTML = html;
+}
+
+function _maRefreshUsernameCell(i) {
+  const cell = document.getElementById('maUserCell_' + i);
+  if (cell) cell.textContent = _maDraft.teams[i].username;
+}
+
+function maCopyAllCreds() {
+  const d = _maDraft;
+  const baseUrl = window.location.origin + window.location.pathname;
+  const lines = ['Team\tUsername\tPassword\tRep email\tLogin URL'];
+  d.teams.forEach(t => {
+    const url = `${baseUrl}#/session/${d.sessionCode}/team/${t.username}`;
+    lines.push(`${t.teamName}\t${t.username}\t${t.password}\t${t.repEmail}\t${url}`);
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(
+    () => showNotification('Credentials copied as TSV — paste into a spreadsheet.', 'success'),
+    () => showNotification('Copy failed; please copy manually.', 'error')
+  );
+}
+
+async function maSendTestEmail() {
+  const d = _maDraft;
+  if (!d.gmEmail) { showNotification('Add your GM email in step 1 first.', 'error'); return; }
+  // Phase 2: real Resend Edge Function. For now, stub.
+  showNotification(`(Phase 1 stub) Test email would go to ${d.gmEmail}. Edge Function lands in Phase 2.`, 'info');
+}
+
+async function maConfirmAndSend() {
+  const d = _maDraft;
+  for (const t of d.teams) {
+    if (!t.password || !t.username || !t.repEmail) {
+      showNotification('Every team needs a username, password, and rep email.', 'error'); return;
+    }
+  }
+  const sb = getSupabase();
+  if (!sb) { showNotification('Supabase not connected.', 'error'); return; }
+
+  const { data: caseRow } = await sb.from('cases').select('id').eq('slug', d.caseSlug).single();
+  if (!caseRow) { showNotification('Case not found in DB.', 'error'); return; }
+
+  const { data: sess, error: sessErr } = await sb.from('sessions').insert({
+    code: d.sessionCode,
+    case_id: caseRow.id,
+    cohort_name: d.cohort.trim(),
+    admin_email: d.gmEmail,
+    current_round: 1, round_open: true, status: 'active',
+  }).select().single();
+  if (sessErr || !sess) {
+    showNotification('Failed to create session: ' + (sessErr?.message||'unknown'), 'error');
+    return;
+  }
+
+  // Repurpose existing columns: slot=username (lowercase), display_name=teamName, access_code=password.
+  // Phase 2 schema migration adds dedicated `username` and renames `access_code`→`password`.
+  const teamRows = d.teams.map(t => ({
+    session_id: sess.id,
+    slot: t.username,
+    display_name: t.teamName,
+    access_code: t.password,
+    participant_email: t.repEmail,
+  }));
+  const { error: teamErr } = await sb.from('teams').insert(teamRows);
+  if (teamErr) {
+    showNotification('Cohort row created but team insert failed: ' + teamErr.message, 'error');
+    return;
+  }
+
+  d._created = sess;
+  _maMode = 'sent';
+  renderMasterAdmin();
+}
+
+function renderCohortSent() {
+  const cont = document.getElementById('masterAdminContent');
+  const d = _maDraft;
+
+  let html = `<div class="card" style="border-left:3px solid var(--volt);text-align:center;padding:48px 32px;max-width:640px;margin:0 auto">
+    <div style="font-size:44px;margin-bottom:8px">🎉</div>
+    <div class="card-title" style="font-size:22px;margin-bottom:6px">Cohort created</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:24px">${escapeHtml(d.cohort)} · ${escapeHtml(_caseLabel(d.caseSlug))} · ${d.teamCount} teams · ${d.rounds} rounds</div>
+
+    <div style="background:var(--wire-2);border-radius:8px;padding:16px;margin-bottom:18px;text-align:left">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Session join code</div>
+      <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--volt-dim);letter-spacing:3px">${escapeHtml(d.sessionCode)}</div>
+    </div>
+
+    <div style="background:#fff8e1;border:1px solid #ffe0a0;border-radius:8px;padding:14px 16px;margin-bottom:18px;text-align:left">
+      <div style="font-size:12px;color:#7a5500;font-weight:600;margin-bottom:6px">⚠ Phase 1: emails not sent automatically yet</div>
+      <div style="font-size:12px;color:#7a5500;line-height:1.5">The cohort is saved to the database. Until the Resend Edge Function is deployed in Phase 2, copy credentials and forward them to reps yourself.</div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      <button class="btn-secondary" onclick="maCopyAllCreds()">Copy all credentials</button>
+      <button class="btn-volt" onclick="maEnterFromDraft()">Enter session as Game Master &rarr;</button>
+    </div>
+    <div style="margin-top:14px"><button class="btn-ghost" onclick="maExitWizard()">Back to all sessions</button></div>
+  </div>`;
+
+  cont.innerHTML = html;
+}
+
+async function maEnterFromDraft() {
+  const d = _maDraft;
+  _masterSessions = await dbGetAllSessions();
+  const sess = _masterSessions.find(s => s.code === d.sessionCode);
+  _maDraft = null;
+  _maMode = 'list';
+  if (sess) maEnterSession(sess.id);
+  else { renderMasterAdmin(); showNotification('Cohort saved — refresh and re-enter.', 'info'); }
 }
 
 async function maManageSession(sessionId) {
@@ -3871,8 +4149,12 @@ function updateTopbarScore() {
 }
 
 // =================================================
-//  PAGE LOAD — URL session routing
+//  PAGE LOAD — URL session routing + dev-mode bypass
 // =================================================
+function _isLocalhost() {
+  return location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const code = getSessionCodeFromURL();
   if (code) {
@@ -3886,6 +4168,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       showNotification('Session ' + code + ' loaded: ' + (sess.cohort_name||''), 'success');
     } else {
       showNotification('Session "' + code + '" not found.', 'error');
+    }
+  }
+
+  // Localhost-only dev bypass: ?dev=master skips OTP and drops into Master Admin.
+  // No-op on production hostnames.
+  if (_isLocalhost()) {
+    const dev = new URLSearchParams(location.search).get('dev');
+    if (dev === 'master') {
+      currentUser = { teamId:'admin', teamName:'Master Admin (DEV)', isAdmin:true, isSuperuser:true, email:SUPERUSER_EMAIL };
+      showApp();
+      showNotification('Dev mode: signed in as Master Admin (localhost only).', 'info');
     }
   }
 });
