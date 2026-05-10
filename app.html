@@ -1476,10 +1476,16 @@ input, select, textarea { font-family: var(--sans); }
 const SUPA_URL = 'https://towyztagdudjbxfevnus.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvd3l6dGFnZHVkamJ4ZmV2bnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NzA0NzQsImV4cCI6MjA5MTE0NjQ3NH0.57SNbO6ZtxxZOgd1OPlE3mT92F62-dTSavqVEWK2ENA';
 
-var supabase = null;
+// IMPORTANT: do not name this `supabase` — the CDN bundle exposes the SDK
+// as window.supabase, and a top-level `var supabase = null` would clobber
+// it before initSupabase() ever runs (regressed bug — original fix in
+// commit ae9ac51).
+var _supabaseClient = null;
 function initSupabase() {
-  if (window.supabase && window.supabase.createClient) {
-    supabase = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+  if (_supabaseClient) return true;
+  var sdk = window.supabase;
+  if (sdk && sdk.createClient) {
+    _supabaseClient = sdk.createClient(SUPA_URL, SUPA_KEY);
     return true;
   }
   return false;
@@ -1587,7 +1593,7 @@ function setSessionInURL(code) {
 // =================================================
 //  DB LAYER
 // =================================================
-function getSupabase() { if (!supabase) initSupabase(); return supabase; }
+function getSupabase() { if (!_supabaseClient) initSupabase(); return _supabaseClient; }
 
 async function dbGetSession(code) {
   const sb = getSupabase(); if (!sb) return null;
@@ -1735,7 +1741,7 @@ async function dbGetSubmissionCounts(sessionId, round) {
 // =================================================
 var realtimeChannel = null;
 function subscribeToSession(sessionId) {
-  if (realtimeChannel && supabase) { supabase.removeChannel(realtimeChannel); }
+  if (realtimeChannel && _supabaseClient) { _supabaseClient.removeChannel(realtimeChannel); }
   const sb = getSupabase(); if (!sb) return;
   realtimeChannel = sb.channel('session:' + sessionId)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions', filter: 'id=eq.'+sessionId },
