@@ -1218,14 +1218,14 @@ input, select, textarea { font-family: var(--sans); }
         <button class="login-back-btn" onclick="backToGmEmail()">&larr; Back</button>
         <span style="font-size:12px;font-weight:600;color:var(--volt)">Game Master Login</span>
       </div>
-      <div class="login-step-indicator">Enter the 6-digit code sent to your email</div>
-      <input id="otpInput" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+      <div class="login-step-indicator">Enter the verification code sent to your email</div>
+      <input id="otpInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10"
              autocomplete="one-time-code"
              class="login-input"
-             style="text-align:center;letter-spacing:0.4em;font-family:var(--mono);font-size:18px;font-weight:700"
-             placeholder="••••••">
+             style="text-align:center;letter-spacing:0.35em;font-family:var(--mono);font-size:18px;font-weight:700"
+             placeholder="••••••••">
       <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">
-        Configure Supabase Auth → Email → OTP Length = 6.
+        Paste the code from the email — any length 6 to 10 digits works.
       </div>
       <button class="login-btn" id="gmVerifyBtn" onclick="gmVerifyOTP()">Verify &amp; Enter &rarr;</button>
       <div id="gmOtpError" class="login-error"></div>
@@ -2018,13 +2018,18 @@ function backToGmEmail() { showLoginStep('gmEmailStep'); }
 document.addEventListener('DOMContentLoaded', () => {
   const otp = document.getElementById('otpInput');
   if (!otp) return;
-  // Strip any non-digits (some email clients wrap the code in punctuation).
+  // Strip non-digits (some clients wrap the code in punctuation). Accept any
+  // length in [6, 10] — Supabase Auth's OTP length is project-configurable.
   otp.addEventListener('input', () => {
-    const cleaned = otp.value.replace(/\D/g, '').slice(0, 6);
+    const cleaned = otp.value.replace(/\D/g, '').slice(0, 10);
     if (cleaned !== otp.value) otp.value = cleaned;
-    if (cleaned.length === 6) {
+    // Auto-submit once the code looks complete; if the user keeps typing,
+    // we re-debounce so the actual final length wins.
+    if (cleaned.length >= 6) {
       clearTimeout(otp._autoSubmitTimer);
-      otp._autoSubmitTimer = setTimeout(gmVerifyOTP, 180);
+      otp._autoSubmitTimer = setTimeout(() => {
+        if (otp.value.replace(/\D/g, '').length >= 6) gmVerifyOTP();
+      }, 250);
     }
   });
   otp.addEventListener('keydown', e => {
@@ -2037,8 +2042,8 @@ async function gmVerifyOTP() {
   const token  = (otp ? otp.value : '').replace(/\D/g, '');
   const err    = document.getElementById('gmOtpError');
   const btn    = document.getElementById('gmVerifyBtn');
-  if (token.length !== 6) {
-    err.textContent = 'Please enter the full 6-digit code.';
+  if (token.length < 6 || token.length > 10) {
+    err.textContent = 'Enter the full code from your email (6–10 digits).';
     return;
   }
   btn.textContent = 'Verifying...'; btn.disabled = true; err.textContent = '';
