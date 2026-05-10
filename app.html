@@ -3688,6 +3688,46 @@ function adminResetGame() {
 //  COHORT CONSOLE  (master admin + per-GM home)
 // =================================================
 var _masterSessions = [];
+var _maMode  = 'list';   // 'list' | 'wizard' | 'review' | 'sent'
+var _maDraft = null;     // wizard state, persists across re-renders
+
+// Curated, easy-to-spell password words (110, 3-7 chars). 3 random = ~22-bit pool, paired with throwaway scope is fine.
+const _PWD_WORDS = ['amber','anchor','azure','badger','beacon','birch','breeze','cedar','cliff','cobra','copper','crane','crimson','cypher','dawn','drift','eagle','ember','fern','finch','flint','focus','forest','frost','gale','ginger','glacier','glow','gold','granite','grove','harbor','hawk','hazel','helix','heron','honey','ibex','indigo','iris','iron','ivory','jade','juniper','koala','lark','laurel','lily','lynx','maple','marble','mint','momentum','moss','mountain','navy','nimbus','oak','ocean','olive','onyx','opal','orbit','oryx','otter','owl','panda','pearl','pebble','pine','pivot','prairie','pulse','quartz','quasar','quill','raven','reef','river','robin','rust','sable','sage','sapphire','scarlet','silver','sky','slate','snow','sparrow','spire','spruce','steel','storm','stride','summit','swift','tiger','topaz','tundra','valley','vector','vine','violet','willow','wolf','zenith'];
+
+// Themed team-name pools per case slug. Pulled from in random order; max 6 teams so 12+ names is plenty.
+const _TEAM_NAME_POOLS = {
+  volta: ['Quasar','Helix','Voltage','Surge','Pulse','Ignite','Spark','Photon','Dynamo','Catalyst','Flux','Flare','Plasma','Kelvin','Tesla','Beacon'],
+  arc:   ['Vector','Trajectory','Apex','Vertex','Glide','Compass','Orbit','Tangent','Axis','Pivot','Vortex','Slipstream','Mach','Velocity','Drift','Span'],
+  demo:  ['Nimbus','Cipher','Vault','Gateway','Tempo','Cargo','Conduit','Express','Relay','Dispatch','Cascade','Threshold','Spire','Atlas','Pioneer','Summit'],
+};
+
+function _shuffleSlice(arr, n) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
+function _genPassword() { return _shuffleSlice(_PWD_WORDS, 3).join('-'); }
+function _genTeamNames(slug, n) { return _shuffleSlice(_TEAM_NAME_POOLS[slug] || _TEAM_NAME_POOLS.volta, n); }
+function _slugify(s) { return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24) || 'team'; }
+function _maxRoundsForCase(slug) { return slug === 'demo' ? 4 : 5; }
+function _caseLabel(slug) { return slug==='volta' ? 'VOLTA Motors' : slug==='arc' ? 'ARC Motors' : 'ShopPulse (Demo)'; }
+
+function _genSessionCode() {
+  // Skip 0/O/1/I/L to avoid read-aloud confusion. crypto-random when available.
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let out = '';
+  if (window.crypto && window.crypto.getRandomValues) {
+    const buf = new Uint32Array(6);
+    crypto.getRandomValues(buf);
+    for (let i = 0; i < 6; i++) out += alphabet[buf[i] % alphabet.length];
+  } else {
+    for (let i = 0; i < 6; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return out;
+}
 
 async function dbGetAllSessions() {
   const sb = getSupabase(); if (!sb) return [];
@@ -3766,8 +3806,86 @@ async function renderMasterAdmin() {
     });
     html += '</tbody></table>';
   }
-  html += '</div>';
-  html += '<div id="maSessionDetail"></div>';
+  html += '</div><div id="maSessionDetail"></div>';
+
+  cont.innerHTML = html;
+}
+
+function maStartWizard() {
+  if (!_maDraft) {
+    _maDraft = {
+      cohort: '', caseSlug: 'volta', teamCount: 4, rounds: 5,
+      gmEmail: (currentUser && currentUser.email) || '',
+      repEmails: [], teams: [], sessionCode: '',
+    };
+  }
+  _maMode = 'wizard';
+  renderMasterAdmin();
+}
+
+function maExitWizard() {
+  _maMode = 'list';
+  _maDraft = null;
+  renderMasterAdmin();
+}
+
+function renderCohortWizard() {
+  const cont = document.getElementById('masterAdminContent');
+  const d = _maDraft;
+  const maxRounds = _maxRoundsForCase(d.caseSlug);
+  if (d.rounds > maxRounds) d.rounds = maxRounds;
+
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+    <div>
+      <div class="admin-section-title" style="margin-bottom:4px">Step 1 of 2 — Cohort details</div>
+      <div class="card-title" style="font-size:20px">New Cohort</div>
+    </div>
+    <button class="btn-ghost" onclick="maExitWizard()">Cancel ✕</button>
+  </div>`;
+
+  html += `<div class="card" style="border-left:3px solid var(--volt)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <label class="field-label">Cohort name</label>
+        <input id="wizCohort" type="text" value="${escapeHtml(d.cohort)}" placeholder="e.g. Catalyst Batch 4" oninput="_maDraft.cohort=this.value" style="background:var(--surface);border:1px solid var(--wire);color:var(--ink);padding:11px 14px;font-size:13px;width:100%;border-radius:8px">
+      </div>
+      <div>
+        <label class="field-label">Game Master email (you)</label>
+        <input id="wizGmEmail" type="email" value="${escapeHtml(d.gmEmail||'')}" placeholder="gm@example.com" oninput="_maDraft.gmEmail=this.value.trim()" style="background:var(--surface);border:1px solid var(--wire);color:var(--ink);padding:11px 14px;font-size:13px;width:100%;border-radius:8px">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <label class="field-label">Case</label>
+        <select class="field-select" style="margin:0" onchange="_maDraft.caseSlug=this.value;renderMasterAdmin()">
+          <option value="volta"${d.caseSlug==='volta'?' selected':''}>Case A — VOLTA Motors (5 rounds max)</option>
+          <option value="arc"${d.caseSlug==='arc'?' selected':''}>Case B — ARC Motors (5 rounds max)</option>
+          <option value="demo"${d.caseSlug==='demo'?' selected':''}>Demo — ShopPulse (4 rounds max)</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Number of teams</label>
+        <select class="field-select" style="margin:0" onchange="_maDraft.teamCount=parseInt(this.value);renderMasterAdmin()">
+          ${[2,3,4,5,6].map(n=>`<option value="${n}"${d.teamCount===n?' selected':''}>${n} teams</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Number of rounds</label>
+        <select class="field-select" style="margin:0" onchange="_maDraft.rounds=parseInt(this.value)">
+          ${Array.from({length:maxRounds},(_,i)=>i+1).map(n=>`<option value="${n}"${d.rounds===n?' selected':''}>${n} round${n>1?'s':''} (Q1–Q${n})</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="admin-section-title" style="font-size:10px;margin-top:8px">Representative email per team</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">One email per team. Credentials will be sent here for the rep to share with their teammates.</div>
+    <div id="wizTeamEmails"></div>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:20px;gap:8px">
+      <button class="btn-secondary" onclick="maExitWizard()">Cancel</button>
+      <button class="btn-volt" onclick="maGenerateCohort()">Generate cohort &rarr;</button>
+    </div>
+  </div>`;
 
   cont.innerHTML = html;
 }
@@ -3996,6 +4114,45 @@ async function wizardSubmit() {
       failed ? 'error' : 'success'
     );
   }
+}
+
+function renderCohortSent() {
+  const cont = document.getElementById('masterAdminContent');
+  const d = _maDraft;
+
+  let html = `<div class="card" style="border-left:3px solid var(--volt);text-align:center;padding:48px 32px;max-width:640px;margin:0 auto">
+    <div style="font-size:44px;margin-bottom:8px">🎉</div>
+    <div class="card-title" style="font-size:22px;margin-bottom:6px">Cohort created</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:24px">${escapeHtml(d.cohort)} · ${escapeHtml(_caseLabel(d.caseSlug))} · ${d.teamCount} teams · ${d.rounds} rounds</div>
+
+    <div style="background:var(--wire-2);border-radius:8px;padding:16px;margin-bottom:18px;text-align:left">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Session join code</div>
+      <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--volt-dim);letter-spacing:3px">${escapeHtml(d.sessionCode)}</div>
+    </div>
+
+    <div style="background:#fff8e1;border:1px solid #ffe0a0;border-radius:8px;padding:14px 16px;margin-bottom:18px;text-align:left">
+      <div style="font-size:12px;color:#7a5500;font-weight:600;margin-bottom:6px">⚠ Phase 1: emails not sent automatically yet</div>
+      <div style="font-size:12px;color:#7a5500;line-height:1.5">The cohort is saved to the database. Until the Resend Edge Function is deployed in Phase 2, copy credentials and forward them to reps yourself.</div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      <button class="btn-secondary" onclick="maCopyAllCreds()">Copy all credentials</button>
+      <button class="btn-volt" onclick="maEnterFromDraft()">Enter session as Game Master &rarr;</button>
+    </div>
+    <div style="margin-top:14px"><button class="btn-ghost" onclick="maExitWizard()">Back to all sessions</button></div>
+  </div>`;
+
+  cont.innerHTML = html;
+}
+
+async function maEnterFromDraft() {
+  const d = _maDraft;
+  _masterSessions = await dbGetAllSessions();
+  const sess = _masterSessions.find(s => s.code === d.sessionCode);
+  _maDraft = null;
+  _maMode = 'list';
+  if (sess) maEnterSession(sess.id);
+  else { renderMasterAdmin(); showNotification('Cohort saved — refresh and re-enter.', 'info'); }
 }
 
 async function maManageSession(sessionId) {
@@ -4228,8 +4385,12 @@ function updateTopbarScore() {
 }
 
 // =================================================
-//  PAGE LOAD — URL session routing
+//  PAGE LOAD — URL session routing + dev-mode bypass
 // =================================================
+function _isLocalhost() {
+  return location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const code = getSessionCodeFromURL();
   if (code) {
@@ -4248,6 +4409,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       showNotification('Cohort ' + code + ' loaded' + (sess.cohort_name ? (': ' + sess.cohort_name) : ''), 'success');
     } else {
       showNotification('Session "' + code + '" not found.', 'error');
+    }
+  }
+
+  // Localhost-only dev bypass: ?dev=master skips OTP and drops into Master Admin.
+  // No-op on production hostnames.
+  if (_isLocalhost()) {
+    const dev = new URLSearchParams(location.search).get('dev');
+    if (dev === 'master') {
+      currentUser = { teamId:'admin', teamName:'Master Admin (DEV)', isAdmin:true, isSuperuser:true, email:SUPERUSER_EMAIL };
+      showApp();
+      showNotification('Dev mode: signed in as Master Admin (localhost only).', 'info');
     }
   }
 });
