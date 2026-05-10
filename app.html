@@ -1968,7 +1968,11 @@ function defaultMetrics() {
 // =================================================
 //  SUPERUSER
 // =================================================
-const SUPERUSER_EMAIL = 'ross.harvey92@gmail.com';
+// Must match the Resend account's signup email while we're still on the
+// resend.dev sandbox sender, otherwise the SMTP relay rejects the OTP.
+// Switch back to ross.harvey92@gmail.com (and update the SQL helper) once
+// a Resend domain is verified.
+const SUPERUSER_EMAIL = 'x22yaswanta@iima.ac.in';
 
 // =================================================
 //  AUTH — LOGIN FLOW
