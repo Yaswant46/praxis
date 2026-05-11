@@ -1364,6 +1364,7 @@ input, select, textarea { font-family: var(--sans); }
       <div id="page-dashboard" class="page-section active">
         <div class="round-timeline" id="roundTimeline"></div>
         <div class="grid-4" id="kpiGrid"></div>
+        <div id="boardMemoCard" style="display:none"></div>
         <div class="divider"></div>
         <div class="grid-2">
           <div>
@@ -1632,7 +1633,7 @@ async function dbGetAllDecisions(sessionId) {
     .eq('session_id', sessionId).order('submitted_at');
   return data || [];
 }
-async function dbPublishOutcome(sessionId, teamId, round, metrics, score, narratives) {
+async function dbPublishOutcome(sessionId, teamId, round, metrics, score, narratives, summary) {
   const sb = getSupabase(); if (!sb) return false;
   const { error } = await sb.from('outcomes').upsert({
     session_id: sessionId, team_id: teamId, round,
@@ -1641,6 +1642,7 @@ async function dbPublishOutcome(sessionId, teamId, round, metrics, score, narrat
     product_health: metrics.productHealth, team_capability: metrics.teamCapability,
     score,
     narratives: Array.isArray(narratives) ? narratives : [],
+    summary: typeof summary === 'string' ? summary : null,
     published_at: new Date().toISOString()
   }, { onConflict: 'session_id,team_id,round' });
   return !error;
@@ -1918,12 +1920,14 @@ async function _doLoadState() {
 
   const outcomes = await dbGetOutcomes(currentSession.id);
   state.narratives = {};   // { round: { teamKey: [ narrative... ] } }
+  state.memos      = {};   // { round: { teamKey: 'board memo text' } }
   outcomes.forEach(o => {
     const tSlot = o.teams ? o.teams.slot : null;
     const key   = tSlot ? slotToKey[tSlot] : null;
     if (!key) return;
     if (!state.outcomes[o.round]) state.outcomes[o.round] = {};
     if (!state.narratives[o.round]) state.narratives[o.round] = {};
+    if (!state.memos[o.round])     state.memos[o.round]     = {};
     const m = {
       revenue: parseFloat(o.revenue)||0, grossMargin: parseFloat(o.gross_margin)||0,
       cashRunway: parseFloat(o.cash_runway)||0, marketShare: parseFloat(o.market_share)||50,
@@ -1931,6 +1935,7 @@ async function _doLoadState() {
     };
     state.outcomes[o.round][key] = m;
     state.narratives[o.round][key] = Array.isArray(o.narratives) ? o.narratives : [];
+    state.memos[o.round][key]      = typeof o.summary === 'string' ? o.summary : null;
     state.metrics[key] = m;
     state.scores[key].history[o.round-1] = o.score || 0;
     state.scores[key].total = state.scores[key].history.reduce((a,b)=>a+(b||0),0);
@@ -2253,8 +2258,40 @@ function renderApp() {
   renderTimeline();
   renderKPIs();
   renderMetrics();
+  renderBoardMemo();
   checkCurveballs();
   updateTopbarScore();
+}
+
+// Pulls the latest published board memo for the signed-in team (or for
+// the first team when the GM is observing) and renders it on the
+// Dashboard between the KPI tiles and the case-context cards.
+function renderBoardMemo() {
+  const cont = document.getElementById('boardMemoCard');
+  if (!cont) return;
+  if (!currentUser || !currentSession) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+  const state = getState();
+  const teamId = currentUser.isAdmin ? 'team1' : currentUser.teamId;
+  // Find the latest round that has a memo for this team.
+  const rounds = Object.keys(state.memos || {}).map(Number).filter(r => state.memos[r] && state.memos[r][teamId]).sort((a,b)=>b-a);
+  const latest = rounds[0];
+  if (!latest) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+  const memo = state.memos[latest][teamId];
+  if (!memo) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+  const memoHtml = escapeHtml(memo).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  cont.style.display = 'block';
+  cont.innerHTML = `
+    <div class="card" style="border-left:3px solid var(--volt);margin:18px 0">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--volt-pale);color:var(--volt-dim)">🗒</div>
+        <div>
+          <div class="card-title">Quarterly Board Memo — Q${latest}</div>
+          <div class="card-subtitle">Where you stand heading into the next round</div>
+        </div>
+      </div>
+      <p style="font-size:14px;color:var(--ink);line-height:1.7;margin:6px 0 0">${memoHtml}</p>
+    </div>
+  `;
 }
 
 // P1 FIX: Session ended screen
@@ -3213,6 +3250,92 @@ function defaultMetricsForCaseSlug(slug) {
   if (slug === 'arc')  return { revenue:6.9,  grossMargin:4.2,  cashRunway:24, marketShare:52, productHealth:72, teamCapability:74 };
   if (slug === 'demo') return { revenue:1.1,  grossMargin:-12,  cashRunway:11, marketShare:18, productHealth:45, teamCapability:60 };
   return { revenue:16.8, grossMargin:-5.8, cashRunway:22, marketShare:42, productHealth:58, teamCapability:65 };
+}
+
+// =================================================
+//  BOARD MEMO
+//  Generates a 3-4 sentence quarterly read of where the team stands.
+//  Built deterministically from the same data the engine just produced
+//  (no new lookups). Shown on the participant Dashboard as the third
+//  layer (case backstory + KPI numbers + per-round narrative read).
+// =================================================
+const _MEMO_METRIC_DEFS = [
+  { k:'revenue',        label:'top-line revenue',  good:18, bad:8   },
+  { k:'grossMargin',    label:'gross margin',      good:5,  bad:-5  },
+  { k:'cashRunway',     label:'cash runway',       good:18, bad:8   },
+  { k:'marketShare',    label:'market share',      good:55, bad:25  },
+  { k:'productHealth',  label:'product health',    good:70, bad:40  },
+  { k:'teamCapability', label:'team capability',   good:70, bad:50  },
+];
+
+function _memoFmtMetric(k, v) {
+  if (k === 'revenue')     return `₹${v}Cr`;
+  if (k === 'grossMargin') return `${v >= 0 ? '+' : ''}${v}%`;
+  if (k === 'cashRunway')  return `${v}mo`;
+  return `${v}`;
+}
+
+function _memoSignedDelta(prev, now, k) {
+  const d = Number(now) - Number(prev);
+  if (Math.abs(d) < 0.05) return null;
+  const rounded = Math.abs(d) >= 1 ? Math.round(d) : Number(d.toFixed(1));
+  return (rounded > 0 ? '+' : '') + rounded;
+}
+
+// Returns a short paragraph board memo for one team after a round closes.
+// metricsNow / metricsPrev: the team's metrics after / before this round
+// narratives: this round's narrative rows (decisions + curveballs)
+// round, caseName, teamName: context strings
+function generateBoardMemo(metricsNow, metricsPrev, narratives, round, caseName, teamName) {
+  const t = teamName || 'The team';
+  const c = caseName || 'this case';
+  // Headline numbers + deltas.
+  const parts = [];
+  const dR = _memoSignedDelta(metricsPrev.revenue,     metricsNow.revenue,     'revenue');
+  const dM = _memoSignedDelta(metricsPrev.grossMargin, metricsNow.grossMargin, 'grossMargin');
+  const dC = _memoSignedDelta(metricsPrev.cashRunway,  metricsNow.cashRunway,  'cashRunway');
+  parts.push(
+    `**After Q${round}.** ${t} closed the quarter at ${_memoFmtMetric('revenue', metricsNow.revenue)} revenue` +
+    (dR ? ` (${dR})` : '') +
+    `, ${_memoFmtMetric('grossMargin', metricsNow.grossMargin)} gross margin` +
+    (dM ? ` (${dM})` : '') +
+    `, ${_memoFmtMetric('cashRunway', metricsNow.cashRunway)} runway` +
+    (dC ? ` (${dC})` : '') + '.'
+  );
+
+  // Most impactful positive decision this round (highest sum-of-positive-deltas).
+  const decisionRows = (narratives || []).filter(n => n && n.domain_id !== 'curveball');
+  let topDecision = null;
+  decisionRows.forEach(n => {
+    const pos = Object.values(n.delta || {}).reduce((s, v) => s + Math.max(0, Number(v)), 0);
+    if (pos > 0 && (!topDecision || pos > topDecision.pos)) topDecision = { pos, n };
+  });
+  if (topDecision) {
+    parts.push(`The board called out ${t.toLowerCase()}'s ${topDecision.n.domain_title.toLowerCase()} move: "${topDecision.n.option}" — ${topDecision.n.summary}`);
+  }
+
+  // First curveball that hit this round, if any.
+  const curveball = (narratives || []).find(n => n && n.domain_id === 'curveball');
+  if (curveball) {
+    parts.push(`External: ${curveball.summary}`);
+  }
+
+  // Strongest and weakest metric heading into next round.
+  const ranked = _MEMO_METRIC_DEFS
+    .map(def => {
+      const v = Number(metricsNow[def.k] ?? 0);
+      const spread = def.good - def.bad;
+      const norm = spread ? (v - def.bad) / spread : 0;
+      return { def, v, norm };
+    })
+    .sort((a, b) => b.norm - a.norm);
+  const top    = ranked[0];
+  const bottom = ranked[ranked.length - 1];
+  if (top && bottom && top.def.k !== bottom.def.k) {
+    parts.push(`Heading into Q${round + 1}: ${top.def.label} is your strongest position; ${bottom.def.label} is the watchpoint.`);
+  }
+
+  return parts.join(' ');
 }
 
 // =================================================
@@ -4263,12 +4386,16 @@ async function adminCloseAndPublishRound() {
     allDecisionsByTeam, curveballsThisRound
   );
 
-  // 4. Persist one outcome row per team (only those who submitted).
+  // 4. Persist one outcome row per team (only those who submitted), plus a
+  //    board memo generated from the same data.
   const teamsToPublish = teams.filter(t => computed[t.id]);
   const teamsSkipped   = teams.length - teamsToPublish.length;
+  const caseName = (currentSession.cases && currentSession.cases.name) || 'this case';
   await Promise.all(teamsToPublish.map(t => {
-    const r = computed[t.id];
-    return dbPublishOutcome(currentSession.id, t.id, round, r.metrics, r.score, r.narratives);
+    const r    = computed[t.id];
+    const prev = prevMetricsByTeam[t.id] || defaultMetricsForCaseSlug(caseSlug);
+    const memo = generateBoardMemo(r.metrics, prev, r.narratives, round, caseName, t.display_name || t.username);
+    return dbPublishOutcome(currentSession.id, t.id, round, r.metrics, r.score, r.narratives, memo);
   }));
 
   // 5. Close the round; GM advances to the next round separately.
@@ -4411,6 +4538,7 @@ async function renderMasterAdmin() {
         <td style="color:${statusColor};font-weight:600;text-transform:capitalize">${escapeHtml(s.status || '')}</td>
         <td style="font-size:12px;color:var(--muted)">${escapeHtml(created)}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-secondary" style="padding:6px 12px;font-size:11px" onclick="maRenderCohortSummary('${s.id}')">Summary</button>
           <button class="btn-secondary" style="padding:6px 12px;font-size:11px" onclick="maManageSession('${s.id}')">Manage</button>
           <button class="btn-secondary" style="padding:6px 12px;font-size:11px" onclick="maEnterSession('${s.id}')">Enter as GM</button>
         </td>
@@ -4972,6 +5100,147 @@ async function maEnterSession(sessionId) {
   renderApp();
   navigate('admin');
   showNotification('Entered session ' + sess.code + ' as Game Master.', 'success');
+}
+
+// =================================================
+//  COHORT SUMMARY (GM-facing read-only overview)
+// =================================================
+//  Pulls everything for one cohort and renders a chronological view:
+//  per-team trajectory at the top, a round-by-round timeline below
+//  (curveballs injected, per-team decisions + score + board memo).
+async function maRenderCohortSummary(sessionId) {
+  const detailCont = document.getElementById('maSessionDetail');
+  if (!detailCont) return;
+  detailCont.innerHTML = '<div class="card"><div class="empty-state"><h3>Loading cohort summary…</h3></div></div>';
+
+  const sess = _masterSessions.find(s => s.id === sessionId);
+  if (!sess) { detailCont.innerHTML = '<div class="card"><p>Cohort not found.</p></div>'; return; }
+
+  const sb = getSupabase(); if (!sb) return;
+  const [teams, decisions, outcomes, curveballs] = await Promise.all([
+    dbGetTeamsForSession(sessionId),
+    sb.from('decisions').select('*').eq('session_id', sessionId).order('round').then(r => r.data || []),
+    sb.from('outcomes').select('*').eq('session_id', sessionId).order('round').then(r => r.data || []),
+    sb.from('curveballs').select('*').eq('session_id', sessionId).order('round').then(r => r.data || []),
+  ]);
+
+  const totalR = sess.total_rounds || ((sess.cases && sess.cases.slug==='demo') ? 4 : 5);
+  const teamById = {}; teams.forEach(t => { teamById[t.id] = t; });
+
+  // outcomesByRoundTeam[round][team_id] = outcome row
+  const outcomesByRoundTeam = {};
+  outcomes.forEach(o => {
+    (outcomesByRoundTeam[o.round] = outcomesByRoundTeam[o.round] || {})[o.team_id] = o;
+  });
+  // decisionsByRoundTeam[round][team_id] = [decision rows]
+  const decisionsByRoundTeam = {};
+  decisions.forEach(d => {
+    const r = decisionsByRoundTeam[d.round] = decisionsByRoundTeam[d.round] || {};
+    (r[d.team_id] = r[d.team_id] || []).push(d);
+  });
+  const curveballsByRound = {};
+  curveballs.forEach(c => { (curveballsByRound[c.round] = curveballsByRound[c.round] || []).push(c); });
+
+  // ---- Header ----
+  let html = `<div class="card" style="border-left:3px solid var(--volt-dim);margin-top:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="admin-section-title" style="margin-bottom:4px">Cohort Summary: ${escapeHtml(sess.code)}</div>
+        <div style="font-size:12px;color:var(--muted)">${escapeHtml(sess.cohort_name || '')} · ${escapeHtml(sess.cases ? sess.cases.name : '')} · Q${sess.current_round} of ${totalR} · ${escapeHtml(sess.status || '')}</div>
+      </div>
+      <button class="btn-ghost" onclick="document.getElementById('maSessionDetail').innerHTML=''">Close ✕</button>
+    </div>`;
+
+  // ---- Teams trajectory table ----
+  html += `<div class="admin-section-title" style="font-size:10px;margin-top:10px">Team Trajectories</div>
+    <table class="ma-sessions-table" style="margin-bottom:18px">
+      <thead><tr>
+        <th>Team</th><th>Score</th><th>Revenue</th><th>Margin</th><th>Runway</th><th>Share</th><th>Latest memo</th>
+      </tr></thead><tbody>`;
+
+  teams.forEach(t => {
+    let lastOutcome = null;
+    for (let r = totalR; r >= 1; r--) {
+      if (outcomesByRoundTeam[r] && outcomesByRoundTeam[r][t.id]) { lastOutcome = outcomesByRoundTeam[r][t.id]; break; }
+    }
+    const score   = lastOutcome ? (lastOutcome.score ?? '—') : '—';
+    const rev     = lastOutcome ? ('₹' + lastOutcome.revenue + 'Cr') : '—';
+    const mg      = lastOutcome ? (((lastOutcome.gross_margin >= 0) ? '+' : '') + lastOutcome.gross_margin + '%') : '—';
+    const runway  = lastOutcome ? (lastOutcome.cash_runway + 'mo') : '—';
+    const share   = lastOutcome ? (lastOutcome.market_share + '%') : '—';
+    const memo    = lastOutcome && lastOutcome.summary ? lastOutcome.summary : '—';
+    const memoShort = memo.length > 140 ? memo.slice(0, 140) + '…' : memo;
+    html += `<tr>
+      <td style="font-weight:700">${escapeHtml(t.display_name || t.username || '')}</td>
+      <td style="font-weight:700;color:var(--volt-dim)">${score}</td>
+      <td>${escapeHtml(rev)}</td>
+      <td>${escapeHtml(mg)}</td>
+      <td>${escapeHtml(runway)}</td>
+      <td>${escapeHtml(share)}</td>
+      <td style="font-size:12px;color:var(--muted);max-width:340px">${escapeHtml(memoShort).replace(/\*\*(.+?)\*\*/g,'<strong style="color:var(--ink)">$1</strong>')}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+
+  // ---- Round-by-round timeline ----
+  html += `<div class="admin-section-title" style="font-size:10px;margin-top:6px">Round Timeline</div>`;
+  for (let r = 1; r <= totalR; r++) {
+    const isCurrent = r === sess.current_round;
+    const isClosed  = r < sess.current_round || (isCurrent && !sess.round_open);
+    const statusChip = isCurrent
+      ? (sess.round_open ? '<span class="tag green">In progress</span>' : '<span class="tag amber">Closed (current)</span>')
+      : (isClosed ? '<span class="tag amber">Closed</span>' : '<span class="tag" style="background:var(--wire-2);color:var(--muted)">Not started</span>');
+
+    html += `<div style="border:1px solid var(--wire);border-radius:8px;padding:14px;margin-bottom:10px;background:${isCurrent?'var(--volt-pale)':'white'}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="font-size:16px;font-weight:800">Q${r}</div>
+        ${statusChip}
+      </div>`;
+
+    // Curveballs
+    const cbs = curveballsByRound[r] || [];
+    if (cbs.length) {
+      html += `<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Curveballs (${cbs.length})</div>`;
+      cbs.forEach(c => {
+        const isScored = c.impact && c.impact.u;
+        html += `<div style="font-size:12px;padding:6px 10px;background:var(--red-pale);border-radius:6px;margin-bottom:4px;border-left:2px solid var(--red)">
+          <strong>${escapeHtml(c.title)}</strong>${isScored ? ' <span style="color:var(--volt-dim);font-size:10px;font-weight:700">⚡ SCORED</span>' : ''}
+          <div style="color:var(--muted);font-size:11px;margin-top:2px">${escapeHtml(c.body)}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // Per-team activity
+    const decRow = decisionsByRoundTeam[r] || {};
+    const outRow = outcomesByRoundTeam[r] || {};
+    if (Object.keys(decRow).length === 0 && Object.keys(outRow).length === 0) {
+      html += `<div style="font-size:12px;color:var(--muted);font-style:italic">No team activity recorded in this round yet.</div>`;
+    } else {
+      html += `<table style="width:100%;border-collapse:collapse;font-size:12px"><thead>
+        <tr style="text-align:left;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">
+          <th style="padding:6px 8px">Team</th><th style="padding:6px 8px">Decisions submitted</th><th style="padding:6px 8px">Score</th><th style="padding:6px 8px">Memo</th>
+        </tr></thead><tbody>`;
+      teams.forEach(t => {
+        const teamDecs = decRow[t.id] || [];
+        const out      = outRow[t.id];
+        const memo     = out && out.summary ? out.summary : '';
+        const memoShort = memo.length > 200 ? memo.slice(0, 200) + '…' : memo;
+        html += `<tr style="border-top:1px solid var(--wire)">
+          <td style="padding:8px;font-weight:700">${escapeHtml(t.display_name || t.username || '')}</td>
+          <td style="padding:8px">${teamDecs.length || '—'}</td>
+          <td style="padding:8px;font-weight:700;color:var(--volt-dim)">${out ? (out.score ?? '—') : '—'}</td>
+          <td style="padding:8px;color:var(--muted);max-width:420px">${escapeHtml(memoShort).replace(/\*\*(.+?)\*\*/g,'<strong style="color:var(--ink)">$1</strong>')}</td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+    }
+
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  detailCont.innerHTML = html;
 }
 
 // =================================================
