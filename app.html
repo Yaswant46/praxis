@@ -4919,9 +4919,14 @@ async function maManageSession(sessionId) {
       <span style="font-size:12px;font-weight:600;color:var(--muted)">Cohort link:</span>
       <code style="font-family:var(--mono);font-size:12px;color:var(--volt-dim);flex:1;min-width:200px;word-break:break-all">${escapeHtml(link)}</code>
       <button class="btn-secondary" style="padding:6px 12px;font-size:11px;flex-shrink:0"
-        onclick="copyToClipboard(this, ${JSON.stringify(link)})">Copy</button>
+        onclick="copyToClipboard(this, ${JSON.stringify(link)})">Copy link</button>
+      <button class="btn-secondary" style="padding:6px 12px;font-size:11px;flex-shrink:0"
+        onclick="maCopyAllInvites('${sessionId}')">📋 Copy all invites</button>
       <button class="btn-volt" style="padding:6px 12px;font-size:11px;flex-shrink:0"
-        onclick="maSendAllEmails('${sessionId}')">📧 Send credentials to all reps</button>
+        onclick="maSendAllEmails('${sessionId}')">📧 Email all reps</button>
+    </div>
+    <div style="background:var(--volt-pale);border:1px solid var(--volt);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--ink);line-height:1.5">
+      <strong>Two ways to share credentials:</strong> use <strong>Copy invite</strong> per team to get a ready-to-paste message you can send from your own email / WhatsApp, or <strong>Email all reps</strong> to send via Praxis transactional email. Both are equivalent — pick whichever your cohort prefers.
     </div>
     <div class="admin-section-title" style="font-size:10px">Teams &amp; Credentials</div>`;
 
@@ -4953,11 +4958,13 @@ async function maManageSession(sessionId) {
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:center">
         <input type="email" id="maEdit_repemail_${t.id}" value="${escapeHtml(t.representative_email || '')}" placeholder="rep@team.com" style="font-size:12px">
         <span style="font-size:11px;color:var(--muted)">${escapeHtml(sentLabel)} · <span class="tag ${submittedRounds>0?'green':'amber'}">${submittedRounds} rounds submitted</span></span>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn-secondary" style="padding:6px 10px;font-size:11px"
             onclick="maUpdateRepEmail('${sessionId}','${t.id}')">Save email</button>
+          <button class="btn-secondary" style="padding:6px 10px;font-size:11px"
+            onclick="maCopyInvite('${sessionId}','${t.id}')">📋 Copy invite</button>
           <button class="btn-volt" style="padding:6px 10px;font-size:11px"
-            onclick="maResendOne('${sessionId}','${t.id}')">${t.credentials_sent_at ? 'Resend' : 'Send'}</button>
+            onclick="maResendOne('${sessionId}','${t.id}')">${t.credentials_sent_at ? 'Resend' : '📧 Send'}</button>
         </div>
       </div>
     </div>`;
@@ -5027,6 +5034,61 @@ async function maSendAllEmails(sessionId) {
     showNotification(`${result.sent || 0} sent, ${result.failed || 0} failed.`, (result.failed||0) > 0 ? 'error' : 'success');
   }
   await refreshMasterAdminAfterMutation(sessionId);
+}
+
+// Build a ready-to-paste invitation message for one team.
+function _buildTeamInviteText(sess, team) {
+  const caseName    = (sess.cases && sess.cases.name) || 'Praxis';
+  const cohortName  = sess.cohort_name || 'Praxis Cohort';
+  const totalRounds = sess.total_rounds || ((sess.cases && sess.cases.slug==='demo') ? 4 : 5);
+  const baseUrl     = window.location.origin + window.location.pathname;
+  const slot        = team.slot || ('team-' + team.team_number);
+  const loginUrl    = `${baseUrl}#/session/${sess.code}/team/${slot}`;
+  return [
+    `Hi ${team.display_name || 'team'},`,
+    ``,
+    `You're invited to a Praxis cohort: ${cohortName} (${caseName}, ${totalRounds} rounds).`,
+    `You are the representative for ${team.display_name || ('Team ' + team.team_number)} — please forward this to your teammates.`,
+    ``,
+    `Login link: ${loginUrl}`,
+    `Team:     ${team.display_name || ''}`,
+    `Username: ${team.username || ''}`,
+    `Password: ${team.password || ''}`,
+    ``,
+    `Confidential — please share only with your team.`,
+  ].join('\n');
+}
+
+async function maCopyInvite(sessionId, teamId) {
+  const sess = _masterSessions.find(s => s.id === sessionId);
+  if (!sess) { showNotification('Cohort not found.', 'error'); return; }
+  // Reload teams so we have current creds (in case password was just rotated).
+  const teams = await dbGetTeamsForSession(sessionId);
+  const team  = teams.find(t => t.id === teamId);
+  if (!team) { showNotification('Team not found.', 'error'); return; }
+  const text = _buildTeamInviteText(sess, team);
+  try {
+    await navigator.clipboard.writeText(text);
+    showNotification('Invitation for ' + (team.display_name || ('Team ' + team.team_number)) + ' copied. Paste into your email client.', 'success');
+  } catch (e) {
+    // Clipboard API can fail on http or restricted pages — fall back to prompt.
+    window.prompt('Copy the invitation below (Cmd/Ctrl+C):', text);
+  }
+}
+
+async function maCopyAllInvites(sessionId) {
+  const sess = _masterSessions.find(s => s.id === sessionId);
+  if (!sess) { showNotification('Cohort not found.', 'error'); return; }
+  const teams = await dbGetTeamsForSession(sessionId);
+  if (!teams.length) { showNotification('No teams in this cohort yet.', 'error'); return; }
+  const blocks = teams.map(t => _buildTeamInviteText(sess, t));
+  const combined = blocks.join('\n\n--- next team ---\n\n');
+  try {
+    await navigator.clipboard.writeText(combined);
+    showNotification(`Invitations for ${teams.length} teams copied as one block. Paste into a doc, split per rep, send.`, 'success');
+  } catch (e) {
+    window.prompt('Copy all invitations below (Cmd/Ctrl+C):', combined);
+  }
 }
 
 async function maRotatePassword(sessionId, teamId) {
