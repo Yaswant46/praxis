@@ -1168,6 +1168,28 @@ input, select, textarea { font-family: var(--sans); }
   .role-cards { grid-template-columns: 1fr; }
 }
 .mobile-menu-btn { display: none; }
+
+/* =================================================
+   PRINT — used by Report → Export to PDF.
+   Strips chrome, lets only #page-report content flow
+   to paper. Keeps team blocks together when possible.
+   ================================================= */
+@media print {
+  body { background: white !important; color: black !important; }
+  .sidebar, .topbar, .mobile-menu-btn, #notification, .mobile-overlay { display: none !important; }
+  .content { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+  .page-section { display: none !important; }
+  .page-section#page-report { display: block !important; }
+  /* Hide everything outside the report page (e.g. round timeline above content). */
+  #page-report .empty-state { display: none; }
+  /* Avoid splitting a team's block across pages where possible. */
+  .report-team-block { break-inside: avoid; page-break-inside: avoid; }
+  .card { box-shadow: none !important; border-color: #ccc !important; background: white !important; }
+  /* Hide the "Export to PDF" button itself in print output. */
+  button { display: none !important; }
+  /* Keep the report header visible even though buttons are hidden. */
+  .card-title { color: black !important; }
+}
 </style>
 </head>
 <body>
@@ -1320,6 +1342,9 @@ input, select, textarea { font-family: var(--sans); }
       <div class="nav-item" onclick="navigate('leaderboard')" id="nav-leaderboard">
         <span class="icon">▲</span> Leaderboard
       </div>
+      <div class="nav-item" onclick="navigate('report')" id="nav-report">
+        <span class="icon">📑</span> <span id="reportNavLabel">Team Report</span>
+      </div>
       <div id="adminNavItem" class="nav-item" onclick="navigate('admin')" style="display:none">
         <span class="icon">⬡</span> Admin Panel
         <span class="nav-badge" style="background:var(--purple)">GM</span>
@@ -1434,6 +1459,11 @@ input, select, textarea { font-family: var(--sans); }
       <!-- LEADERBOARD -->
       <div id="page-leaderboard" class="page-section">
         <div id="leaderboardContent"></div>
+      </div>
+
+      <!-- REPORT (team report for participants; cohort report for GM) -->
+      <div id="page-report" class="page-section">
+        <div id="reportContent"></div>
       </div>
 
       <!-- ADMIN -->
@@ -2235,6 +2265,8 @@ async function showApp() {
   const maIcon  = document.getElementById('masterAdminNavIcon');
   const maBadge = document.getElementById('masterAdminNavBadge');
   if (maLabel) maLabel.textContent = currentUser.isSuperuser ? 'Master Admin' : 'GM Console';
+  const reportLabel = document.getElementById('reportNavLabel');
+  if (reportLabel) reportLabel.textContent = currentUser.isAdmin ? 'Cohort Report' : 'Team Report';
   if (maIcon)  maIcon.textContent  = currentUser.isSuperuser ? '🔑' : '🛡';
   if (maBadge) {
     maBadge.textContent       = currentUser.isSuperuser ? 'SA' : 'GM';
@@ -2323,7 +2355,8 @@ function navigate(page) {
   const titles = {
     dashboard:'Dashboard', case:'Case Brief', curveball:'Curveballs', decisions:'Decisions',
     assessment:'Assessment', history:'Decision Log', leaderboard:'Leaderboard',
-    admin:'Admin Panel', 'master-admin': currentUser && currentUser.isSuperuser ? 'Master Admin' : 'GM Console'
+    admin:'Admin Panel', 'master-admin': currentUser && currentUser.isSuperuser ? 'Master Admin' : 'GM Console',
+    report: currentUser && currentUser.isAdmin ? 'Cohort Report' : 'Team Report'
   };
   document.getElementById('topbarSubtitle').textContent = '/ ' + (titles[page] || page);
 
@@ -2338,6 +2371,7 @@ function navigate(page) {
   if (page === 'leaderboard')    renderLeaderboard();
   if (page === 'admin' && currentUser.isAdmin) renderAdmin();
   if (page === 'master-admin' && currentUser.isAdmin) renderMasterAdmin();
+  if (page === 'report')                              renderReport();
 }
 
 // =================================================
@@ -3846,6 +3880,162 @@ const LB_TEAMS = [
   { id:'team5', name:'Epsilon' }, { id:'team6', name:'Zeta' },
 ];
 const RANK_ICONS = ['🥇','🥈','🥉','4','5','6'];
+
+// =================================================
+//  REPORT  (team report for participants; cohort report + PDF export for GM)
+// =================================================
+async function renderReport() {
+  const cont = document.getElementById('reportContent');
+  if (!cont) return;
+  if (!currentSession) {
+    cont.innerHTML = `<div class="empty-state"><span class="icon">📑</span><h3>No active session</h3><p>Join a session to see this team's report.</p></div>`;
+    return;
+  }
+  cont.innerHTML = `<div class="empty-state"><h3 style="color:var(--muted)">Loading report…</h3></div>`;
+
+  const state    = getState();
+  const allDec   = await dbGetAllDecisions(currentSession.id);
+  const teams    = state._teams || [];
+  const slotToKey = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
+
+  // Which teams to include in the report.
+  let teamsToShow;
+  if (currentUser.isAdmin) {
+    teamsToShow = teams;
+  } else {
+    const myTeam = teams.find(t => slotToKey[t.slot] === currentUser.teamId);
+    teamsToShow = myTeam ? [myTeam] : [];
+  }
+  if (!teamsToShow.length) {
+    cont.innerHTML = `<div class="empty-state"><span class="icon">📑</span><h3>No team data</h3></div>`;
+    return;
+  }
+
+  // Group decisions by team_id → round → field_id → value.
+  const decByTeamRound = {};
+  allDec.forEach(d => {
+    const r = decByTeamRound[d.team_id] = decByTeamRound[d.team_id] || {};
+    const rr = r[d.round] = r[d.round] || {};
+    rr[d.field_id] = d.value;
+  });
+
+  const caseSlug = (currentSession.cases && currentSession.cases.slug)
+                || (selectedCase === 'A' ? 'volta' : selectedCase === 'B' ? 'arc' : 'demo');
+  const caseName = (currentSession.cases && currentSession.cases.name) || 'Praxis';
+  const domains  = getDecisionDomainsForCaseSlug(caseSlug);
+  const playedRounds = [];
+  for (let r = 1; r < state.currentRound; r++) playedRounds.push(r);
+  if (state.outcomes && state.outcomes[state.currentRound]) playedRounds.push(state.currentRound);
+
+  let html = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div>
+        <div class="card-title" style="font-size:20px">${currentUser.isAdmin ? 'Cohort Report' : 'Team Report'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(currentSession.cohort_name || '')} · ${escapeHtml(caseName)} · ${escapeHtml(currentSession.code || '')} · Q${state.currentRound} of ${currentSession.total_rounds || playedRounds.length || '—'}</div>
+      </div>
+      <button class="btn-volt" style="padding:8px 16px" onclick="window.print()">📄 Export to PDF</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:18px">When you click Export to PDF, your browser opens the print dialog. Choose <strong>Save as PDF</strong> as the destination.</p>
+  `;
+
+  teamsToShow.forEach(t => {
+    const teamKey = slotToKey[t.slot];
+    const teamId  = t.id;
+    const teamName = t.display_name || t.username || ('Team ' + t.team_number);
+    const scoreData = state.scores[teamKey];
+    const totalScore = scoreData ? scoreData.total : 0;
+
+    html += `<div class="card report-team-block" style="margin-bottom:20px;break-inside:avoid">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+        <div class="card-title" style="font-size:18px">${escapeHtml(teamName)}</div>
+        ${currentUser.isAdmin ? `<span class="admin-chip" style="background:var(--volt-pale);color:var(--volt-dim);border-color:var(--volt)">${escapeHtml(t.username || '')}</span>` : ''}
+        <span style="margin-left:auto;font-size:13px;color:var(--muted)">Cumulative score: <strong style="color:var(--volt-dim)">${totalScore}</strong></span>
+      </div>
+    `;
+
+    if (playedRounds.length === 0) {
+      html += `<p style="font-size:13px;color:var(--muted);font-style:italic">No rounds played yet.</p>`;
+    }
+
+    playedRounds.forEach(round => {
+      const decisionsForRound = (decByTeamRound[teamId] || {})[round] || {};
+      const outcome  = state.outcomes && state.outcomes[round] && state.outcomes[round][teamKey];
+      const prev     = (round > 1 && state.outcomes && state.outcomes[round-1] && state.outcomes[round-1][teamKey])
+                       ? state.outcomes[round-1][teamKey]
+                       : defaultMetricsForCaseSlug(caseSlug);
+      const memo     = state.memos && state.memos[round] && state.memos[round][teamKey];
+      const narratives = (state.narratives && state.narratives[round] && state.narratives[round][teamKey]) || [];
+      const roundScore = scoreData && scoreData.history[round-1] ? scoreData.history[round-1] : null;
+
+      html += `<div style="border:1px solid var(--wire);border-radius:8px;padding:16px;margin-top:12px;break-inside:avoid">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+          <div style="font-size:15px;font-weight:700">Quarter ${round}</div>
+          ${roundScore !== null ? `<div style="font-size:12px;color:var(--muted)">Round score: <strong style="color:var(--volt-dim)">${roundScore} / 100</strong></div>` : ''}
+        </div>`;
+
+      // KPI block
+      if (outcome) {
+        html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+          ${_assessMetricCell('Monthly Revenue', '₹' + outcome.revenue + 'Cr', outcome.revenue - prev.revenue, '₹', 'Cr')}
+          ${_assessMetricCell('Gross Margin',    (outcome.grossMargin>0?'+':'') + outcome.grossMargin + '%', outcome.grossMargin - prev.grossMargin, '', '%')}
+          ${_assessMetricCell('Cash Runway',     outcome.cashRunway + 'mo', outcome.cashRunway - prev.cashRunway, '', 'mo')}
+          ${_assessMetricCell('Market Share',    outcome.marketShare + '%', outcome.marketShare - prev.marketShare, '', '%')}
+          ${_assessMetricCell('Product Health',  outcome.productHealth, outcome.productHealth - prev.productHealth, '', '')}
+          ${_assessMetricCell('Team Capability', outcome.teamCapability, outcome.teamCapability - prev.teamCapability, '', '')}
+        </div>`;
+      } else {
+        html += `<p style="font-size:12px;color:var(--muted);font-style:italic;margin:6px 0 14px">Outcomes not published for this quarter yet.</p>`;
+      }
+
+      // Decisions submitted block (grouped by domain)
+      const decKeys = Object.keys(decisionsForRound);
+      if (decKeys.length === 0) {
+        html += `<p style="font-size:12px;color:var(--muted);font-style:italic">No decisions submitted for this quarter.</p>`;
+      } else {
+        html += `<div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:8px 0 6px">Decisions submitted</div>`;
+        domains.forEach(dom => {
+          const fieldsInRound = dom.fields.filter(f => decisionsForRound[f.id] != null && decisionsForRound[f.id] !== '');
+          if (!fieldsInRound.length) return;
+          html += `<div style="margin-bottom:6px">
+            <div style="font-size:11px;font-weight:700;color:var(--volt-dim);margin-bottom:2px">${escapeHtml(dom.title)}</div>`;
+          fieldsInRound.forEach(f => {
+            const v = decisionsForRound[f.id];
+            const display = (f.type === 'slider') ? `${v}${f.unit || ''}` : v;
+            html += `<div style="font-size:12px;color:var(--ink);line-height:1.5">
+              <span style="color:var(--muted)">${escapeHtml(f.label)}:</span> <strong>${escapeHtml(display)}</strong>
+            </div>`;
+          });
+          html += `</div>`;
+        });
+      }
+
+      // Narrative commentary
+      if (narratives.length) {
+        html += `<div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:14px 0 6px">Commentary</div>
+          <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px">`;
+        narratives.forEach(n => {
+          if (!n || !n.summary) return;
+          html += `<li style="font-size:12px;line-height:1.55;color:var(--ink);padding-left:10px;border-left:2px solid var(--volt-pale)">
+            <strong>${escapeHtml(n.field_label || n.domain_title || '')}</strong> — ${escapeHtml(n.summary)}
+          </li>`;
+        });
+        html += `</ul>`;
+      }
+
+      if (memo) {
+        const memoHtml = escapeHtml(memo).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html += `<div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:14px 0 6px">Board memo</div>
+          <p style="font-size:13px;color:var(--ink);line-height:1.65;margin:0">${memoHtml}</p>`;
+      }
+
+      html += `</div>`; // end round block
+    });
+
+    html += `</div>`;   // end team block
+  });
+
+  cont.innerHTML = html;
+}
 
 function renderLeaderboard() {
   const state = getState();
