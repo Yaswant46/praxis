@@ -142,11 +142,13 @@ CREATE TABLE IF NOT EXISTS outcomes (
   team_capability NUMERIC(6,1),
   score           INTEGER,
   narratives      JSONB DEFAULT '[]'::jsonb,
+  summary         TEXT,
   published_at    TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(session_id, team_id, round)
 );
 
 ALTER TABLE outcomes ADD COLUMN IF NOT EXISTS narratives JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE outcomes ADD COLUMN IF NOT EXISTS summary TEXT;
 
 
 -- =============================================================
