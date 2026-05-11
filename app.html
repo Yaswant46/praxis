@@ -1651,12 +1651,14 @@ async function dbGetOutcomes(sessionId) {
     .eq('session_id', sessionId).order('round');
   return data || [];
 }
-async function dbInjectCurveball(sessionId, round, title, body, adminEmail) {
+async function dbInjectCurveball(sessionId, round, title, body, adminEmail, impact) {
   const sb = getSupabase(); if (!sb) return false;
-  const { error } = await sb.from('curveballs').insert({
+  const payload = {
     session_id: sessionId, round, title, body,
+    impact: impact && typeof impact === 'object' ? impact : {},
     injected_by: adminEmail, injected_at: new Date().toISOString()
-  });
+  };
+  const { error } = await sb.from('curveballs').insert(payload);
   return !error;
 }
 async function dbGetCurveballs(sessionId) {
@@ -3129,15 +3131,80 @@ function computeTeamOutcome(decisions, prevMetrics, caseSlug) {
   return { metrics, narratives, score: _scoringNormaliseScore(metrics) };
 }
 
+// Apply curveball impacts to one team's metrics, given the team's full
+// decision history (all rounds) so modifiers like "if you forward-hedged
+// in Q1" still apply when the curveball lands in Q3.
+//   curveballs:     [{ title, body, impact: { u, m, s } }, ...]
+//   allTeamDecisions: array of decision rows for THIS team across all rounds
+// Mutates metrics in place. Returns narrative entries to append.
+function _applyCurveballImpacts(metrics, curveballs, allTeamDecisions, caseSlug) {
+  const narratives = [];
+  // Index this team's decisions by field_id → option index for quick modifier lookups.
+  const fieldToIndex = {};
+  const domains = getDecisionDomainsForCaseSlug(caseSlug);
+  const fieldDefs = {};
+  domains.forEach(d => d.fields.forEach(f => { fieldDefs[f.id] = f; }));
+  (allTeamDecisions || []).forEach(dec => {
+    const f = fieldDefs[dec.field_id];
+    if (f && f.type === 'select') {
+      const idx = (f.options || []).indexOf(dec.value);
+      if (idx >= 0) fieldToIndex[dec.field_id] = idx;
+    }
+  });
+
+  (curveballs || []).forEach(cb => {
+    const imp = cb.impact || cb.i;
+    if (!imp || !imp.u || typeof imp.u !== 'object') return;
+    let mult = 1.0;
+    (imp.m || []).forEach(mod => {
+      if (!mod || !mod.f) return;
+      const teamIdx = fieldToIndex[mod.f];
+      if (teamIdx == null) return;
+      const opts = Array.isArray(mod.o) ? mod.o : [mod.o];
+      if (opts.indexOf(teamIdx) >= 0) {
+        mult *= Number(mod.mult ?? 1);
+      }
+    });
+    const effective = {};
+    Object.entries(imp.u).forEach(([k, v]) => { effective[k] = Number(v) * mult; });
+    _scoringApplyDelta(metrics, effective);
+    narratives.push({
+      domain_id:    'curveball',
+      domain_title: 'Curveball',
+      field_id:     null,
+      field_label:  cb.title || 'Scenario event',
+      option:       imp.s || cb.body || '',
+      delta:        effective,
+      summary:      (imp.s || cb.body || '') + (mult !== 1.0 ? ` (Your decisions reduced the impact to ${Math.round(mult * 100)}% of the headline.)` : ''),
+    });
+  });
+  return narratives;
+}
+
 // Compute outcomes for every submitting team in a round.
-//   decisionsByTeam:     { teamId: [decisions...] }
+//   decisionsByTeam:     { teamId: [decisions THIS round] }
 //   prevMetricsByTeam:   { teamId: metrics } (round-1 outcome; falls back to defaultMetrics)
-function computeRoundOutcomes(decisionsByTeam, prevMetricsByTeam, caseSlug) {
+//   allTeamDecisions:    { teamId: [decisions ALL rounds incl. this one] }
+//   curveballsThisRound: [{ title, body, impact }] from curveballs WHERE round = this round
+function computeRoundOutcomes(decisionsByTeam, prevMetricsByTeam, caseSlug, allDecisionsByTeam, curveballsThisRound) {
   const out = {};
   Object.entries(decisionsByTeam).forEach(([teamId, decisions]) => {
     const prev = (prevMetricsByTeam && prevMetricsByTeam[teamId])
       || defaultMetricsForCaseSlug(caseSlug);
-    out[teamId] = computeTeamOutcome(decisions, prev, caseSlug);
+    const teamResult = computeTeamOutcome(decisions, prev, caseSlug);
+    // Apply curveball impacts ON TOP of decision impacts.
+    const teamAllDecs = (allDecisionsByTeam && allDecisionsByTeam[teamId]) || decisions;
+    const cbNarratives = _applyCurveballImpacts(teamResult.metrics, curveballsThisRound, teamAllDecs, caseSlug);
+    teamResult.narratives = teamResult.narratives.concat(cbNarratives);
+    // Re-round/clamp after curveball deltas applied.
+    teamResult.metrics.revenue        = Math.max(0, Number(teamResult.metrics.revenue.toFixed(1)));
+    teamResult.metrics.grossMargin    = Number(teamResult.metrics.grossMargin.toFixed(1));
+    teamResult.metrics.cashRunway     = Math.max(0, Number(teamResult.metrics.cashRunway.toFixed(1)));
+    teamResult.metrics.marketShare    = _scoringClamp(Math.round(teamResult.metrics.marketShare),    0, 100);
+    teamResult.metrics.productHealth  = _scoringClamp(Math.round(teamResult.metrics.productHealth),  0, 100);
+    teamResult.metrics.teamCapability = _scoringClamp(Math.round(teamResult.metrics.teamCapability), 0, 100);
+    teamResult.score = _scoringNormaliseScore(teamResult.metrics);
+    out[teamId] = teamResult;
   });
   return out;
 }
@@ -3923,28 +3990,107 @@ async function renderAdmin() {
   renderCurveballBank();
 }
 
-// Curveball banks
+// =================================================
+//  CURVEBALL BANKS (with scoring impact)
+//
+//  Each entry's `i` is the impact spec applied by the scoring engine
+//  when the GM injects this curveball for a round. Shape:
+//    {
+//      u: { revenue:-2, grossMargin:-1, ... },   // uniform delta on every team
+//      m: [ { f: 'sc_battery', o: [1,2], mult: 0.3 }, ... ],
+//                                                // per-team modifiers: if the
+//                                                // team chose option index o in
+//                                                // field f this round (or any
+//                                                // earlier round), multiply the
+//                                                // uniform delta by mult.
+//      s: "Short narrative summarising the curveball's effect."
+//    }
+//  Modifiers stack multiplicatively. If multiple modifiers match, the
+//  resulting delta is uniform × product(mults). A free-form curveball
+//  injected without an impact spec is narrative-only (no scoring effect).
+// =================================================
 var CB_BANK_A = [
-  { q:'Q2', t:'LFP Cell Price Spike', b:'Global lithium carbonate prices spiked 22% in the spot market following supply disruption at two Chilean mines. Increase expected to persist 5-7 months.' },
-  { q:'Q3', t:'Zephyr Launches at ₹76,000', b:'Zephyr EV officially launched the Zephyr Flash at ₹76,000 ex-showroom. Strong order intake reported in Bengaluru and Hyderabad.' },
-  { q:'Q3', t:'VoltaOS 3-Star Safety Rating', b:'AutoSafe India published a VoltaOS connectivity stability report giving the VOLTA Edge a 3-star rating, citing intermittent Bluetooth disconnection.' },
-  { q:'Q4', t:'FAME III Subsidy Restructure', b:'Draft FAME III circular: vehicles priced above ₹85,000 ex-showroom no longer qualify for per-unit subsidy. Directly affects VOLTA Go eligibility.' },
-  { q:'Q4', t:'Pune Plant Work Stoppage Risk', b:'Pune plant workers union issued 72-hour notice of industrial action. Management estimates 3-day stoppage could reduce output by 2,800 units/month.' },
-  { q:'Q5', t:'Strategic Acquisition Approach', b:'Singapore-based mobility fund approached VOLTA with indicative acquisition offer of ₹900 Cr at 2.1x revenue. Requires clean VoltaOS IP ownership.' },
+  { q:'Q2', t:'LFP Cell Price Spike',
+    b:'Global lithium carbonate prices spiked 22% in the spot market following supply disruption at two Chilean mines. Increase expected to persist 5-7 months.',
+    i: { u:{ grossMargin:-3, cashRunway:-1 },
+         m:[ { f:'sc_battery', o:[1], mult:0.5 }, { f:'sc_battery', o:[2], mult:0.1 } ],
+         s:'LFP spot prices spiked — full forward-hedgers absorbed almost none of the hit; partial hedgers took half.' } },
+  { q:'Q3', t:'Zephyr Launches at ₹76,000',
+    b:'Zephyr EV officially launched the Zephyr Flash at ₹76,000 ex-showroom. Strong order intake reported in Bengaluru and Hyderabad.',
+    i: { u:{ marketShare:-2, revenue:-1 },
+         m:[ { f:'com_go', o:[2,3], mult:0.4 } ],
+         s:'Zephyr Flash hit the lower segment. Teams that expanded Go or cut its price defended much of the share.' } },
+  { q:'Q3', t:'VoltaOS 3-Star Safety Rating',
+    b:'AutoSafe India published a VoltaOS connectivity stability report giving the VOLTA Edge a 3-star rating, citing intermittent Bluetooth disconnection.',
+    i: { u:{ productHealth:-3, marketShare:-1 },
+         m:[ { f:'eng_priority', o:[0], mult:0.0 } ],
+         s:'A poor connectivity rating pulled product perception down — except for teams that prioritised the BLE stability fix.' } },
+  { q:'Q4', t:'FAME III Subsidy Restructure',
+    b:'Draft FAME III circular: vehicles priced above ₹85,000 ex-showroom no longer qualify for per-unit subsidy. Directly affects VOLTA Go eligibility.',
+    i: { u:{ revenue:-2 },
+         m:[ { f:'com_go', o:[1], mult:0.3 } ],
+         s:'The subsidy reset hit Go demand. Teams that had already reduced Go production took less of the revenue knock.' } },
+  { q:'Q4', t:'Pune Plant Work Stoppage Risk',
+    b:'Pune plant workers union issued 72-hour notice of industrial action. Management estimates 3-day stoppage could reduce output by 2,800 units/month.',
+    i: { u:{ revenue:-3, grossMargin:-1 },
+         m:[ { f:'mfg_hosur', o:[3], mult:1.5 } ],
+         s:'A Pune stoppage trimmed output for everyone — and hit teams that had concentrated all volume into Pune harder.' } },
+  { q:'Q5', t:'Strategic Acquisition Approach',
+    b:'Singapore-based mobility fund approached VOLTA with indicative acquisition offer of ₹900 Cr at 2.1x revenue. Requires clean VoltaOS IP ownership.',
+    i: { u:{ teamCapability:+2 },
+         m:[ { f:'sc_chipaxis', o:[2], mult:2.0 } ],
+         s:'Acquisition optionality lifted team confidence. Teams investing in in-house SoC capability had the strongest IP story.' } },
 ];
 var CB_BANK_B = [
-  { q:'Q1', t:'Zep Aire Launches — Full Spec Confirmed', b:'Zep Motors confirms Aire launches this month at ₹1,22,000 with removable battery, fast-charge, and 7-inch display. First-week bookings exceeded 2,000 units.' },
-  { q:'Q2', t:'Maharashtra EV Subsidy Announced', b:'Maharashtra announces ₹8,000 per-vehicle EV purchase subsidy. Analysts estimate 35-40% demand increase in the state over the following two quarters.' },
-  { q:'Q3', t:'SwiftEV Announces 400 New Swap Kiosks', b:'SwiftEV doubles their battery swap network across Maharashtra, Karnataka, and Tamil Nadu. Removable battery ecosystem deepening faster than forecast.' },
-  { q:'Q3', t:'ARC Drift Wins Design Award — Sales Flat', b:'The ARC Drift wins a national industrial design award. Strong media coverage but dealer data shows no meaningful sales uplift. Recognition and purchase intent are diverging.' },
-  { q:'Q4', t:'NovaBike Nova S2 Announced', b:'NovaBike announces the Nova S2 with removable battery option, planned launch in 3 months. Your most active Bengaluru competitor is closing its feature gap.' },
-  { q:'Q5', t:'FAME IV Consultation — Swap Policy Signal', b:'FAME IV consultation paper proposes restricting subsidies to swap-compatible vehicles from FY28 onwards. The signal is serious.' },
+  { q:'Q1', t:'Zep Aire Launches — Full Spec Confirmed',
+    b:'Zep Motors confirms Aire launches this month at ₹1,22,000 with removable battery, fast-charge, and 7-inch display. First-week bookings exceeded 2,000 units.',
+    i: { u:{ marketShare:-3, revenue:-2 },
+         m:[ { f:'pd_path', o:[2,3], mult:0.4 } ],
+         s:'Zep Aire shipped at full parity. Teams already adding features to Nimbus held share much better.' } },
+  { q:'Q2', t:'Maharashtra EV Subsidy Announced',
+    b:'Maharashtra announces ₹8,000 per-vehicle EV purchase subsidy. Analysts estimate 35-40% demand increase in the state over the following two quarters.',
+    i: { u:{ revenue:+2, marketShare:+1 },
+         s:'A Maharashtra-level subsidy lifted demand uniformly across teams.' } },
+  { q:'Q3', t:'SwiftEV Announces 400 New Swap Kiosks',
+    b:'SwiftEV doubles their battery swap network across Maharashtra, Karnataka, and Tamil Nadu. Removable battery ecosystem deepening faster than forecast.',
+    i: { u:{ marketShare:-2 },
+         m:[ { f:'fp_top', o:[4], mult:0.2 } ],
+         s:'Swap infrastructure tilted demand toward removable-battery formats — teams that prioritised that feature were largely insulated.' } },
+  { q:'Q3', t:'ARC Drift Wins Design Award — Sales Flat',
+    b:'The ARC Drift wins a national industrial design award. Strong media coverage but dealer data shows no meaningful sales uplift. Recognition and purchase intent are diverging.',
+    i: { u:{ productHealth:+1, marketShare:0 },
+         s:'A design award lifted brand perception without moving demand — recognition is not commerce.' } },
+  { q:'Q4', t:'NovaBike Nova S2 Announced',
+    b:'NovaBike announces the Nova S2 with removable battery option, planned launch in 3 months. Your most active Bengaluru competitor is closing its feature gap.',
+    i: { u:{ marketShare:-2 },
+         m:[ { f:'pd_path', o:[2,3], mult:0.5 } ],
+         s:'Nova S2 narrowed the field. Teams already adapting Nimbus held position better than spec-holders.' } },
+  { q:'Q5', t:'FAME IV Consultation — Swap Policy Signal',
+    b:'FAME IV consultation paper proposes restricting subsidies to swap-compatible vehicles from FY28 onwards. The signal is serious.',
+    i: { u:{ marketShare:-1 },
+         m:[ { f:'fp_top', o:[4], mult:0.0 } ],
+         s:'A swap-friendly subsidy signal favoured removable-battery roadmaps — teams without that feature lost a notch of position.' } },
 ];
 var CB_BANK_DEMO = [
-  { q:'Q1', t:'Swiggy Instamart Price Drop', b:'Swiggy Instamart dropped delivery fees to ₹0 for orders above ₹199 in Bengaluru and Mumbai. Competitive pressure on your fee structure is now acute.' },
-  { q:'Q2', t:'Rider Strike Risk', b:'Gig worker association issued a 48-hour notice demanding minimum guaranteed pay of ₹600/shift. Affects all platforms in Bengaluru. Customer SLAs at risk.' },
-  { q:'Q3', t:'Dark Store Regulation Draft', b:'BBMP issued draft regulation requiring dark stores to obtain separate commercial licenses in residential zones. 3 of your 5 dark stores may be affected.' },
-  { q:'Q4', t:'Series A Term Sheet Received', b:'A tier-1 VC firm has sent a non-binding term sheet at ₹120 Cr for 20% equity. They want contribution margin positive in 2 cities within 90 days of close.' },
+  { q:'Q1', t:'Swiggy Instamart Price Drop',
+    b:'Swiggy Instamart dropped delivery fees to ₹0 for orders above ₹199 in Bengaluru and Mumbai. Competitive pressure on your fee structure is now acute.',
+    i: { u:{ marketShare:-2, grossMargin:-1 },
+         m:[ { f:'ue_delivery', o:[0,3], mult:0.4 } ],
+         s:'A free-delivery push from Swiggy squeezed everyone. Teams that held the ₹30 fee or offered free delivery to Plus subscribers absorbed less of the hit.' } },
+  { q:'Q2', t:'Rider Strike Risk',
+    b:'Gig worker association issued a 48-hour notice demanding minimum guaranteed pay of ₹600/shift. Affects all platforms in Bengaluru. Customer SLAs at risk.',
+    i: { u:{ productHealth:-2, grossMargin:-1 },
+         m:[ { f:'op_riders', o:[1,2], mult:0.3 } ],
+         s:'A gig-worker action interrupted delivery — teams running hybrid or full-time rider models kept reliability up.' } },
+  { q:'Q3', t:'Dark Store Regulation Draft',
+    b:'BBMP issued draft regulation requiring dark stores to obtain separate commercial licenses in residential zones. 3 of your 5 dark stores may be affected.',
+    i: { u:{ revenue:-2, cashRunway:-1 },
+         s:'Dark-store regulation increased compliance costs uniformly across the field.' } },
+  { q:'Q4', t:'Series A Term Sheet Received',
+    b:'A tier-1 VC firm has sent a non-binding term sheet at ₹120 Cr for 20% equity. They want contribution margin positive in 2 cities within 90 days of close.',
+    i: { u:{ cashRunway:+5 },
+         m:[ { f:'gr_pace', o:[0,1], mult:1.4 } ],
+         s:'A Series A term sheet extended runway — teams with disciplined growth attracted more favourable terms.' } },
 ];
 
 function getCurveballBank() {
@@ -3953,29 +4099,39 @@ function getCurveballBank() {
   return CB_BANK_A;
 }
 
+// Tracks the impact spec of the most-recently-prefilled bank entry so that
+// adminInjectCurveball / maInjectCurveball can attach it when persisting.
+var _pendingCurveballImpact = null;
+
 function renderCurveballBank() {
   const grid  = document.getElementById('cbBankGrid');
   const title = document.getElementById('cbBankTitle');
   if (!grid) return;
   if (title) title.textContent = 'Curveball Idea Bank — ' + (selectedCase==='B'?'Case B: ARC Motors':selectedCase==='demo'?'Demo: ShopPulse':'Case A: VOLTA Motors');
-  grid.innerHTML = getCurveballBank().map(cb => {
-    const st = cb.t.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    const sb = cb.b.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  grid.innerHTML = getCurveballBank().map((cb, idx) => {
     return `<div style="background:var(--wire-2);border-radius:var(--radius-sm);padding:14px;cursor:pointer;border:1px solid var(--wire);transition:border-color 0.15s"
-      onclick="prefillCurveball('${st}','${sb}','${cb.q}')"
+      onclick="prefillCurveballFromBank(${idx})"
       onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--wire)'">
-      <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:4px">${cb.q}</div>
-      <div style="font-size:13px;font-weight:700;color:var(--ink)">${cb.t}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">${cb.b.substring(0,90)}…</div>
+      <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:4px">${escapeHtml(cb.q)}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--ink)">${escapeHtml(cb.t)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">${escapeHtml(cb.b.substring(0,90))}…</div>
+      ${cb.i ? `<div style="font-size:10px;color:var(--volt-dim);margin-top:6px;font-weight:600">⚡ Scored curveball</div>` : ''}
     </div>`;
   }).join('');
 }
 
-function prefillCurveball(title, body, q) {
+function prefillCurveballFromBank(idx) {
+  const cb = getCurveballBank()[idx];
+  if (!cb) return;
+  prefillCurveball(cb.t, cb.b, cb.q, cb.i || null);
+}
+
+function prefillCurveball(title, body, q, impact) {
   document.getElementById('cbTitle').value = title;
   document.getElementById('cbBody').value  = body;
   const qNum = parseInt(q.replace('Q',''));
   document.getElementById('cbRound').value = qNum;
+  _pendingCurveballImpact = impact || null;
 }
 
 async function copySessionLink() {
@@ -4030,11 +4186,13 @@ async function adminInjectCurveball() {
   const round = parseInt(document.getElementById('cbRound').value);
   if (!title || !body) { showNotification('Please fill in both the event title and description.', 'error'); return; }
   if (!currentSession) { showNotification('No active session.', 'error'); return; }
-  const ok = await dbInjectCurveball(currentSession.id, round, title, body, currentSession.admin_email || currentUser.email);
+  const impact = _pendingCurveballImpact;
+  const ok = await dbInjectCurveball(currentSession.id, round, title, body, currentSession.admin_email || currentUser.email, impact);
   if (!ok) { showNotification('Failed to inject curveball.', 'error'); return; }
-  showNotification('⚡ Curveball injected — all teams notified.', 'success');
+  showNotification('⚡ Curveball injected — all teams notified.' + (impact ? ' Scoring impact will apply at round close.' : ''), 'success');
   document.getElementById('cbTitle').value = '';
   document.getElementById('cbBody').value  = '';
+  _pendingCurveballImpact = null;
 }
 
 // Engine-driven round close. Reads every team's submitted decisions for the
@@ -4054,20 +4212,36 @@ async function adminCloseAndPublishRound() {
   const btn = document.querySelector('[onclick="adminCloseAndPublishRound()"]');
   if (btn) { btn.textContent = 'Computing...'; btn.disabled = true; }
 
-  // 1. Pull every decision row for (session, round).
+  // 1. Pull every decision row for this session.
+  //    decisionsByTeam holds THIS round's decisions (drives impact deltas).
+  //    allDecisionsByTeam holds the full history (used for curveball modifier
+  //    lookups, e.g. "if you forward-hedged in Q1").
   const { data: decisionRows, error: decErr } = await sb
     .from('decisions').select('*')
-    .eq('session_id', currentSession.id)
-    .eq('round', round);
+    .eq('session_id', currentSession.id);
   if (decErr) {
     if (btn) { btn.textContent = 'Close round & publish →'; btn.disabled = false; }
     showNotification('Failed to load decisions: ' + decErr.message, 'error');
     return;
   }
-  const decisionsByTeam = {};
+  const decisionsByTeam    = {};
+  const allDecisionsByTeam = {};
   (decisionRows || []).forEach(d => {
-    (decisionsByTeam[d.team_id] = decisionsByTeam[d.team_id] || []).push(d);
+    (allDecisionsByTeam[d.team_id] = allDecisionsByTeam[d.team_id] || []).push(d);
+    if (d.round === round) {
+      (decisionsByTeam[d.team_id] = decisionsByTeam[d.team_id] || []).push(d);
+    }
   });
+
+  // 1b. Pull curveballs scheduled for this round (impact specs included).
+  const { data: cbRows, error: cbErr } = await sb
+    .from('curveballs').select('*')
+    .eq('session_id', currentSession.id)
+    .eq('round', round);
+  if (cbErr) {
+    showNotification('Failed to load curveballs: ' + cbErr.message, 'error');
+  }
+  const curveballsThisRound = (cbRows || []).map(c => ({ title: c.title, body: c.body, impact: c.impact || {} }));
 
   // 2. Previous round's outcomes are the starting metrics for this round.
   const prevMetricsByTeam = {};
@@ -4084,7 +4258,10 @@ async function adminCloseAndPublishRound() {
   // 3. Run the engine.
   const caseSlug = (currentSession.cases && currentSession.cases.slug) ||
                    (selectedCase === 'A' ? 'volta' : selectedCase === 'B' ? 'arc' : 'demo');
-  const computed = computeRoundOutcomes(decisionsByTeam, prevMetricsByTeam, caseSlug);
+  const computed = computeRoundOutcomes(
+    decisionsByTeam, prevMetricsByTeam, caseSlug,
+    allDecisionsByTeam, curveballsThisRound
+  );
 
   // 4. Persist one outcome row per team (only those who submitted).
   const teamsToPublish = teams.filter(t => computed[t.id]);
@@ -4771,9 +4948,12 @@ async function maInjectCurveball(sessionId) {
   const body  = document.getElementById('maCbBody_'+sessionId)?.value.trim();
   const round = parseInt(document.getElementById('maCbRound_'+sessionId)?.value);
   if (!title || !body) { showNotification('Fill in both title and description.', 'error'); return; }
-  const ok = await dbInjectCurveball(sessionId, round, title, body, SUPERUSER_EMAIL);
+  // Master Admin injects narrative-only curveballs by default (no impact spec
+  // wired here). To attach impacts, prefill from the in-session admin tab's
+  // Idea Bank picker, which knows the case-specific bank.
+  const ok = await dbInjectCurveball(sessionId, round, title, body, SUPERUSER_EMAIL, null);
   if (!ok) { showNotification('Failed to inject curveball.', 'error'); return; }
-  showNotification('Curveball injected for Q' + round + '.', 'success');
+  showNotification('Curveball injected for Q' + round + '. (Narrative-only — use the Admin tab\'s Idea Bank for scored curveballs.)', 'success');
   document.getElementById('maCbTitle_'+sessionId).value = '';
   document.getElementById('maCbBody_'+sessionId).value  = '';
 }
