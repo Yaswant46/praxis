@@ -2271,8 +2271,52 @@ function renderBoardMemo() {
   if (!cont) return;
   if (!currentUser || !currentSession) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
   const state = getState();
-  const teamId = currentUser.isAdmin ? 'team1' : currentUser.teamId;
-  // Find the latest round that has a memo for this team.
+
+  // GM / Master Admin: show the latest-round memo for EVERY team stacked
+  // vertically, each labelled with the team's display name. Participants
+  // continue to see only their own team's memo.
+  if (currentUser.isAdmin) {
+    const teamKeys = Object.keys(state._teamMap || {});
+    // Find the latest round that has at least one memo across all teams.
+    const allRounds = Object.keys(state.memos || {}).map(Number).sort((a,b)=>b-a);
+    let latest = null;
+    for (const r of allRounds) {
+      if (state.memos[r] && Object.keys(state.memos[r]).length > 0) { latest = r; break; }
+    }
+    if (!latest) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+    cont.style.display = 'block';
+    let html = `<div class="card" style="border-left:3px solid var(--volt);margin:18px 0">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--volt-pale);color:var(--volt-dim)">🗒</div>
+        <div>
+          <div class="card-title">Quarterly Board Memos — Q${latest}</div>
+          <div class="card-subtitle">All teams · GM view</div>
+        </div>
+      </div>`;
+    teamKeys.forEach(tk => {
+      const team = state._teamMap[tk];
+      const memo = state.memos[latest] && state.memos[latest][tk];
+      if (!team) return;
+      if (!memo) {
+        html += `<div style="border-top:1px solid var(--wire);padding:12px 0 4px;margin-top:8px">
+          <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${escapeHtml(team.display_name || team.username || tk)}</div>
+          <p style="font-size:13px;color:var(--muted);font-style:italic;margin:0">No memo for this team in Q${latest} (no submission, or round not yet closed).</p>
+        </div>`;
+        return;
+      }
+      const memoHtml = escapeHtml(memo).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html += `<div style="border-top:1px solid var(--wire);padding:12px 0 4px;margin-top:8px">
+        <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--volt-dim);margin-bottom:6px">${escapeHtml(team.display_name || team.username || tk)}</div>
+        <p style="font-size:14px;color:var(--ink);line-height:1.7;margin:0">${memoHtml}</p>
+      </div>`;
+    });
+    html += `</div>`;
+    cont.innerHTML = html;
+    return;
+  }
+
+  // Participant: single team's latest memo (unchanged behaviour).
+  const teamId = currentUser.teamId;
   const rounds = Object.keys(state.memos || {}).map(Number).filter(r => state.memos[r] && state.memos[r][teamId]).sort((a,b)=>b-a);
   const latest = rounds[0];
   if (!latest) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
@@ -3637,9 +3681,8 @@ function getRoundAssessments() {
 }
 
 function renderAssessments() {
-  const state  = getState();
-  const teamId = currentUser.isAdmin ? 'team1' : currentUser.teamId;
-  const cont   = document.getElementById('assessmentContent');
+  const state = getState();
+  const cont  = document.getElementById('assessmentContent');
 
   const completedRounds = [];
   for (let r=1; r<state.currentRound; r++) {
@@ -3652,81 +3695,109 @@ function renderAssessments() {
   }
 
   cont.innerHTML = '';
+
+  // Admin / Game Master sees every team's assessment for each round, grouped
+  // by round (newest first), with a team header per block. Participants see
+  // only their own team's cards.
+  if (currentUser.isAdmin) {
+    const teamKeys = Object.keys(state._teamMap || {});
+    [...completedRounds].reverse().forEach(round => {
+      const assessment = getRoundAssessments()[round];
+      let html = `<div style="margin-top:18px;margin-bottom:6px;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)">Quarter ${round} — All teams</div>`;
+      teamKeys.forEach(tk => {
+        const team = state._teamMap[tk];
+        if (!team) return;
+        html += `<div style="font-size:13px;font-weight:700;color:var(--volt-dim);letter-spacing:1px;text-transform:uppercase;margin:14px 0 8px">${escapeHtml(team.display_name || team.username || tk)}</div>`;
+        html += _renderAssessmentCardForTeam(round, tk, state, assessment);
+      });
+      cont.innerHTML += html;
+    });
+    return;
+  }
+
+  // Participant view: own team only.
+  const teamId = currentUser.teamId;
   [...completedRounds].reverse().forEach(round => {
-    const outcome    = state.outcomes[round];
-    const scoreData  = state.scores[teamId];
-    const roundScore = scoreData && scoreData.history[round-1] ? scoreData.history[round-1] : null;
     const assessment = getRoundAssessments()[round];
-    const teamMetrics = outcome && outcome[teamId] ? outcome[teamId] : defaultMetrics();
-    const prev        = (round > 1 && state.outcomes && state.outcomes[round-1] && state.outcomes[round-1][teamId])
-      ? state.outcomes[round-1][teamId]
-      : defaultMetrics();
-    const narratives  = (state.narratives && state.narratives[round] && state.narratives[round][teamId]) || [];
+    cont.innerHTML += _renderAssessmentCardForTeam(round, teamId, state, assessment);
+  });
+}
 
-    let html = `
-      <div class="assessment-card">
-        <div class="assessment-header">
-          <div class="assessment-q-badge">Q${round}</div>
-          <div class="assessment-title">${escapeHtml(assessment ? assessment.title : ('Quarter ' + round + ' — Results'))}</div>
-          ${roundScore ? `<div class="assessment-score-badge"><div class="assessment-score-num">${roundScore}</div><div class="assessment-score-label">/ 100 pts</div></div>` : ''}
+// Builds one assessment card (metrics + narratives + considerations) for a
+// single team in a single round. Shared by the participant and GM render paths.
+function _renderAssessmentCardForTeam(round, teamId, state, assessment) {
+  const outcome     = state.outcomes[round];
+  const scoreData   = state.scores[teamId];
+  const roundScore  = scoreData && scoreData.history[round-1] ? scoreData.history[round-1] : null;
+  const teamMetrics = outcome && outcome[teamId] ? outcome[teamId] : defaultMetrics();
+  const prev        = (round > 1 && state.outcomes && state.outcomes[round-1] && state.outcomes[round-1][teamId])
+    ? state.outcomes[round-1][teamId]
+    : defaultMetrics();
+  const narratives  = (state.narratives && state.narratives[round] && state.narratives[round][teamId]) || [];
+
+  let html = `
+    <div class="assessment-card">
+      <div class="assessment-header">
+        <div class="assessment-q-badge">Q${round}</div>
+        <div class="assessment-title">${escapeHtml(assessment ? assessment.title : ('Quarter ' + round + ' — Results'))}</div>
+        ${roundScore ? `<div class="assessment-score-badge"><div class="assessment-score-num">${roundScore}</div><div class="assessment-score-label">/ 100 pts</div></div>` : ''}
+      </div>
+      <div class="assessment-body">
+        <div class="assessment-metrics-row">
+          ${_assessMetricCell('Monthly Revenue', '₹' + teamMetrics.revenue + 'Cr', teamMetrics.revenue - prev.revenue, '₹', 'Cr')}
+          ${_assessMetricCell('Gross Margin',    (teamMetrics.grossMargin>0?'+':'') + teamMetrics.grossMargin + '%', teamMetrics.grossMargin - prev.grossMargin, '', '%')}
+          ${_assessMetricCell('Cash Runway',     teamMetrics.cashRunway + 'mo', teamMetrics.cashRunway - prev.cashRunway, '', 'mo')}
+          ${_assessMetricCell('Market Share',    teamMetrics.marketShare + '%', teamMetrics.marketShare - prev.marketShare, '', '%')}
+          ${_assessMetricCell('Product Health',  teamMetrics.productHealth, teamMetrics.productHealth - prev.productHealth, '', '')}
+          ${_assessMetricCell('Team Capability', teamMetrics.teamCapability, teamMetrics.teamCapability - prev.teamCapability, '', '')}
         </div>
-        <div class="assessment-body">
-          <div class="assessment-metrics-row">
-            ${_assessMetricCell('Monthly Revenue', '₹' + teamMetrics.revenue + 'Cr', teamMetrics.revenue - prev.revenue, '₹', 'Cr')}
-            ${_assessMetricCell('Gross Margin',    (teamMetrics.grossMargin>0?'+':'') + teamMetrics.grossMargin + '%', teamMetrics.grossMargin - prev.grossMargin, '', '%')}
-            ${_assessMetricCell('Cash Runway',     teamMetrics.cashRunway + 'mo', teamMetrics.cashRunway - prev.cashRunway, '', 'mo')}
-            ${_assessMetricCell('Market Share',    teamMetrics.marketShare + '%', teamMetrics.marketShare - prev.marketShare, '', '%')}
-            ${_assessMetricCell('Product Health',  teamMetrics.productHealth, teamMetrics.productHealth - prev.productHealth, '', '')}
-            ${_assessMetricCell('Team Capability', teamMetrics.teamCapability, teamMetrics.teamCapability - prev.teamCapability, '', '')}
-          </div>
-    `;
+  `;
 
-    if (narratives.length) {
+  if (narratives.length) {
+    html += `
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:20px 0 12px;display:flex;align-items:center;gap:8px;">
+        <span style="width:20px;height:1px;background:var(--wire);display:inline-block;"></span>
+        What happened this quarter
+        <span style="flex:1;height:1px;background:var(--wire);display:inline-block;"></span>
+      </div>
+      <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px">
+    `;
+    narratives.forEach(n => {
+      if (!n || !n.summary) return;
       html += `
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:20px 0 12px;display:flex;align-items:center;gap:8px;">
+        <li style="border:1px solid var(--wire);border-radius:var(--radius-sm);padding:12px 14px;background:white">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">${escapeHtml(n.domain_title || n.domain_id || '')}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px">${escapeHtml(n.field_label || n.field_id || '')}: <span style="font-weight:500;color:var(--muted)">${escapeHtml(n.option || '')}</span></div>
+          <div style="font-size:13px;line-height:1.55;color:var(--ink)">${escapeHtml(n.summary)}</div>
+          ${_renderDeltaChips(n.delta)}
+        </li>
+      `;
+    });
+    html += `</ul>`;
+  }
+
+  if (assessment && assessment.considerations && assessment.considerations.length) {
+    html += `
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:24px 0 12px;display:flex;align-items:center;gap:8px;">
           <span style="width:20px;height:1px;background:var(--wire);display:inline-block;"></span>
-          What happened this quarter
+          Considerations for reflection
           <span style="flex:1;height:1px;background:var(--wire);display:inline-block;"></span>
         </div>
-        <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px">
-      `;
-      narratives.forEach(n => {
-        if (!n || !n.summary) return;
-        html += `
-          <li style="border:1px solid var(--wire);border-radius:var(--radius-sm);padding:12px 14px;background:white">
-            <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">${escapeHtml(n.domain_title || n.domain_id || '')}</div>
-            <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px">${escapeHtml(n.field_label || n.field_id || '')}: <span style="font-weight:500;color:var(--muted)">${escapeHtml(n.option || '')}</span></div>
-            <div style="font-size:13px;line-height:1.55;color:var(--ink)">${escapeHtml(n.summary)}</div>
-            ${_renderDeltaChips(n.delta)}
-          </li>
-        `;
-      });
-      html += `</ul>`;
-    }
-
-    if (assessment && assessment.considerations && assessment.considerations.length) {
+        <ul class="consideration-list">
+    `;
+    assessment.considerations.forEach(item => {
       html += `
-          <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:24px 0 12px;display:flex;align-items:center;gap:8px;">
-            <span style="width:20px;height:1px;background:var(--wire);display:inline-block;"></span>
-            Considerations for reflection
-            <span style="flex:1;height:1px;background:var(--wire);display:inline-block;"></span>
-          </div>
-          <ul class="consideration-list">
+        <li class="consideration-item">
+          <div class="consid-icon ${item.type}">${item.icon}</div>
+          <div class="consid-text">${item.text}</div>
+        </li>
       `;
-      assessment.considerations.forEach(item => {
-        html += `
-          <li class="consideration-item">
-            <div class="consid-icon ${item.type}">${item.icon}</div>
-            <div class="consid-text">${item.text}</div>
-          </li>
-        `;
-      });
-      html += `</ul>`;
-    }
+    });
+    html += `</ul>`;
+  }
 
-    html += `</div></div>`;
-    cont.innerHTML += html;
-  });
+  html += `</div></div>`;
+  return html;
 }
 
 function _assessMetricCell(label, valDisplay, delta, prefix, suffix) {
