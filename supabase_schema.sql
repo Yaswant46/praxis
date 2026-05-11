@@ -158,9 +158,12 @@ CREATE TABLE IF NOT EXISTS curveballs (
   round        INTEGER NOT NULL,
   title        TEXT NOT NULL,
   body         TEXT NOT NULL,
+  impact       JSONB DEFAULT '{}'::jsonb,
   injected_by  TEXT,
   injected_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE curveballs ADD COLUMN IF NOT EXISTS impact JSONB DEFAULT '{}'::jsonb;
 
 
 -- =============================================================
