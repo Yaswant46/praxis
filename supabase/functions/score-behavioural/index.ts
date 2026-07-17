@@ -13,16 +13,20 @@
 // Required env vars (Supabase project secrets):
 //   ANTHROPIC_API_KEY — console.anthropic.com key
 //
-// Request body: { response_text: string, round_context?: string }
-// Response:     { clarity, stakeholder_awareness, ethical_alignment, total, people_score }
+// Two modes, chosen by the request body:
+//   STORE mode  (participant submit) — body has { session_id, team_id, round,
+//     response_text, round_context? }. Computes the score, writes it to the
+//     GM-only decision_secrets table via the SERVICE ROLE (bypasses RLS), and
+//     returns ONLY { ok: true, stored: true } — the participant never sees the
+//     numbers. This is the secrecy-safe path.
+//   RETURN mode (GM / server / test) — body has { response_text, round_context? }
+//     with no session_id. Returns the raw score for GM/testing use.
 //
-// ⚠️ SECRECY NOTE: this function RETURNS the score, so it is for GM/server use.
-// The participant "submit → score hidden during play" flow must store the score
-// in a GM-only table (decision_secrets — next increment) and return only {ok},
-// NOT surface the numbers to the participant. Do not wire the raw return into a
-// participant-visible view.
+// Response (STORE):  { ok: true, stored: true }
+// Response (RETURN): { clarity, stakeholder_awareness, ethical_alignment, total, people_score }
 
 // deno-lint-ignore-file no-explicit-any
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-6";
@@ -128,5 +132,22 @@ Deno.serve(async (req: Request) => {
   const total = clarity + stakeholder_awareness + ethical_alignment; // max 15
   const people_score = Math.round((total / 15) * 100);
 
+  // STORE mode: persist to decision_secrets (GM-only) and return only {ok}.
+  const sessionId = body.session_id, teamId = body.team_id, round = body.round;
+  if (sessionId && teamId && round != null) {
+    const svcUrl = Deno.env.get("SUPABASE_URL");
+    const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!svcUrl || !svcKey) return jsonResponse({ error: "server_not_configured: service role missing" }, 500);
+    const svc = createClient(svcUrl, svcKey);
+    const { error } = await svc.from("decision_secrets").upsert({
+      session_id: sessionId, team_id: teamId, round: Number(round),
+      clarity, stakeholder_awareness, ethical_alignment, total, people_score,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "session_id,team_id,round" });
+    if (error) return jsonResponse({ error: "store_failed", detail: error.message }, 500);
+    return jsonResponse({ ok: true, stored: true }); // participant never sees the numbers
+  }
+
+  // RETURN mode: GM / server / test use.
   return jsonResponse({ clarity, stakeholder_awareness, ethical_alignment, total, people_score });
 });

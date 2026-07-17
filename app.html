@@ -1730,13 +1730,15 @@ async function dbGetSessionWeight(sessionId) {
   return data ? data.task_weight : null;
 }
 // Behavioural (People-axis) scoring via the score-behavioural Edge Function.
-// The Anthropic key stays server-side. ⚠️ Returns the raw score — GM/server use
-// only; do NOT render into participant-visible views (see function header).
-async function dbScoreBehavioural(responseText, roundContext) {
+// The Anthropic key stays server-side. Pass storeCtx {session_id, team_id, round}
+// for the participant-submit path: the function stores the score in the GM-only
+// decision_secrets table and returns only {ok:true} — the participant never sees
+// the numbers. Omit storeCtx (GM/test) to get the raw score back.
+async function dbScoreBehavioural(responseText, roundContext, storeCtx) {
   const sb = getSupabase(); if (!sb) return { error: 'no client' };
-  const { data, error } = await sb.functions.invoke('score-behavioural', {
-    body: { response_text: responseText, round_context: roundContext || '' },
-  });
+  const payload = { response_text: responseText, round_context: roundContext || '' };
+  if (storeCtx && storeCtx.session_id) Object.assign(payload, storeCtx);
+  const { data, error } = await sb.functions.invoke('score-behavioural', { body: payload });
   if (error) return { error: error.message || 'scoring failed' };
   return data;
 }
