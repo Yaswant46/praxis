@@ -90,6 +90,30 @@ console.log('\n(e) R4 survivability ≈ 0 for a hollowed-out team');
   ok('hollow team fails the C&I gate (rep<90)', hollow.cni_gate === false);
 }
 
+console.log('\n(i) two-axis: task_weight + people_weight always sum to 100');
+{
+  let allSum = true;
+  for (const tw of [0, 10, 33, 50, 67, 90, 100]) {
+    const r = E.computeTwoAxisScore(80, 40, tw);
+    if (r.task_weight + r.people_weight !== 100) { allSum = false; }
+  }
+  ok('weights sum to 100 across tw ∈ {0,10,33,50,67,90,100}', allSum);
+  const r = E.computeTwoAxisScore(80, 40, 70); // 80*.7 + 40*.3 = 56 + 12 = 68
+  ok('composite = task·tw + people·pw', approx(r.composite, 68), 'got ' + r.composite);
+  ok('task/people passed through unweighted', r.task === 80 && r.people === 40);
+}
+
+console.log('\n(j) quadrant classification at boundary values (64/65/44/45)');
+{
+  ok('(65,65) → Catalyst', E.classifyQuadrant(65, 65) === 'Catalyst');
+  ok('(65,44) → Executor', E.classifyQuadrant(65, 44) === 'Executor');
+  ok('(44,65) → Connector', E.classifyQuadrant(44, 65) === 'Connector');
+  ok('(44,44) → Passenger', E.classifyQuadrant(44, 44) === 'Passenger');
+  ok('(64,64) → Balancer (below hi, above lo)', E.classifyQuadrant(64, 64) === 'Balancer');
+  ok('(45,45) → Balancer (above lo, below hi)', E.classifyQuadrant(45, 45) === 'Balancer');
+  ok('(65,45) → Balancer (hi task, mid people)', E.classifyQuadrant(65, 45) === 'Balancer');
+}
+
 console.log('\n──────────────────────────────');
 console.log('  PASS ' + pass + '   FAIL ' + fail);
 process.exit(fail ? 1 : 0);

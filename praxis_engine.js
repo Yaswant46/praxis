@@ -541,6 +541,44 @@
     return { round: round, teams: teams, news: news };
   }
 
+  // ── Workstream B: two-axis (Task/People) scoring + quadrant ─────────────────
+  // Applies to ALL cases (not Suryan-specific). task_weight is GM-only and comes
+  // from session_secrets — NEVER from participant-readable data. People weight is
+  // always (100 − task_weight), computed. Composite is GM-view only; Task and
+  // People are shown separately to participants.
+  var QUADRANT_DEFAULT = { hi: 65, lo: 44 };
+
+  /**
+   * Combine a Task score and People score into the GM composite using the
+   * GM-only task weight. Returns task/people (participant-safe) plus the
+   * composite + weights (GM-only).
+   */
+  function computeTwoAxisScore(taskScore, peopleScore, taskWeight) {
+    var tw = clamp(Math.round(taskWeight), 0, 100);
+    var pw = 100 - tw;
+    var task = clamp(taskScore, 0, 100);
+    var people = clamp(peopleScore, 0, 100);
+    return {
+      task: round2(task), people: round2(people),
+      task_weight: tw, people_weight: pw,
+      composite: round2(task * tw / 100 + people * pw / 100),
+    };
+  }
+
+  /**
+   * Quadrant label from Task/People scores. GM-dashboard / scorecard only —
+   * never shown to participants during play. Thresholds configurable.
+   */
+  function classifyQuadrant(task, people, cfg) {
+    var hi = (cfg && cfg.hi) || QUADRANT_DEFAULT.hi;
+    var lo = (cfg && cfg.lo) || QUADRANT_DEFAULT.lo;
+    if (task >= hi && people >= hi) return 'Catalyst';
+    if (task >= hi && people <= lo) return 'Executor';
+    if (task <= lo && people >= hi) return 'Connector';
+    if (task <= lo && people <= lo) return 'Passenger';
+    return 'Balancer';
+  }
+
   var API = {
     SURYAN_CONFIG: SURYAN_CONFIG, parseDecisions: parseDecisions, parsePosture: parsePosture,
     initState: initState, resolveAuction: resolveAuction, computeWageIndex: computeWageIndex,
@@ -548,6 +586,7 @@
     computeDefects: computeDefects, computeAttrition: computeAttrition, cashWalk: cashWalk,
     computeSurvivability: computeSurvivability, computeFinalScores: computeFinalScores,
     incidentTag: incidentTag, resolveRound: resolveRound, clamp: clamp,
+    computeTwoAxisScore: computeTwoAxisScore, classifyQuadrant: classifyQuadrant,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

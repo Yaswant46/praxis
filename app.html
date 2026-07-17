@@ -1710,6 +1710,26 @@ async function dbUpdateTeam(teamId, updates) {
   const { error } = await sb.from('teams').update(updates).eq('id', teamId);
   return !error;
 }
+// Split-tables secrecy: write GM-only session config (task_weight) to
+// session_secrets. Caller is the authenticated GM/master-admin, so RLS allows
+// it; participants (anon) can never read this table. people = 100 − task.
+async function dbSaveSessionWeight(sessionId, taskWeight) {
+  const sb = getSupabase(); if (!sb || sessionId == null) return false;
+  const tw = Math.max(0, Math.min(100, parseInt(taskWeight, 10) || 50));
+  const { error } = await sb.from('session_secrets')
+    .upsert({ session_id: sessionId, task_weight: tw, updated_at: new Date().toISOString() },
+            { onConflict: 'session_id' });
+  if (error) console.warn('dbSaveSessionWeight', error.message);
+  return !error;
+}
+// GM-only read (returns null for participants — RLS denies anon).
+async function dbGetSessionWeight(sessionId) {
+  const sb = getSupabase(); if (!sb) return null;
+  const { data } = await sb.from('session_secrets').select('task_weight')
+    .eq('session_id', sessionId).maybeSingle();
+  return data ? data.task_weight : null;
+}
+
 // Cohort wizard backend — wraps the create_cohort RPC.
 // Caller must already be authenticated (Supabase OTP).
 // teamSpecs: [{ team_number, slot, display_name, username, password, representative_email }]
@@ -5220,7 +5240,7 @@ async function renderMasterAdmin() {
 function maStartWizard() {
   if (!_maDraft) {
     _maDraft = {
-      cohort: '', caseSlug: 'volta', teamCount: 4, rounds: 5,
+      cohort: '', caseSlug: 'volta', teamCount: 4, rounds: 5, taskWeight: 50,
       gmEmail: (currentUser && currentUser.email) || '',
       repEmails: [], teams: [], sessionCode: '',
     };
@@ -5282,6 +5302,14 @@ function renderCohortWizard() {
           ${Array.from({length:maxRounds},(_,i)=>i+1).map(n=>`<option value="${n}"${d.rounds===n?' selected':''}>${n} round${n>1?'s':''} (Q1–Q${n})</option>`).join('')}
         </select>
       </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <label class="field-label">Task / People weight <span style="color:var(--faint);font-weight:400">(GM only — participants never see this)</span></label>
+      <select class="field-select" style="margin:0" onchange="_maDraft.taskWeight=parseInt(this.value)">
+        ${[20,30,40,50,60,70,80].map(w=>`<option value="${w}"${d.taskWeight===w?' selected':''}>Task ${w}% · People ${100-w}%</option>`).join('')}
+      </select>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Sets how the GM composite weights quantitative decisions vs. behavioural response. Locked once Round 1 opens. Stored in <code>session_secrets</code> — never sent to participant views.</div>
     </div>
 
     <div class="admin-section-title" style="font-size:10px;margin-top:8px">Representative email per team</div>
@@ -5399,7 +5427,7 @@ function wizardGoToStep2() {
       representative_email: '',
     });
   }
-  _wizardDraft = { cohort, caseSlug, teamCount, rounds, adminEmail, teams };
+  _wizardDraft = { cohort, caseSlug, teamCount, rounds, adminEmail, teams, taskWeight: _maDraft.taskWeight };
   wizardRenderStep2();
 }
 
@@ -5503,6 +5531,9 @@ async function wizardSubmit() {
     errEl.textContent = 'Could not create cohort: ' + (result.error || 'unknown error');
     return;
   }
+
+  // Persist GM-only task/people weight to the secrecy table (best-effort).
+  await dbSaveSessionWeight(result.sessionId, _wizardDraft.taskWeight);
 
   if (btn) { btn.textContent = 'Sending emails...'; }
   const sendResult = await dbSendCohortEmails(result.sessionId, null);
