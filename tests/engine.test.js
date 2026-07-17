@@ -103,58 +103,61 @@ console.log('\n(i) two-axis: task_weight + people_weight always sum to 100');
   ok('task/people passed through unweighted', r.task === 80 && r.people === 40);
 }
 
-console.log('\n(j) quadrant classification at boundary values (64/65/44/45)');
+console.log('\n(j) quadrant classification at boundary values (hi 65 / lo 45)');
 {
   ok('(65,65) → Catalyst', E.classifyQuadrant(65, 65) === 'Catalyst');
-  ok('(65,44) → Executor', E.classifyQuadrant(65, 44) === 'Executor');
-  ok('(44,65) → Connector', E.classifyQuadrant(44, 65) === 'Connector');
-  ok('(44,44) → Passenger', E.classifyQuadrant(44, 44) === 'Passenger');
+  ok('(65,45) → Executor', E.classifyQuadrant(65, 45) === 'Executor');
+  ok('(45,65) → Connector', E.classifyQuadrant(45, 65) === 'Connector');
+  ok('(45,45) → Passenger', E.classifyQuadrant(45, 45) === 'Passenger');
   ok('(64,64) → Balancer (below hi, above lo)', E.classifyQuadrant(64, 64) === 'Balancer');
-  ok('(45,45) → Balancer (above lo, below hi)', E.classifyQuadrant(45, 45) === 'Balancer');
-  ok('(65,45) → Balancer (hi task, mid people)', E.classifyQuadrant(65, 45) === 'Balancer');
+  ok('(46,46) → Balancer (above lo, below hi)', E.classifyQuadrant(46, 46) === 'Balancer');
+  ok('(65,46) → Balancer (hi task, mid people)', E.classifyQuadrant(65, 46) === 'Balancer');
+  ok('getQuadrantLabel returns description', E.getQuadrantLabel(65, 65).description.length > 0);
 }
 
-console.log('\n(f) questionnaire scores sum correctly across all 15 questions');
+console.log('\n(f) questionnaire scores sum + normalise correctly (real key)');
 {
-  const allQ = {};
-  for (let i = 1; i <= 15; i++) allQ['Q' + i] = 'A'; // all primary (3 pts)
-  const r = E.scoreIndividualQuestionnaire(allQ);
-  const names = Object.keys(r.domain_scores);
-  ok('all-primary → every domain scores 100', names.every(n => r.domain_scores[n].score === 100), JSON.stringify(names.map(n => r.domain_scores[n].score)));
-  const allC = {}; for (let i = 1; i <= 15; i++) allC['Q' + i] = 'C'; // all tertiary (1 pt)
-  const rc = E.scoreIndividualQuestionnaire(allC);
-  ok('all-tertiary → every domain scores 33 (1/3)', names.every(n => rc.domain_scores[n].score === 33), JSON.stringify(names.map(n => rc.domain_scores[n].score)));
-  ok('4 domains reported with full names', names.length === 4 && names.includes('Strategic Judgment') && names.includes('Adaptive Integrity'));
+  const KEY = E.DARE_SCORING_KEY;
+  const resp = {}; for (let i = 1; i <= 15; i++) resp['Q' + i] = ['A', 'B', 'C'][i % 3];
+  // recompute raw + max independently from the key, then compare to the engine
+  const raw = { D: 0, A: 0, R: 0, E: 0 }, max = { D: 0, A: 0, R: 0, E: 0 };
+  for (const q of Object.keys(KEY.questions)) {
+    const qd = KEY.questions[q];
+    for (const d of ['D', 'A', 'R', 'E']) {
+      max[d] += Math.max(...Object.keys(qd.optionScores).map(o => qd.optionScores[o][d]));
+      raw[d] += qd.optionScores[resp[q]][d];
+    }
+  }
+  const r = E.scoreQuestionnaire(resp);
+  ok('raw domain sums match the key', ['D', 'A', 'R', 'E'].every(d => r.domainRaw[d] === raw[d]), JSON.stringify(r.domainRaw));
+  ok('normalised = round(raw/max·100)', ['D', 'A', 'R', 'E'].every(d => r.domainScores[d] === Math.round(raw[d] / max[d] * 100)), JSON.stringify(r.domainScores));
+  ok('proficiency L1/L2/L3 assigned', ['D', 'A', 'R', 'E'].every(d => ['L1', 'L2', 'L3'].includes(r.proficiency[d])));
+  ok('dominant/growth-edge domains identified', !!r.dominantDomain && !!r.growthEdgeDomain);
 }
 
-console.log('\n(g) contradiction pair Q2↔Q11 fires on inconsistent responses');
+console.log('\n(g) contradiction pair Q2↔Q11 fires on inconsistent responses (real key)');
 {
-  const base = {}; for (let i = 1; i <= 15; i++) base['Q' + i] = 'B'; // neutral (2 pts) everywhere
-  const inconsistent = { ...base, Q2: 'A', Q11: 'C' }; // |3−1| = 2 ≥ gap → fires
-  const r1 = E.scoreIndividualQuestionnaire(inconsistent);
-  ok('Q2↔Q11 fires when primary vs tertiary', r1.contradiction_flags.includes('Q2↔Q11'), JSON.stringify(r1.contradiction_flags));
-  const consistent = { ...base, Q2: 'A', Q11: 'A' }; // |3−3| = 0 → no fire
-  const r2 = E.scoreIndividualQuestionnaire(consistent);
-  ok('Q2↔Q11 does NOT fire when consistent', !r2.contradiction_flags.includes('Q2↔Q11'), JSON.stringify(r2.contradiction_flags));
+  const B = {}; for (let i = 1; i <= 15; i++) B['Q' + i] = 'C'; // neutral, fires nothing
+  const cp1 = f => f.id === 'CP1';
+  const inc = E.scoreQuestionnaire({ ...B, Q2: 'A', Q11: 'B' }); // contradicts.A = ['B'] → fires
+  ok('CP1 (Q2↔Q11) fires when Q2=A, Q11=B', inc.contradictionFlags.find(cp1).fired);
+  const con = E.scoreQuestionnaire({ ...B, Q2: 'A', Q11: 'A' }); // 'A' not in ['B'] → no fire
+  ok('CP1 does NOT fire when Q2=A, Q11=A', !con.contradictionFlags.find(cp1).fired);
 }
 
-console.log('\n(h) consistency index maps to 0/1/2/3-4 flag counts');
+console.log('\n(h) consistency index maps to 0/1/2/3-4 flag counts (real key)');
 {
-  const B = {}; for (let i = 1; i <= 15; i++) B['Q' + i] = 'B';
-  // 0 flags → High
-  ok('0 flags → High', E.scoreIndividualQuestionnaire(B).consistency_index === 'High');
-  // 2 flags → Moderate (pairs Q2↔Q11 and Q4↔Q13). Q13 dual but points by option.
-  const two = { ...B, Q2: 'A', Q11: 'C', Q4: 'A', Q13: 'C' };
-  const r2 = E.scoreIndividualQuestionnaire(two);
-  ok('2 flags → Moderate', r2.flag_count === 2 && r2.consistency_index === 'Moderate', 'flags=' + r2.flag_count);
-  // 3 flags → Low (add Q6↔Q14)
-  const three = { ...two, Q6: 'A', Q14: 'C' };
-  const r3 = E.scoreIndividualQuestionnaire(three);
-  ok('3 flags → Low', r3.flag_count === 3 && r3.consistency_index === 'Low', 'flags=' + r3.flag_count);
-  // 4 flags → Low (add Q2↔Q15; Q2 already A, set Q15 C)
-  const four = { ...three, Q15: 'C' };
-  const r4 = E.scoreIndividualQuestionnaire(four);
-  ok('4 flags → Low', r4.flag_count === 4 && r4.consistency_index === 'Low', 'flags=' + r4.flag_count);
+  const C = {}; for (let i = 1; i <= 15; i++) C['Q' + i] = 'C'; C.Q15 = 'C'; // 0 flags
+  ok('0 flags → High', (() => { const r = E.scoreQuestionnaire(C); return r.flagCount === 0 && r.consistencyIndex === 'High'; })());
+  const two = { ...C, Q2: 'A', Q11: 'B', Q4: 'A', Q13: 'B' }; // CP1 + CP2 (Q15='C' keeps CP4 off)
+  const r2 = E.scoreQuestionnaire(two);
+  ok('2 flags → Moderate', r2.flagCount === 2 && r2.consistencyIndex === 'Moderate', 'flags=' + r2.flagCount);
+  const three = { ...two, Q6: 'A', Q14: 'B' }; // + CP3
+  const r3 = E.scoreQuestionnaire(three);
+  ok('3 flags → Low', r3.flagCount === 3 && r3.consistencyIndex === 'Low', 'flags=' + r3.flagCount);
+  const four = { ...three, Q15: 'B' }; // + CP4 (Q2=A contradicts ['B'])
+  const r4 = E.scoreQuestionnaire(four);
+  ok('4 flags → Low', r4.flagCount === 4 && r4.consistencyIndex === 'Low', 'flags=' + r4.flagCount);
 }
 
 console.log('\n──────────────────────────────');
