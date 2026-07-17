@@ -579,8 +579,74 @@
     return 'Balancer';
   }
 
+  // ── Workstream B: individual leadership questionnaire (DARE) ────────────────
+  // 15 forced-choice questions (A/B/C). Domain mapping + per-option points are a
+  // CONTENT decision (the real answer key comes from the facilitator, like
+  // cases.config) — this DEFAULT key encodes the spec's domain map with a
+  // placeholder A/B/C = primary/secondary/tertiary (3/2/1) scoring. The internal
+  // D/A/R/E letters are NEVER exposed to participants; only full domain names are.
+  var DARE_NAMES = { D: 'Strategic Judgment', A: 'Execution Drive', R: 'People Leadership', E: 'Adaptive Integrity' };
+  var QUESTIONNAIRE_KEY = {
+    domains: { // spec §B mapping (Q13/14/15 are dual-domain)
+      Q1: ['D'], Q2: ['E'], Q3: ['R'], Q4: ['A'], Q5: ['D'], Q6: ['R'], Q7: ['E'],
+      Q8: ['A'], Q9: ['R'], Q10: ['E'], Q11: ['D'], Q12: ['R'], Q13: ['A', 'E'],
+      Q14: ['D', 'R'], Q15: ['R', 'E'],
+    },
+    // per-question option→points (primary/secondary/tertiary). DEFAULT placeholder:
+    // A=3, B=2, C=1. Replace per question when the real answer key is finalised.
+    points: { A: 3, B: 2, C: 1 },
+    contradiction_pairs: [['Q2', 'Q11'], ['Q4', 'Q13'], ['Q6', 'Q14'], ['Q2', 'Q15']],
+    contradiction_gap: 2, // pair fires when |pts(a) − pts(b)| ≥ this
+    proficiency: [{ max: 45, level: 'L1', label: 'Reactive' }, { max: 70, level: 'L2', label: 'Aware' }, { max: 100, level: 'L3', label: 'Intentional' }],
+  };
+
+  /**
+   * Scores the 15-question individual questionnaire. Pure. Returns per-domain
+   * 0–100 scores (full names), contradiction flags, consistency index, and
+   * proficiency levels. Consistency index + flags are GM-only.
+   *
+   * @param {Object<string,string>} responses - { Q1:'A', Q2:'C', ... }
+   * @param {object} [key] - answer key (defaults to QUESTIONNAIRE_KEY)
+   */
+  function scoreIndividualQuestionnaire(responses, key) {
+    key = key || QUESTIONNAIRE_KEY;
+    responses = responses || {};
+    var pts = function (q) { var a = responses[q]; return key.points[a] != null ? key.points[a] : 0; };
+
+    // sum + max per DARE letter
+    var sum = { D: 0, A: 0, R: 0, E: 0 }, max = { D: 0, A: 0, R: 0, E: 0 };
+    var maxOption = Math.max(key.points.A, key.points.B, key.points.C);
+    Object.keys(key.domains).forEach(function (q) {
+      key.domains[q].forEach(function (dom) { sum[dom] += pts(q); max[dom] += maxOption; });
+    });
+    var domain_scores = {};
+    ['D', 'A', 'R', 'E'].forEach(function (dom) {
+      var score = max[dom] > 0 ? Math.round((sum[dom] / max[dom]) * 100) : 0;
+      var prof = key.proficiency.find(function (p) { return score <= p.max; }) || key.proficiency[key.proficiency.length - 1];
+      domain_scores[DARE_NAMES[dom]] = { score: score, level: prof.level, label: prof.label };
+    });
+
+    // contradiction flags
+    var flags = [];
+    key.contradiction_pairs.forEach(function (pair) {
+      if (Math.abs(pts(pair[0]) - pts(pair[1])) >= key.contradiction_gap) flags.push(pair[0] + '↔' + pair[1]);
+    });
+    var n = flags.length;
+    var consistency_index = n <= 1 ? 'High' : n === 2 ? 'Moderate' : 'Low';
+
+    // lowest domain (for the scorecard insight/experiment)
+    var lowest = Object.keys(domain_scores).reduce(function (lo, name) {
+      return domain_scores[name].score < domain_scores[lo].score ? name : lo;
+    }, Object.keys(domain_scores)[0]);
+
+    return { domain_scores: domain_scores, contradiction_flags: flags, flag_count: n,
+      consistency_index: consistency_index, lowest_domain: lowest };
+  }
+
   var API = {
     SURYAN_CONFIG: SURYAN_CONFIG, parseDecisions: parseDecisions, parsePosture: parsePosture,
+    QUESTIONNAIRE_KEY: QUESTIONNAIRE_KEY, DARE_NAMES: DARE_NAMES,
+    scoreIndividualQuestionnaire: scoreIndividualQuestionnaire,
     initState: initState, resolveAuction: resolveAuction, computeWageIndex: computeWageIndex,
     productivityMult: productivityMult, computeCapacity: computeCapacity, allocateDemand: allocateDemand,
     computeDefects: computeDefects, computeAttrition: computeAttrition, cashWalk: cashWalk,

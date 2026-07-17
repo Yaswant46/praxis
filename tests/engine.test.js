@@ -114,6 +114,49 @@ console.log('\n(j) quadrant classification at boundary values (64/65/44/45)');
   ok('(65,45) → Balancer (hi task, mid people)', E.classifyQuadrant(65, 45) === 'Balancer');
 }
 
+console.log('\n(f) questionnaire scores sum correctly across all 15 questions');
+{
+  const allQ = {};
+  for (let i = 1; i <= 15; i++) allQ['Q' + i] = 'A'; // all primary (3 pts)
+  const r = E.scoreIndividualQuestionnaire(allQ);
+  const names = Object.keys(r.domain_scores);
+  ok('all-primary → every domain scores 100', names.every(n => r.domain_scores[n].score === 100), JSON.stringify(names.map(n => r.domain_scores[n].score)));
+  const allC = {}; for (let i = 1; i <= 15; i++) allC['Q' + i] = 'C'; // all tertiary (1 pt)
+  const rc = E.scoreIndividualQuestionnaire(allC);
+  ok('all-tertiary → every domain scores 33 (1/3)', names.every(n => rc.domain_scores[n].score === 33), JSON.stringify(names.map(n => rc.domain_scores[n].score)));
+  ok('4 domains reported with full names', names.length === 4 && names.includes('Strategic Judgment') && names.includes('Adaptive Integrity'));
+}
+
+console.log('\n(g) contradiction pair Q2↔Q11 fires on inconsistent responses');
+{
+  const base = {}; for (let i = 1; i <= 15; i++) base['Q' + i] = 'B'; // neutral (2 pts) everywhere
+  const inconsistent = { ...base, Q2: 'A', Q11: 'C' }; // |3−1| = 2 ≥ gap → fires
+  const r1 = E.scoreIndividualQuestionnaire(inconsistent);
+  ok('Q2↔Q11 fires when primary vs tertiary', r1.contradiction_flags.includes('Q2↔Q11'), JSON.stringify(r1.contradiction_flags));
+  const consistent = { ...base, Q2: 'A', Q11: 'A' }; // |3−3| = 0 → no fire
+  const r2 = E.scoreIndividualQuestionnaire(consistent);
+  ok('Q2↔Q11 does NOT fire when consistent', !r2.contradiction_flags.includes('Q2↔Q11'), JSON.stringify(r2.contradiction_flags));
+}
+
+console.log('\n(h) consistency index maps to 0/1/2/3-4 flag counts');
+{
+  const B = {}; for (let i = 1; i <= 15; i++) B['Q' + i] = 'B';
+  // 0 flags → High
+  ok('0 flags → High', E.scoreIndividualQuestionnaire(B).consistency_index === 'High');
+  // 2 flags → Moderate (pairs Q2↔Q11 and Q4↔Q13). Q13 dual but points by option.
+  const two = { ...B, Q2: 'A', Q11: 'C', Q4: 'A', Q13: 'C' };
+  const r2 = E.scoreIndividualQuestionnaire(two);
+  ok('2 flags → Moderate', r2.flag_count === 2 && r2.consistency_index === 'Moderate', 'flags=' + r2.flag_count);
+  // 3 flags → Low (add Q6↔Q14)
+  const three = { ...two, Q6: 'A', Q14: 'C' };
+  const r3 = E.scoreIndividualQuestionnaire(three);
+  ok('3 flags → Low', r3.flag_count === 3 && r3.consistency_index === 'Low', 'flags=' + r3.flag_count);
+  // 4 flags → Low (add Q2↔Q15; Q2 already A, set Q15 C)
+  const four = { ...three, Q15: 'C' };
+  const r4 = E.scoreIndividualQuestionnaire(four);
+  ok('4 flags → Low', r4.flag_count === 4 && r4.consistency_index === 'Low', 'flags=' + r4.flag_count);
+}
+
 console.log('\n──────────────────────────────');
 console.log('  PASS ' + pass + '   FAIL ' + fail);
 process.exit(fail ? 1 : 0);
