@@ -144,3 +144,44 @@ from the Manage panel at any time.
 The hardcoded master-admin email is `ross.harvey92@gmail.com`. To change
 it, edit both `app.html` (`SUPERUSER_EMAIL`) and
 `supabase_schema.sql` (the `praxis_is_master_admin` helper).
+
+---
+
+## Competitive mode (Case C — Suryan Energy)
+
+Existing cases (VOLTA/ARC/ShopPulse) are **parallel-world**: each team runs its
+own company and outcomes are independent (GM types the outcomes). **Suryan
+Energy** is **competitive** — all teams share one demand pool, one crew-wage
+market, and one public reputation feed, so a round resolves **once for the whole
+session** via a coded engine.
+
+### Architecture
+- **`praxis_engine.js`** — the pure, data-driven resolution engine (single source
+  of truth for `SURYAN_CONFIG`). Loaded by `app.html` (`window.PraxisEngine`) and
+  by the Node test. No hardcoded numbers — everything reads from the config.
+  Key functions: `resolveAuction`, `computeWageIndex`, `computeCapacity`,
+  `allocateDemand`, `computeDefects`, `cashWalk`, `computeSurvivability`,
+  `computeFinalScores`, orchestrated by `resolveRound()`.
+- **`migrations/002_suryan_competitive.sql`** — additive schema: `cases.mode`/
+  `config`, `teams.posture`/`posture_switched`/`state` (JSONB), `outcomes.detail`
+  (JSONB), and the `market_news` table. Applied to the live project.
+- **`tests/engine.test.js`** — `node tests/engine.test.js` (12 assertions across
+  the 5 spec conditions). `tests/e2e_live.mjs` — headless end-to-end.
+
+### Round mapping
+App-round **1 = Round 0** (posture declaration, no financials); app-rounds
+**2–5 = spec R1–R4** (Surge / Strain / Crunch / Reckoning).
+
+### GM flow (competitive only — gated by `mode='competitive'`)
+Open window → teams submit → **close window** → **⚙️ Resolve Round** (runs the
+engine across all teams, writes outcomes + team state + Market News, idempotent
+per session+round) → advance. The leaderboard shows the **financial component
+only** during play; the full weighted score (Financial 40 / Survivability 25 /
+Trust 20 / Reputation 15) is revealed at **End Session** — the gap is the lesson.
+
+### Adding future competitive cases
+Reuse the engine with different numbers: add a `CASE_CONTENT`/`DECISION_DOMAINS`/
+`QUARTERS_BY_CASE` entry keyed by a new letter, seed the case row with
+`mode='competitive'` + a `config` JSONB, and (if mechanics differ) extend the
+engine. Parallel-mode cases are untouched — every competitive path is gated by
+`isCompetitiveSession()`.
