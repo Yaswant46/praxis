@@ -1231,58 +1231,39 @@ input, select, textarea { font-family: var(--sans); }
       <div id="gmOtpError" class="login-error"></div>
     </div>
 
-    <!-- Participant: Case selection -->
-    <div id="caseStep" class="case-selector-step hidden">
+    <!-- Participant: Welcome (URL has both session + team) -->
+    <div id="welcomeStep" class="case-selector-step hidden">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <button class="login-back-btn" onclick="backToRole()">&larr; Back</button>
+        <span id="welcomeCaseBadge" class="case-badge volta">Case</span>
+      </div>
+      <div style="margin-bottom:18px">
+        <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px">Welcome to</div>
+        <div id="welcomeTeamName" style="font-family:var(--serif,Georgia);font-size:32px;font-weight:600;line-height:1.1">Team —</div>
+        <div id="welcomeCohortName" style="font-size:13px;color:rgba(255,255,255,.5);margin-top:6px">—</div>
+      </div>
+      <label class="login-label">Your team password</label>
+      <input id="pwInput" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" class="login-input" placeholder="three-word-password">
+      <button class="login-btn" id="pwLoginBtn" onclick="pwLogin()">Enter simulation &rarr;</button>
+      <div id="pwError" class="login-error"></div>
+      <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:14px;text-align:center">Lost the password? Ask your facilitator.</div>
+    </div>
+
+    <!-- Participant: Manual entry (no URL or session-only URL) -->
+    <div id="manualStep" class="case-selector-step hidden">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
         <button class="login-back-btn" onclick="backToRole()">&larr; Back</button>
         <span style="font-size:12px;font-weight:600;color:rgba(255,255,255,.4)">Participant Login</span>
       </div>
-      <div class="login-step-indicator">Select your simulation case</div>
-      <div class="case-cards">
-        <div class="case-card" id="caseCardA" onclick="selectCase('A')">
-          <span class="cc-tag">Case A</span>
-          <span class="cc-title">VOLTA Motors</span>
-          <span class="cc-sub">Navigating the Inflection:<br>Scale, survival, and unit economics</span>
-          <span class="cc-chip">Series C &middot; Complex</span>
-        </div>
-        <div class="case-card" id="caseCardB" onclick="selectCase('B')">
-          <span class="cc-tag">Case B</span>
-          <span class="cc-title">ARC Motors</span>
-          <span class="cc-sub">The Velocity Trap:<br>Product development under market shift</span>
-          <span class="cc-chip">Series B &middot; Intermediate</span>
-        </div>
-        <div class="case-card" id="caseCarddemo" onclick="selectCase('demo')" style="grid-column:span 2;border-color:rgba(255,143,0,0.3);background:rgba(255,143,0,0.05)">
-          <span class="cc-tag" style="color:var(--amber)">Demo</span>
-          <span class="cc-title">ShopPulse &mdash; The Last Mile Problem</span>
-          <span class="cc-sub">Quick-commerce growth vs. margin. Simpler decisions, faster rounds.</span>
-          <span class="cc-chip" style="color:var(--amber)">Seed Stage &middot; Introductory</span>
-        </div>
-      </div>
-      <button class="login-btn" id="caseNextBtn" onclick="proceedToTeamSelect()" disabled style="opacity:0.4">Select a case to continue &rarr;</button>
-    </div>
-
-    <!-- Participant: Team + code -->
-    <div id="loginStep" class="case-selector-step hidden">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
-        <button class="login-back-btn" id="participantBackBtn" onclick="backToCase()">&larr; Back</button>
-        <span id="selectedCaseBadge" class="case-badge volta">Case A — VOLTA Motors</span>
-      </div>
-      <div class="login-step-indicator">Select team, enter email &amp; access code</div>
-      <label class="login-label">Select Your Team</label>
-      <div class="team-slot-grid" id="teamSlotGrid">
-        <div class="team-slot-btn" onclick="selectTeamSlot('alpha',this)">Alpha</div>
-        <div class="team-slot-btn" onclick="selectTeamSlot('beta',this)">Beta</div>
-        <div class="team-slot-btn" onclick="selectTeamSlot('gamma',this)">Gamma</div>
-        <div class="team-slot-btn" onclick="selectTeamSlot('delta',this)">Delta</div>
-        <div class="team-slot-btn" onclick="selectTeamSlot('epsilon',this)">Epsilon</div>
-        <div class="team-slot-btn" onclick="selectTeamSlot('zeta',this)">Zeta</div>
-      </div>
-      <label class="login-label">Your Email Address</label>
-      <input id="participantEmail" type="email" class="login-input" placeholder="your.email@example.com">
-      <label class="login-label">Access Code</label>
-      <input id="accessCode" type="password" class="login-input" placeholder="Enter your team access code">
-      <button class="login-btn" id="loginSubmitBtn" onclick="handleLogin()">Enter Simulation &rarr;</button>
-      <div id="loginError" class="login-error"></div>
+      <div class="login-step-indicator">Enter the credentials your facilitator sent you</div>
+      <label class="login-label">Session code</label>
+      <input id="manualSession" type="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" class="login-input" placeholder="e.g. 5ADT8Q" style="text-transform:uppercase;letter-spacing:2px;font-family:var(--mono)">
+      <label class="login-label">Team username</label>
+      <input id="manualUser" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" class="login-input" placeholder="e.g. quasar" style="text-transform:lowercase">
+      <label class="login-label">Password</label>
+      <input id="manualPw" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" class="login-input" placeholder="three-word-password">
+      <button class="login-btn" id="manualLoginBtn" onclick="manualLogin()">Enter simulation &rarr;</button>
+      <div id="manualError" class="login-error"></div>
     </div>
   </div>
 </div>
@@ -1473,6 +1454,7 @@ input, select, textarea { font-family: var(--sans); }
 <div id="notification" class="notification"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="praxis_engine.js"></script>
 <script>
 // =================================================
 //  SUPABASE CONFIG
@@ -1504,14 +1486,20 @@ function toggleSidebar() {
 
 // =================================================
 //  URL SESSION ROUTING
+//  Supported formats:
+//    #/session/CODE              — session only (case selector / manual entry)
+//    #/session/CODE/team/USER    — session + team (skip straight to password)
 // =================================================
-function getSessionCodeFromURL() {
-  const m = window.location.hash.match(/#\/session\/([A-Z0-9]{6,8})/i);
-  return m ? m[1].toUpperCase() : null;
+function getRouteFromURL() {
+  const h = window.location.hash || '';
+  const m = h.match(/#\/session\/([A-Za-z0-9]{6,8})(?:\/team\/([a-z0-9]{1,24}))?/i);
+  if (!m) return { code: null, team: null };
+  return { code: m[1].toUpperCase(), team: m[2] ? m[2].toLowerCase() : null };
 }
-function setSessionInURL(code) {
-  window.location.hash = '/session/' + code;
-}
+// Back-compat alias used elsewhere in the file
+function getSessionCodeFromURL() { return getRouteFromURL().code; }
+function setSessionInURL(code) { window.location.hash = '/session/' + code; }
+function setTeamInURL(code, team) { window.location.hash = '/session/' + code + '/team/' + team; }
 
 // =================================================
 //  DB LAYER
@@ -1585,6 +1573,59 @@ async function dbGetCurveballs(sessionId) {
   const { data } = await sb.from('curveballs').select('*')
     .eq('session_id', sessionId).order('injected_at');
   return data || [];
+}
+
+// ── Competitive-mode helpers (Suryan) ───────────────────────────────────────
+// All teams' decisions for a round, shaped as { teamId: {fieldId: value} }.
+async function dbGetAllDecisions(sessionId, round) {
+  const sb = getSupabase(); if (!sb) return {};
+  const { data } = await sb.from('decisions').select('team_id, field_id, value')
+    .eq('session_id', sessionId).eq('round', round);
+  const out = {};
+  (data || []).forEach(r => { (out[r.team_id] = out[r.team_id] || {})[r.field_id] = r.value; });
+  return out;
+}
+// Persist competitive outcome: typed columns (existing UI) + full engine detail JSONB.
+async function dbPublishCompetitiveOutcome(sessionId, teamId, round, outcome, detail) {
+  const sb = getSupabase(); if (!sb) return false;
+  const { error } = await sb.from('outcomes').upsert({
+    session_id: sessionId, team_id: teamId, round,
+    revenue: outcome.revenue, gross_margin: outcome.gross_margin,
+    cash_runway: outcome.cash_runway, market_share: outcome.market_share,
+    product_health: outcome.product_health, team_capability: outcome.team_capability,
+    score: outcome.score, detail, published_at: new Date().toISOString()
+  }, { onConflict: 'session_id,team_id,round' });
+  if (error) console.warn('publishCompetitiveOutcome', error.message);
+  return !error;
+}
+async function dbInsertMarketNews(sessionId, round, items) {
+  const sb = getSupabase(); if (!sb || !items || !items.length) return false;
+  const rows = items.map(n => ({
+    session_id: sessionId, round, team_id: n.team_id || null,
+    headline: n.headline, detail: n.detail || '', reputation_delta: n.reputation_delta || 0
+  }));
+  const { error } = await sb.from('market_news').insert(rows);
+  if (error) console.warn('insertMarketNews', error.message);
+  return !error;
+}
+async function dbGetMarketNews(sessionId) {
+  const sb = getSupabase(); if (!sb) return [];
+  const { data } = await sb.from('market_news').select('*, teams(display_name,slot)')
+    .eq('session_id', sessionId).order('round').order('created_at');
+  return data || [];
+}
+async function dbClearMarketNews(sessionId, round) {
+  const sb = getSupabase(); if (!sb) return;
+  await sb.from('market_news').delete().eq('session_id', sessionId).eq('round', round);
+}
+// Save posture (Round 0) and live engine state onto a team row.
+async function dbSaveTeamState(teamId, state, posture, postureSwitched) {
+  const sb = getSupabase(); if (!sb) return false;
+  const patch = { state };
+  if (posture !== undefined) patch.posture = posture;
+  if (postureSwitched !== undefined) patch.posture_switched = postureSwitched;
+  const { error } = await sb.from('teams').update(patch).eq('id', teamId);
+  return !error;
 }
 async function dbUpdateSession(sessionId, updates) {
   const sb = getSupabase(); if (!sb) return false;
@@ -1698,43 +1739,24 @@ var CASE_CTX = {
     caseRefSubtitle: 'ShopPulse: The Last Mile Problem',
     caseRefBody: 'This is the Praxis demo case. Use it to familiarise yourself with the simulation format before running a full case.',
     pdfFile: 'demo_case.pdf',
+  },
+  C: {
+    company: 'Suryan Energy',
+    board: 'Suryan Leadership Board',
+    badgeClass: 'arc',
+    badgeText: 'Case C — Suryan Energy',
+    caseSlug: 'suryan',
+    dashMetrics: 'Suryan dashboard — current quarter',
+    dashCtxSubtitle: 'Suryan Energy — The Subsidy Wave',
+    dashCtxBody: 'A ₹150 Cr rooftop-solar installer riding the Surya Shakti Yojana subsidy boom. ₹18 Cr cash, 22 crews, 9.2% EBITDA. <b>Competitive case:</b> you share ONE market and ONE crew pool with every rival team. Boom → crunch → sunset in four quarters.',
+    caseRefSubtitle: 'Suryan Energy: The Subsidy Wave',
+    caseRefBody: 'Competitive simulation. Demand, crew wages and reputation are all shared/relative across teams. Refer to your case document for subsidy economics, the demand model, and auction mechanics.',
+    pdfFile: 'suryan_case.pdf',
   }
 };
 
-function selectCase(id) {
-  selectedCase = id;
-  QUARTERS = QUARTERS_BY_CASE[selectedCase] || QUARTERS_BY_CASE['A'];
-  document.querySelectorAll('.case-card').forEach(c => c.classList.remove('selected'));
-  document.getElementById('caseCard' + id).classList.add('selected');
-  const btn = document.getElementById('caseNextBtn');
-  btn.disabled = false; btn.style.opacity = '1';
-  btn.textContent = 'Continue →';
-}
-
-function proceedToTeamSelect() {
-  const cfg = CASE_CTX[selectedCase];
-  const b = document.getElementById('selectedCaseBadge');
-  b.className = 'case-badge ' + cfg.badgeClass;
-  b.textContent = cfg.badgeText;
-  _selectedTeamSlot = null;
-  document.querySelectorAll('#teamSlotGrid .team-slot-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('participantEmail').value = '';
-  document.getElementById('accessCode').value = '';
-  document.getElementById('loginError').textContent = '';
-  showLoginStep('loginStep');
-}
-
-function backToCase() {
-  if (_sessionPreselected) { backToRole(); _sessionPreselected = false; currentSession = null; return; }
-  showLoginStep('caseStep');
-  document.getElementById('accessCode').value = '';
-  document.getElementById('participantEmail').value = '';
-  _selectedTeamSlot = null;
-  document.querySelectorAll('#teamSlotGrid .team-slot-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('loginError').textContent = '';
-}
-
-var _sessionPreselected = false;
+// (selectCase / proceedToTeamSelect / backToCase removed — old participant flow
+//  replaced by URL-driven password-only flow in pwLogin / manualLogin below.)
 
 function applyCaseConfig() {
   QUARTERS = QUARTERS_BY_CASE[selectedCase] || QUARTERS_BY_CASE['A'];
@@ -1776,6 +1798,13 @@ var QUARTERS_BY_CASE = {
     { id:3, label:'Q3', theme:'The Pivot Window' },
     { id:4, label:'Q4', theme:'Covenant Quarter' },
   ],
+  C: [
+    { id:1, label:'R0', theme:'Posture Declaration' },
+    { id:2, label:'R1', theme:'The Surge' },
+    { id:3, label:'R2', theme:'The Strain' },
+    { id:4, label:'R3', theme:'The Crunch' },
+    { id:5, label:'R4', theme:'The Reckoning' },
+  ],
 };
 var QUARTERS = QUARTERS_BY_CASE['A'];
 function getQuarters() { return QUARTERS_BY_CASE[selectedCase] || QUARTERS_BY_CASE['A']; }
@@ -1804,16 +1833,19 @@ async function _doLoadState() {
   const teams = await dbGetTeams(currentSession.id);
   state._teams = teams;
   state._teamMap = {};
-  const slotToKey = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
-  teams.forEach(t => {
-    const key = slotToKey[t.slot];
-    if (key) state._teamMap[key] = t;
+  // Map slot -> teamN by positional order so creative slot names (quasar, voltage, …)
+  // and legacy slot names (alpha, beta, …) both work uniformly.
+  state._slotToKey = {};
+  teams.forEach((t, i) => {
+    const key = 'team' + (i + 1);
+    state._slotToKey[t.slot] = key;
+    state._teamMap[key] = t;
   });
 
   const outcomes = await dbGetOutcomes(currentSession.id);
   outcomes.forEach(o => {
     const tSlot = o.teams ? o.teams.slot : null;
-    const key   = tSlot ? slotToKey[tSlot] : null;
+    const key   = tSlot ? state._slotToKey[tSlot] : null;
     if (!key) return;
     if (!state.outcomes[o.round]) state.outcomes[o.round] = {};
     const m = {
@@ -1860,6 +1892,7 @@ function initState() {
 function defaultMetrics() {
   if (selectedCase==='B')    return { revenue:6.9,  grossMargin:4.2,  cashRunway:24, marketShare:52, productHealth:72, teamCapability:74 };
   if (selectedCase==='demo') return { revenue:1.1,  grossMargin:-12,  cashRunway:11, marketShare:18, productHealth:45, teamCapability:60 };
+  if (selectedCase==='C')    return { revenue:37.5, grossMargin:9.2,  cashRunway:18, marketShare:50, productHealth:100, teamCapability:100 };
   return { revenue:16.8, grossMargin:-5.8, cashRunway:22, marketShare:42, productHealth:58, teamCapability:65 };
 }
 
@@ -1871,16 +1904,22 @@ const SUPERUSER_EMAIL = 'ross.harvey92@gmail.com';
 // =================================================
 //  AUTH — LOGIN FLOW
 // =================================================
-var _selectedTeamSlot = null;
-var _gmEmailForOTP    = null;
+var _gmEmailForOTP = null;
+var _pwTeamFromURL = null;   // populated when URL has #/session/CODE/team/USER and team is fetched
 
 function showLoginStep(stepId) {
-  ['roleStep','gmEmailStep','gmOtpStep','caseStep','loginStep'].forEach(id => {
+  ['roleStep','gmEmailStep','gmOtpStep','welcomeStep','manualStep'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('hidden', id !== stepId);
   });
 }
-function backToRole() { showLoginStep('roleStep'); _selectedTeamSlot = null; _gmEmailForOTP = null; }
+function backToRole() {
+  showLoginStep('roleStep');
+  _gmEmailForOTP = null;
+  _pwTeamFromURL = null;
+  // Clear URL hash so a back-button click doesn't re-route into a session
+  if (window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search);
+}
 
 // ── Game Master ──
 function loginAsGM() {
@@ -1953,7 +1992,7 @@ async function gmVerifyOTP() {
     if (sessions.length === 1) {
       currentSession = sessions[0];
       const cSlug = sessions[0].cases ? sessions[0].cases.slug : 'volta';
-      selectedCase  = cSlug==='volta' ? 'A' : cSlug==='arc' ? 'B' : 'demo';
+      selectedCase  = cSlug==='volta' ? 'A' : cSlug==='arc' ? 'B' : cSlug==='suryan' ? 'C' : 'demo';
     }
   }
   currentUser = { teamId:'admin', teamName:'Game Master', isAdmin:true, isSuperuser, email:_gmEmailForOTP };
@@ -1961,108 +2000,125 @@ async function gmVerifyOTP() {
 }
 
 // ── Participant ──
+// Two paths:
+//   pwLogin()     — URL had #/session/CODE/team/USER; team already loaded; user just types password
+//   manualLogin() — fallback when URL is missing pieces; user types session+username+password
 function loginAsParticipant() {
-  if (_sessionPreselected && currentSession) {
-    const cfg = CASE_CTX[selectedCase];
-    const b   = document.getElementById('selectedCaseBadge');
-    b.className = 'case-badge ' + cfg.badgeClass;
-    b.textContent = cfg.badgeText;
-    _selectedTeamSlot = null;
-    document.querySelectorAll('#teamSlotGrid .team-slot-btn').forEach(b=>b.classList.remove('selected'));
-    document.getElementById('participantEmail').value = '';
-    document.getElementById('accessCode').value = '';
-    document.getElementById('loginError').textContent = '';
-    showLoginStep('loginStep'); return;
+  if (_pwTeamFromURL && currentSession) {
+    _renderWelcomeStep();
+    showLoginStep('welcomeStep');
+    setTimeout(() => { const i = document.getElementById('pwInput'); if (i) i.focus(); }, 50);
+  } else {
+    // Pre-fill session code from URL if it's there
+    const r = getRouteFromURL();
+    const sessIn = document.getElementById('manualSession');
+    if (sessIn && r.code) sessIn.value = r.code;
+    const userIn = document.getElementById('manualUser');
+    if (userIn && r.team) userIn.value = r.team;
+    document.getElementById('manualPw').value = '';
+    document.getElementById('manualError').textContent = '';
+    showLoginStep('manualStep');
+    setTimeout(() => {
+      const focusEl = (sessIn && !sessIn.value) ? sessIn :
+                      (userIn && !userIn.value) ? userIn :
+                      document.getElementById('manualPw');
+      if (focusEl) focusEl.focus();
+    }, 50);
   }
-  showLoginStep('caseStep');
-  document.querySelectorAll('.case-card').forEach(c=>c.classList.remove('selected'));
-  const nb = document.getElementById('caseNextBtn');
-  if (nb) { nb.disabled = true; nb.style.opacity = '0.4'; nb.textContent = 'Select a case to continue →'; }
 }
 
-function selectTeamSlot(slot, el) {
-  _selectedTeamSlot = slot;
-  document.querySelectorAll('#teamSlotGrid .team-slot-btn').forEach(b=>b.classList.remove('selected'));
-  el.classList.add('selected');
+function _renderWelcomeStep() {
+  const t = _pwTeamFromURL;
+  const cfg = CASE_CTX[selectedCase];
+  const badge = document.getElementById('welcomeCaseBadge');
+  if (badge) { badge.className = 'case-badge ' + cfg.badgeClass; badge.textContent = cfg.badgeText; }
+  document.getElementById('welcomeTeamName').textContent = 'Team ' + (t.display_name || '—');
+  const cohort = currentSession && currentSession.cohort_name ? currentSession.cohort_name + ' · ' : '';
+  document.getElementById('welcomeCohortName').textContent = cohort + cfg.company;
+  document.getElementById('pwInput').value = '';
+  document.getElementById('pwError').textContent = '';
 }
 
-// ── P0 FIX: Email lock-in on first login ──
-async function handleLogin() {
-  const slot  = _selectedTeamSlot;
-  const email = document.getElementById('participantEmail').value.trim().toLowerCase();
-  const code  = document.getElementById('accessCode').value.trim();
-  const err   = document.getElementById('loginError');
-  const btn   = document.getElementById('loginSubmitBtn');
-
-  if (!slot)  { err.textContent = 'Please select your team.'; return; }
-  if (!email || !email.includes('@')) { err.textContent = 'Please enter a valid email address.'; return; }
-  if (!code)  { err.textContent = 'Please enter your access code.'; return; }
-
-  const slotToTeamId = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
-  const teamIdKey    = slotToTeamId[slot];
-
-  if (currentSession) {
-    btn.textContent = 'Verifying...'; btn.disabled = true;
-    const teamFromDB = await dbGetTeam(currentSession.id, slot);
-    btn.textContent = 'Enter Simulation →'; btn.disabled = false;
-
-    if (!teamFromDB) { err.textContent = 'Team not found in this session.'; return; }
-    if (teamFromDB.access_code !== code) { err.textContent = 'Incorrect access code.'; return; }
-    if (teamFromDB.expires_at && new Date(teamFromDB.expires_at) < new Date()) {
-      err.textContent = 'Your access has expired. Contact your facilitator.'; return;
-    }
-
-    // P0 FIX: If email already locked, enforce it
-    if (teamFromDB.participant_email &&
-        teamFromDB.participant_email.toLowerCase() !== email) {
-      err.textContent = 'This team slot is already claimed by a different email address.'; return;
-    }
-
-    // P0 FIX: First login — lock the email to this team
-    const sb = getSupabase();
-    if (sb && !teamFromDB.participant_email) {
-      await sb.from('teams').update({
-        participant_email: email,
-        activated_at: new Date().toISOString()
-      }).eq('id', teamFromDB.id);
-    }
-
-    currentTeam = teamFromDB;
-    currentUser = { teamId: teamIdKey, teamName: teamFromDB.display_name, isAdmin: false, isSuperuser: false, email };
-    err.textContent = '';
-    showApp(); return;
+async function pwLogin() {
+  const pw  = document.getElementById('pwInput').value.trim();
+  const err = document.getElementById('pwError');
+  const btn = document.getElementById('pwLoginBtn');
+  if (!pw) { err.textContent = 'Enter your team password.'; return; }
+  if (!_pwTeamFromURL) { err.textContent = 'Team not loaded. Click Back and try the link again.'; return; }
+  if (pw !== _pwTeamFromURL.access_code) {
+    err.textContent = 'Wrong password. Check the email from your facilitator.'; return;
   }
+  btn.disabled = true;
+  await _enterAsTeam(_pwTeamFromURL);
+}
 
-  // Fallback: local codes (for offline / demo use)
-  const localCodes = { team1:'alpha01', team2:'beta02', team3:'gamma03', team4:'delta04', team5:'epsilon05', team6:'zeta06' };
-  const teamNames  = { team1:'Alpha', team2:'Beta', team3:'Gamma', team4:'Delta', team5:'Epsilon', team6:'Zeta' };
-  if (localCodes[teamIdKey] && code === localCodes[teamIdKey]) {
-    currentUser = { teamId: teamIdKey, teamName: teamNames[teamIdKey], isAdmin: false, isSuperuser: false, email };
-    err.textContent = '';
-    showApp(); return;
-  }
-  err.textContent = 'Incorrect access code or no active session. Check with your facilitator.';
+async function manualLogin() {
+  const code = (document.getElementById('manualSession').value || '').trim().toUpperCase();
+  const user = (document.getElementById('manualUser').value || '').trim().toLowerCase();
+  const pw   = (document.getElementById('manualPw').value || '').trim();
+  const err  = document.getElementById('manualError');
+  const btn  = document.getElementById('manualLoginBtn');
+  if (!code || !user || !pw) { err.textContent = 'Fill in session code, username, and password.'; return; }
+
+  btn.textContent = 'Verifying…'; btn.disabled = true; err.textContent = '';
+  const sb = getSupabase();
+  if (!sb) { err.textContent = 'Supabase not initialised. Refresh the page.'; btn.textContent = 'Enter simulation →'; btn.disabled = false; return; }
+
+  let sess = currentSession;
+  if (!sess || sess.code !== code) sess = await dbGetSession(code);
+  if (!sess) { err.textContent = 'Session "' + code + '" not found.'; btn.textContent = 'Enter simulation →'; btn.disabled = false; return; }
+
+  const team = await dbGetTeam(sess.id, user);
+  if (!team) { err.textContent = 'Team "' + user + '" not found in this session.'; btn.textContent = 'Enter simulation →'; btn.disabled = false; return; }
+  if (team.access_code !== pw) { err.textContent = 'Wrong password.'; btn.textContent = 'Enter simulation →'; btn.disabled = false; return; }
+
+  currentSession = sess;
+  const cSlug = sess.cases ? sess.cases.slug : 'volta';
+  selectedCase = cSlug==='volta' ? 'A' : cSlug==='arc' ? 'B' : cSlug==='suryan' ? 'C' : 'demo';
+  QUARTERS = QUARTERS_BY_CASE[selectedCase] || QUARTERS_BY_CASE['A'];
+  setTeamInURL(sess.code, user);
+  await _enterAsTeam(team);
+}
+
+async function _enterAsTeam(team) {
+  // Compute the team's positional key (team1..team6) so it lines up with state dicts.
+  const teams = await dbGetTeams(team.session_id);
+  const idx = teams.findIndex(t => t.id === team.id);
+  const teamKey = 'team' + Math.max(1, idx + 1);
+  currentTeam = team;
+  currentUser = {
+    teamId: teamKey,
+    teamSlot: team.slot,
+    teamUuid: team.id,
+    teamName: team.display_name,
+    isAdmin: false, isSuperuser: false,
+    email: (team.participant_email || '').toLowerCase(),
+  };
+  showApp();
 }
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  if (document.getElementById('loginScreen').classList.contains('active')) {
-    if (!document.getElementById('loginStep').classList.contains('hidden')) handleLogin();
-    else if (!document.getElementById('gmEmailStep').classList.contains('hidden')) gmSendOTP();
-  }
+  if (!document.getElementById('loginScreen').classList.contains('active')) return;
+  if (!document.getElementById('welcomeStep').classList.contains('hidden')) pwLogin();
+  else if (!document.getElementById('manualStep').classList.contains('hidden')) manualLogin();
+  else if (!document.getElementById('gmEmailStep').classList.contains('hidden')) gmSendOTP();
 });
 
 function handleLogout() {
   const sb = getSupabase();
   if (sb) sb.auth.signOut().catch(()=>{});
   if (realtimeChannel && sb) sb.removeChannel(realtimeChannel);
-  currentUser = null; currentTeam = null; _stateCache = null;
-  _selectedTeamSlot = null; _gmEmailForOTP = null;
+  currentUser = null; currentTeam = null; currentSession = null; _stateCache = null;
+  _gmEmailForOTP = null; _pwTeamFromURL = null;
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('appScreen').classList.remove('active');
+  // Clear URL hash so a logged-out user isn't bounced back into the session
+  if (window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search);
   showLoginStep('roleStep');
-  document.getElementById('accessCode').value = '';
-  document.getElementById('participantEmail').value = '';
+  ['pwInput','manualSession','manualUser','manualPw','gmEmail'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
   document.getElementById('adminNavItem').style.display = 'none';
   document.getElementById('masterAdminNavItem').style.display = 'none';
 }
@@ -2309,6 +2365,24 @@ var CASE_CONTENT = {
       { num:'05', title:'Retention vs. Acquisition', body:'CAC is ₹420. LTV is ₹680 (subscriber) or ₹210 (not). The entire business model depends on converting delivery users to subscribers.' }
     ],
     covenant:'Demonstrate positive contribution margin on core delivery in at least 2 cities by end of Q4. Otherwise the Series A conversation becomes very difficult.'
+  },
+  C: {
+    title:'Suryan Energy',
+    subtitle:'The Subsidy Wave: Competing Through Boom, Crunch, and Sunset',
+    situation:'A government rooftop-solar subsidy (Surya Shakti Yojana) has ignited a demand boom. Suryan and its rivals share ONE market, ONE crew pool, and ONE reputation feed. The wave crests, the subsidy freezes, and a sunset is announced — all in four quarters. Every rival team is playing the same board as you.',
+    products:[
+      { name:'Residential rooftop (3kW)', price:'₹2.0 L ticket (40% subsidy)', units:'460 installs/qtr baseline', margin:'9.2% EBITDA', note:'Subsidy ₹0.8L/install paid to installer at T+60 days — the receivable that freezes in R3' },
+      { name:'C&I (commercial)', price:'₹28 Cr/qtr', units:'background segment', margin:'—', note:'The pivot target once the subsidy sunsets' }
+    ],
+    financials:{ revenue:'₹37.5 Cr/qtr', burn:'—', runway:'₹18 Cr cash + ₹12 Cr WC line', headcount:'22 crews' },
+    challenges:[
+      { num:'01', title:'Shared Demand Pool', body:'Demand is allocated across all teams by price, reputation and channel spend. Your share is relative to rivals — capacity-constrained in the boom.' },
+      { num:'02', title:'The Crew Auction', body:'New trained crews are sealed-bid auctioned. One team overbidding inflates EVERYONE’s wages next round (contagion). Subcontract crews are unlimited but raise defects.' },
+      { num:'03', title:'Quality Has a Public Ledger', body:'Defects surface one round later in a session-wide Market News feed. Reputation is a competitive weapon — and it decays in public.' },
+      { num:'04', title:'The Cash Crunch', body:'In R3 the subsidy receivable freezes and the WC line tightens. Fast growers are cornered hardest. Who do you pay: crews, vendors, or the bank?' },
+      { num:'05', title:'Leadership Posture & Trust', body:'You declare a posture (Command / Coach / Steward) in Round 0. Every incident response is scored for alignment vs that posture — trust compounds or erodes across rounds.' }
+    ],
+    covenant:'Survive the sunset. Final scoring weights financial performance (40%), post-subsidy survivability (25%), trust (20%) and reputation (15%) — but the in-game leaderboard shows ONLY the financial number. The gap between the two is the lesson.'
   }
 };
 
@@ -2660,9 +2734,143 @@ var DECISION_DOMAINS_DEMO = [
   }
 ];
 
+// =================================================
+//  SURYAN ENERGY (Case C) — COMPETITIVE
+//  Data-driven config for the Phase-2 resolution engine.
+//  Engine functions must read from here, not hardcode numbers.
+// =================================================
+// SURYAN_CONFIG is the single source of truth for the competitive engine and
+// is provided by praxis_engine.js (loaded above as window.SURYAN_CONFIG /
+// window.PraxisEngine). Do not redefine it here — tune numbers in the engine
+// file (or, in future, cases.config in the DB) so the app and the Node test
+// share one config.
+
+// Round-keyed decision forms (app-round 1 = Posture/R0, 2..5 = spec R1..R4).
+var DECISION_DOMAINS_SURYAN = {
+  1: [
+    { id:'posture', num:1, title:'Leadership Posture', subtitle:'Declare how you will lead before the numbers arrive. This persists all game; switching later costs morale and crews.', icon:'🧭',
+      fields:[
+        { type:'select', id:'posture', label:'Declared Posture', options:[
+          'Command — decisive, top-down control, results over comfort',
+          'Coach — develop people, delegate with support, build capability',
+          'Steward — protect people and principles first, even at a cost',
+        ]},
+        { type:'textarea', id:'posture_rationale', label:'One-sentence rationale', placeholder:'Why this posture for Suryan, in one sentence?' },
+      ]
+    },
+  ],
+  2: [
+    { id:'crews', num:1, title:'Crew & Capacity — The Surge', subtitle:'Enquiries are 3× baseline. The market has released 8 trained crews for sealed-bid auction. Everyone is capacity-constrained.', icon:'👷',
+      fields:[
+        { type:'slider', id:'hire_crews_bid_count', label:'Crews to bid for (auction, 8 available)', min:0, max:8, default:0, unit:' crews' },
+        { type:'slider', id:'hire_crews_bid_wage', label:'Your sealed wage bid', min:9.5, max:15, step:0.5, default:9.5, unit:' L/qtr' },
+        { type:'slider', id:'subcontract_crews', label:'Subcontract crews (₹7.5L each, adds defect risk)', min:0, max:20, default:0, unit:' crews' },
+        { type:'slider', id:'tier1_premium_bid', label:'Tier-1 inverter allocation bid (premium on materials)', min:0, max:8, default:0, unit:'%' },
+      ]
+    },
+    { id:'market', num:2, title:'Market & Pricing', subtitle:'You share one demand pool with every rival team. Price, reputation and channel spend decide your share.', icon:'📊',
+      fields:[
+        { type:'select', id:'ration_demand', label:'Demand posture', options:['Accept all demand you can capture','Ration — turn away demand to protect quality'] },
+        { type:'slider', id:'price_index', label:'Price vs market reference (1.00 = par)', min:0.90, max:1.10, step:0.01, default:1.00, unit:'×' },
+        { type:'slider', id:'channel_spend', label:'Channel / marketing spend', min:0, max:3, step:0.1, default:0.5, unit:' Cr' },
+        { type:'slider', id:'quality_invest', label:'Quality investment', min:0, max:1.5, step:0.1, default:0, unit:' Cr' },
+      ]
+    },
+    { id:'incident', num:3, title:'Leadership Incident — Ops Head vs Sales Head', subtitle:'Your ops head refuses to scale subcontracting; your sales head says you are leaving the biggest quarter of the decade on the table.', icon:'⚡',
+      fields:[
+        { type:'select', id:'li1', label:'Your call', options:[
+          'Back the ops head — cap subcontracting at 20%',
+          'Overrule him — scale subcontracting, move on',
+          'Give him ownership of subcontractor quality, with authority to reject crews',
+          'Split the difference publicly, decide nothing',
+        ]},
+      ]
+    },
+  ],
+  3: [
+    { id:'quality', num:1, title:'Quality Reckoning — The Strain', subtitle:'Your Round-1 defects are now public in Market News. Wages jumped +30%. How you respond is watched by everyone.', icon:'🔧',
+      fields:[
+        { type:'select', id:'quality_response', label:'Response to the defect reveal', options:['Recall & rework openly','Quiet fix — no announcement','Deny — the data is wrong'] },
+        { type:'slider', id:'quality_invest', label:'Quality investment', min:0, max:1.5, step:0.1, default:0, unit:' Cr' },
+      ]
+    },
+    { id:'people', num:2, title:'People & Retention', subtitle:'Crews are being poached and wages are inflating. Hold your team together.', icon:'🤝',
+      fields:[
+        { type:'slider', id:'retention_spend', label:'Retention spend', min:0, max:1, step:0.1, default:0, unit:' Cr' },
+        { type:'slider', id:'training_invest', label:'Training investment', min:0, max:1, step:0.1, default:0, unit:' Cr' },
+        { type:'slider', id:'hire_crews_bid_count', label:'Crews to bid for (6 available)', min:0, max:6, default:0, unit:' crews' },
+        { type:'slider', id:'hire_crews_bid_wage', label:'Your sealed wage bid', min:9.5, max:18, step:0.5, default:11, unit:' L/qtr' },
+        { type:'slider', id:'subcontract_crews', label:'Subcontract crews', min:0, max:20, default:0, unit:' crews' },
+      ]
+    },
+    { id:'market', num:3, title:'Pricing', subtitle:'The wave is at its peak. Hold or push.', icon:'📊',
+      fields:[
+        { type:'slider', id:'price_index', label:'Price vs market reference', min:0.90, max:1.10, step:0.01, default:1.00, unit:'×' },
+      ]
+    },
+    { id:'incident', num:4, title:'Leadership Incident — The Falsified Safety Audit', subtitle:'A supervisor signed off a safety audit that never happened. A junior engineer flagged it to you directly.', icon:'⚡',
+      fields:[
+        { type:'select', id:'li2', label:'Your call', options:[
+          'Fire the supervisor publicly, thank the whistleblower publicly',
+          'Quiet exit for the supervisor, quiet transfer for the whistleblower',
+          'Demote and rebuild him under a quality mandate; protect the whistleblower visibly',
+          'Keep him — the numbers matter more right now',
+        ]},
+      ]
+    },
+  ],
+  4: [
+    { id:'cash', num:1, title:'The Crunch — Cash Priority', subtitle:'Subsidy receivables are FROZEN. Your working-capital line just tightened ₹12Cr → ₹8Cr. Payday is due. Rank who gets paid.', icon:'💸',
+      fields:[
+        { type:'select', id:'payment_priority', label:'Payment priority (this ranking IS your leadership signal)', options:[
+          'Crews first, then vendors, then bank',
+          'Bank first — protect the credit line',
+          'Vendors first — honor the relationship',
+          'Defer all three — buy time',
+        ]},
+        { type:'select', id:'emergency_capital', label:'Emergency capital', options:['None','Equity dilution — ₹15 Cr for 20%','Bridge debt — 24% p.a.'] },
+        { type:'select', id:'install_pace', label:'Install pace', options:['Full pace (deepens receivables)','Slow to 50% (conserve cash)'] },
+      ]
+    },
+    { id:'people', num:2, title:'Headcount', subtitle:'Something has to give on payroll.', icon:'👥',
+      fields:[
+        { type:'select', id:'headcount_action', label:'Headcount action', options:['Hold everyone','Furlough','20% pay cut','Layoff 20%'] },
+      ]
+    },
+    { id:'predatory', num:3, title:'Opportunity in the Wreckage', subtitle:'Rivals who defer salaries are flagged "distressed" — their crews and order books are in play.', icon:'🎯',
+      fields:[
+        { type:'slider', id:'poach_bid', label:'Poach distressed crews — wage offered (0 = do not poach; must be ≥1.3× index)', min:0, max:30, step:0.5, default:0, unit:' L/qtr' },
+        { type:'select', id:'acquire_book', label:'Acquire a distressed order book at 70% value? (needs cash ≥ ₹6 Cr)', options:['No','Yes'] },
+      ]
+    },
+  ],
+  5: [
+    { id:'pivot', num:1, title:'The Reckoning — Post-Subsidy Pivot', subtitle:'Sunset announced: next year the market is 30% of today. Allocate 100% of your forward effort (engine normalizes to 100).', icon:'🌅',
+      fields:[
+        { type:'slider', id:'pivot_cni', label:'C&I (commercial & industrial) push', min:0, max:100, step:5, default:34, unit:'%' },
+        { type:'slider', id:'pivot_om', label:'O&M annuity (service your installed base)', min:0, max:100, step:5, default:33, unit:'%' },
+        { type:'slider', id:'pivot_harvest', label:'Harvest cash (wind down, take profit)', min:0, max:100, step:5, default:33, unit:'%' },
+      ]
+    },
+    { id:'capability', num:2, title:'Capability & Price', subtitle:'What you keep now determines what survives the sunset.', icon:'🛠️',
+      fields:[
+        { type:'slider', id:'crews_retained', label:'Crews to retain into next year', min:0, max:40, default:15, unit:' crews' },
+        { type:'slider', id:'price_index', label:'Price vs reference (rivals may dump)', min:0.90, max:1.10, step:0.01, default:1.00, unit:'×' },
+      ]
+    },
+    { id:'exit', num:3, title:'The Acquisition Offer', subtitle:'An offer arrives at 1.2× this year’s (boom-inflated) revenue. The founder asks what you built.', icon:'📜',
+      fields:[
+        { type:'select', id:'acquisition', label:'Response to the acquisition offer', options:['Decline — build for the long game','Sell — take the boom-inflated exit','Negotiate'] },
+        { type:'textarea', id:'legacy_memo', label:'Legacy memo (used in debrief, unscored)', placeholder:'What did you build, and what did it cost? One paragraph to your successor.' },
+      ]
+    },
+  ],
+};
+
 function getDecisionDomains() {
   if (selectedCase==='B')    return DECISION_DOMAINS_ARC;
   if (selectedCase==='demo') return DECISION_DOMAINS_DEMO;
+  if (selectedCase==='C')    return DECISION_DOMAINS_SURYAN[getState().currentRound] || DECISION_DOMAINS_SURYAN[1];
   return DECISION_DOMAINS;
 }
 
@@ -2758,7 +2966,7 @@ function renderDecisions() {
           <div class="slider-wrap">
             <div class="slider-row">
               <input type="range" class="slider-input" id="field_${field.id}"
-                min="${field.min}" max="${field.max}" value="${field.default}"
+                min="${field.min}" max="${field.max}" step="${field.step || 1}" value="${field.default}"
                 oninput="document.getElementById('val_${field.id}').textContent=this.value+'${field.unit}';autosaveDraft('${field.id}',this.value)">
               <span class="slider-val" id="val_${field.id}">${field.default}${field.unit}</span>
             </div>
@@ -2958,9 +3166,34 @@ var ROUND_ASSESSMENTS_DEMO = {
   ]}
 };
 
+var ROUND_ASSESSMENTS_SURYAN = {
+  1:{ title:'Round 0 — Posture Declaration', considerations:[
+    { type:'think', icon:'💭', text:'<strong>On your posture:</strong> You are declaring how you will lead before you know the scoring weights. Command, Coach and Steward each read differently against the incidents to come. Choose the one you can hold under pressure — switching later costs morale and crews.' },
+    { type:'caution',icon:'📋',text:'<strong>On consistency:</strong> Every leadership incident this game is tagged aligned / partial / contradicted against this posture. Trust compounds when your actions match your words.' }
+  ]},
+  2:{ title:'Round 1 — The Surge', considerations:[
+    { type:'think', icon:'💭', text:'<strong>On the crew auction:</strong> Bidding high wins crews now — but wage inflation is contagious. Your winning bid drags every team’s payroll up next round, including your own existing crews.' },
+    { type:'risk',  icon:'⚠️', text:'<strong>On subcontracting:</strong> Subcontract crews are unlimited and cheap, but each point of subcontract share adds ~6pp to your defect rate — which surfaces publicly next round.' },
+    { type:'opp',   icon:'🔎', text:'<strong>On demand:</strong> You share one pool with every rival. Price, reputation and channel spend set your share. Capacity caps what you can actually capture — overbidding for demand you cannot serve is wasted.' }
+  ]},
+  3:{ title:'Round 2 — The Strain', considerations:[
+    { type:'risk',  icon:'⚠️', text:'<strong>On your defect reveal:</strong> Round 1’s quality is now public. How you respond — recall, quiet fix, or deny — is watched, and a cover-up can be exposed later at a heavier cost.' },
+    { type:'think', icon:'💭', text:'<strong>On the safety audit:</strong> This incident is scored against your declared posture. The cheapest answer now may be the most expensive to your trust score.' }
+  ]},
+  4:{ title:'Round 3 — The Crunch', considerations:[
+    { type:'caution',icon:'📋',text:'<strong>On the freeze:</strong> Your subsidy receivables are frozen and the WC line tightened. Fast growers are cornered hardest — the faster you grew, the deeper your cash gap.' },
+    { type:'think', icon:'💭', text:'<strong>On who you pay:</strong> The payment-priority ranking IS your leadership signal this round. Crews-first, bank-first and vendor-first each say something different about the company you are building.' }
+  ]},
+  5:{ title:'Round 4 — The Reckoning', considerations:[
+    { type:'opp',   icon:'🔎', text:'<strong>On the pivot:</strong> The subsidy sunsets to 30% of today. O&M annuity, C&I access and retained capability are the only things that survive — and they are gated by the reputation and crews you kept through the boom.' },
+    { type:'think', icon:'💭', text:'<strong>On the offer:</strong> Selling at 1.2× boom-inflated revenue looks great on the leaderboard’s financial number. But the full score weights survivability, trust and reputation — the gap is the lesson.' }
+  ]}
+};
+
 function getRoundAssessments() {
   if (selectedCase==='B')    return ROUND_ASSESSMENTS_ARC;
   if (selectedCase==='demo') return ROUND_ASSESSMENTS_DEMO;
+  if (selectedCase==='C')    return ROUND_ASSESSMENTS_SURYAN;
   return ROUND_ASSESSMENTS;
 }
 
@@ -3125,10 +3358,93 @@ const LB_TEAMS = [
 ];
 const RANK_ICONS = ['🥇','🥈','🥉','4','5','6'];
 
+// Competitive leaderboard + Market News (Suryan). Financial-only while the
+// session is active; full weighted 40/25/20/15 reveal once ended.
+async function renderCompetitiveLeaderboard(cont) {
+  if (!currentSession) { cont.innerHTML = '<div style="padding:32px;color:var(--muted);">No active session.</div>'; return; }
+  const ended = currentSession.status === 'ended';
+  const myId  = currentUser.isAdmin ? null : currentUser.teamId;
+  let teamRows = [], news = [];
+  try { teamRows = await dbGetTeams(currentSession.id); news = await dbGetMarketNews(currentSession.id); }
+  catch (e) { cont.innerHTML = '<div style="padding:32px;color:var(--red);">Failed to load: ' + escapeHtml(e.message) + '</div>'; return; }
+
+  const withState = teamRows.filter(t => t.state);
+  let html = '';
+
+  if (ended && window.PraxisEngine && withState.length) {
+    // ── FULL REVEAL ──
+    const scores = window.PraxisEngine.computeFinalScores(window.SURYAN_CONFIG,
+      withState.map(t => ({ id: t.id, name: t.display_name || t.slot, state: t.state })));
+    const nameOf = id => { const t = teamRows.find(x => x.id === id); return t ? (t.display_name || t.slot) : id; };
+    html += `<div style="margin-bottom:8px;font-size:13px;color:var(--volt);font-weight:700;">🏁 FINAL RESULT — full weighted score revealed</div>`;
+    html += `<div style="font-size:11px;color:var(--muted);margin-bottom:16px;line-height:1.5;">Financial 40% · Post-Subsidy Survivability 25% · Trust 20% · Reputation 15%. The gap vs the in-game (financial-only) ranking is the lesson.</div>`;
+    html += scores.map((s, i) => {
+      const mine = s.id === myId;
+      return `<div style="background:${mine?'var(--wire-2)':'var(--panel)'};border:1px solid ${mine?'var(--volt)':'var(--wire)'};border-radius:10px;padding:16px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="font-size:22px;width:34px;text-align:center;">${RANK_ICONS[i]||(i+1)}</div>
+          <div style="flex:1;"><div style="font-weight:700;font-size:16px;color:var(--ink);">${escapeHtml(nameOf(s.id))}${mine?' <span class="tag green" style="font-size:9px;">YOU</span>':''}</div></div>
+          <div style="font-size:24px;font-weight:800;color:var(--volt);">${s.total}</div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:var(--muted);flex-wrap:wrap;">
+          <span>Financial <b style="color:var(--ink)">${(s.financial*40).toFixed(1)}</b>/40</span>
+          <span>Survivability <b style="color:var(--ink)">${(s.survivability*25).toFixed(1)}</b>/25</span>
+          <span>Trust <b style="color:var(--ink)">${(s.trust*20).toFixed(1)}</b>/20</span>
+          <span>Reputation <b style="color:var(--ink)">${(s.reputation*15).toFixed(1)}</b>/15</span>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    // ── IN-GAME: financial-only ──
+    const ranked = withState.map(t => ({
+      id: t.id, name: t.display_name || t.slot,
+      fin: (t.state.cumulative_fcf || 0) + (t.state.last_ebitda || 0), cash: t.state.cash
+    })).sort((a, b) => b.fin - a.fin);
+    html += `<div style="margin-bottom:6px;font-size:13px;color:var(--ink);font-weight:700;">📊 Leaderboard — financial performance</div>`;
+    html += `<div style="font-size:11px;color:var(--amber);margin-bottom:16px;line-height:1.5;">⚠️ In-game standing shows the <b>financial component only</b>. Survivability, trust and reputation are sealed until the facilitator ends the session.</div>`;
+    if (!ranked.length) { html += `<div style="padding:24px;color:var(--muted);">No rounds resolved yet.</div>`; }
+    html += ranked.map((r, i) => {
+      const mine = r.id === myId;
+      return `<div style="display:flex;align-items:center;gap:14px;background:${mine?'var(--wire-2)':'var(--panel)'};border:1px solid ${mine?'var(--volt)':'var(--wire)'};border-radius:10px;padding:14px 16px;margin-bottom:8px;">
+        <div style="font-size:18px;width:30px;text-align:center;">${RANK_ICONS[i]||(i+1)}</div>
+        <div style="flex:1;font-weight:700;color:var(--ink);">${escapeHtml(r.name)}${mine?' <span class="tag green" style="font-size:9px;">YOU</span>':''}</div>
+        <div style="text-align:right;"><div style="font-weight:800;color:var(--volt);">₹${r.fin.toFixed(1)} Cr</div><div style="font-size:10px;color:var(--muted);">cum. FCF + EBITDA</div></div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Market News feed (newest round first) ──
+  html += `<div style="margin:26px 0 10px;font-size:13px;font-weight:700;color:var(--ink);">📰 Market News</div>`;
+  if (!news.length) { html += `<div style="padding:16px;color:var(--muted);font-size:12px;">No market news yet. It publishes when the facilitator resolves a round.</div>`; }
+  else {
+    const byRound = {};
+    news.forEach(n => { (byRound[n.round] = byRound[n.round] || []).push(n); });
+    Object.keys(byRound).map(Number).sort((a, b) => b - a).forEach(rd => {
+      html += `<div style="font-size:10px;font-weight:700;color:var(--volt);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;">Round ${rd - 1}</div>`;
+      byRound[rd].forEach(n => {
+        const dc = n.reputation_delta < 0 ? 'var(--red)' : n.reputation_delta > 0 ? 'var(--volt-dim)' : 'var(--muted)';
+        html += `<div style="background:var(--panel);border-left:3px solid ${dc};border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+          <div style="font-weight:700;font-size:13px;color:var(--ink);">${escapeHtml(n.headline)}${n.reputation_delta?` <span style="color:${dc};font-size:11px;">(rep ${n.reputation_delta>0?'+':''}${n.reputation_delta})</span>`:''}</div>
+          ${n.detail?`<div style="font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;">${escapeHtml(n.detail)}</div>`:''}
+        </div>`;
+      });
+    });
+  }
+  cont.innerHTML = html;
+}
+
 function renderLeaderboard() {
   const state = getState();
   const cont  = document.getElementById('leaderboardContent');
   const myId  = currentUser.isAdmin ? null : currentUser.teamId;
+
+  // Competitive (Suryan): dedicated view — financial-only during play, full
+  // 40/25/20/15 reveal at End Session — plus the shared Market News feed.
+  if (isCompetitiveSession()) {
+    cont.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted);">Loading market…</div>';
+    renderCompetitiveLeaderboard(cont);
+    return;
+  }
 
   // P1 FIX: determine which teams have actual outcome data
   const hasOutcomes = state.outcomes && Object.keys(state.outcomes).length > 0;
@@ -3240,7 +3556,7 @@ async function renderAdmin() {
   }
 
   const teams = state._teams || [];
-  const slotToKey = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
+  const slotToKey = state._slotToKey || {};
   const submissionStatus = teams.map(t => ({
     id: t.id, slot: t.slot, name: t.display_name,
     submitted: !!submittedTeamIds[t.id]
@@ -3325,9 +3641,11 @@ async function renderAdmin() {
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <button class="btn-volt" onclick="adminToggleRound()">${state.roundOpen?'🔒 Close Decision Window':'🔓 Open Decision Window'}</button>
+        ${isCompetitiveSession() ? `<button class="btn-primary" onclick="adminResolveRound()" style="background:var(--volt);">⚙️ ${state.currentRound===1?'Record Postures':'Resolve Round '+(state.currentRound-1)} →</button>` : ''}
         ${state.currentRound < maxRounds ? `<button class="btn-primary" onclick="adminAdvanceRound()">Advance to Q${state.currentRound+1} →</button>` : '<span class="tag green">Final Round</span>'}
         <button class="btn-secondary" onclick="adminResetGame()" style="margin-left:auto;border-color:var(--red);color:var(--red);">Reset Simulation</button>
       </div>
+      ${isCompetitiveSession() ? `<div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.5;">Competitive flow: close the window → <b>Resolve</b> (runs the shared-market engine across all teams) → Market News + outcomes publish automatically → advance. Re-resolving overwrites this round.</div>` : ''}
     </div>
 
     <!-- TEAM STATUS — live from DB -->
@@ -3434,9 +3752,23 @@ var CB_BANK_DEMO = [
   { q:'Q4', t:'Series A Term Sheet Received', b:'A tier-1 VC firm has sent a non-binding term sheet at ₹120 Cr for 20% equity. They want contribution margin positive in 2 cities within 90 days of close.' },
 ];
 
+var CB_BANK_SURYAN = [
+  { q:'R1', t:'Wage Offers Spike +20%', b:'Rival installers are dangling +20% wages to lure trained crews. The auction for 8 new crews opens now — sealed bids on quarterly wage.' },
+  { q:'R2', t:'Wage Shock +30%', b:'The market wage index jumps +30% vs Q0, compounded with your auction outcomes. Every crew you hold just got more expensive.' },
+  { q:'R2', t:'Quality Reveal — Market News Live', b:'Round 1 defect rates are realized and published PER TEAM in the first Market News broadcast. Reputation moves are now public.' },
+  { q:'R3', t:'Subsidy Freeze', b:'The government freezes ALL subsidy disbursements. Every rupee of Q1+Q2 subsidy receivable is now uncollected. Cash — not demand — is the constraint.' },
+  { q:'R3', t:'Working Capital Tightening', b:'Your bank cuts the working-capital line from ₹12 Cr to ₹8 Cr, effective immediately.' },
+  { q:'R3', t:'Payday / Cash Call', b:'Payroll, vendors and the bank are all due. Your cash gap scales with how aggressively you grew — fast growers are cornered hardest.' },
+  { q:'R3', t:'Distress Market Opens', b:'Teams that defer salaries are flagged "distressed"; their crews enter an open poaching pool and their order books are available at a discount.' },
+  { q:'R4', t:'Disbursement Resumes (with penalty)', b:'Frozen subsidies are released MINUS an audit penalty of 5% + 2% per point of lifetime defect rate above 3% (cap 15%). Clean operators lose the least.' },
+  { q:'R4', t:'Sunset Announced', b:'The scheme sunsets: next year’s market is just 30% of this round’s pool. What survives is annuity, C&I access, and retained capability.' },
+  { q:'R4', t:'Acquisition Offer', b:'A strategic buyer offers 1.2× your current-year (boom-inflated) revenue. Sell, decline, or negotiate.' },
+];
+
 function getCurveballBank() {
   if (selectedCase==='B')    return CB_BANK_B;
   if (selectedCase==='demo') return CB_BANK_DEMO;
+  if (selectedCase==='C')    return CB_BANK_SURYAN;
   return CB_BANK_A;
 }
 
@@ -3444,7 +3776,7 @@ function renderCurveballBank() {
   const grid  = document.getElementById('cbBankGrid');
   const title = document.getElementById('cbBankTitle');
   if (!grid) return;
-  if (title) title.textContent = 'Curveball Idea Bank — ' + (selectedCase==='B'?'Case B: ARC Motors':selectedCase==='demo'?'Demo: ShopPulse':'Case A: VOLTA Motors');
+  if (title) title.textContent = 'Curveball Idea Bank — ' + (selectedCase==='B'?'Case B: ARC Motors':selectedCase==='demo'?'Demo: ShopPulse':selectedCase==='C'?'Case C: Suryan Energy':'Case A: VOLTA Motors');
   grid.innerHTML = getCurveballBank().map(cb => {
     const st = cb.t.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const sb = cb.b.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
@@ -3477,7 +3809,7 @@ async function adminCreateSession() {
   if (btn) { btn.textContent = 'Create Session'; btn.disabled = false; }
   if (!sess) { showNotification('Failed to create session. Check Supabase connection.', 'error'); return; }
   currentSession = sess;
-  selectedCase   = caseSlug==='volta'?'A':caseSlug==='arc'?'B':'demo';
+  selectedCase   = caseSlug==='volta'?'A':caseSlug==='arc'?'B':caseSlug==='suryan'?'C':'demo';
   applyCaseConfig();
   setSessionInURL(sess.code);
   _stateCache = null;
@@ -3550,13 +3882,13 @@ async function adminPublishOutcomes() {
   const btn    = document.querySelector('[onclick="adminPublishOutcomes()"]');
   if (btn) { btn.textContent = 'Publishing...'; btn.disabled = true; }
 
+  const slotToKey = state._slotToKey || {};
   const promises = (teams.length > 0 ? teams : LB_TEAMS.map(t=>({id:t.id,slot:t.id.replace('team','')}))).map(async t => {
-    const revenue = parseFloat(document.getElementById('score_revenue_'+t.id)?.value) || state.metrics[t.slot]?.revenue || 0;
-    const gm      = parseFloat(document.getElementById('score_gm_'+t.id)?.value)      || state.metrics[t.slot]?.grossMargin || 0;
-    const runway  = parseFloat(document.getElementById('score_runway_'+t.id)?.value)  || state.metrics[t.slot]?.cashRunway || 0;
-    const pts     = parseFloat(document.getElementById('score_pts_'+t.id)?.value)     || 65;
-    const slotToKey = { alpha:'team1', beta:'team2', gamma:'team3', delta:'team4', epsilon:'team5', zeta:'team6' };
     const teamKey = slotToKey[t.slot] || t.id;
+    const revenue = parseFloat(document.getElementById('score_revenue_'+t.id)?.value) || state.metrics[teamKey]?.revenue || 0;
+    const gm      = parseFloat(document.getElementById('score_gm_'+t.id)?.value)      || state.metrics[teamKey]?.grossMargin || 0;
+    const runway  = parseFloat(document.getElementById('score_runway_'+t.id)?.value)  || state.metrics[teamKey]?.cashRunway || 0;
+    const pts     = parseFloat(document.getElementById('score_pts_'+t.id)?.value)     || 65;
     const metrics = {
       revenue, grossMargin: gm, cashRunway: runway,
       marketShare: state.metrics[teamKey]?.marketShare || 50,
@@ -3580,6 +3912,76 @@ function adminResetGame() {
   renderApp();
   renderAdmin();
   showNotification('Simulation reset to Q1.', 'info');
+}
+
+// =================================================
+//  COMPETITIVE RESOLUTION (Suryan) — cross-team engine bridge
+// =================================================
+function isCompetitiveSession() {
+  const slug = currentSession && currentSession.cases && currentSession.cases.slug;
+  return selectedCase === 'C' || slug === 'suryan';
+}
+
+// GM "Resolve Round": reads ALL teams' decisions + prior state, runs the pure
+// engine once for the whole session, and writes outcomes + team state + market
+// news. Idempotent — re-resolving a round overwrites (keyed on session+round).
+async function adminResolveRound() {
+  if (!currentSession) { showNotification('No active session.', 'error'); return; }
+  if (!window.PraxisEngine) { showNotification('Engine not loaded (praxis_engine.js).', 'error'); return; }
+  const round = currentSession.current_round;
+  const btn = document.querySelector('[onclick="adminResolveRound()"]');
+  if (btn) { btn.textContent = 'Resolving…'; btn.disabled = true; }
+  try {
+    const teamRows = await dbGetTeams(currentSession.id);
+
+    // Round 0 (app-round 1) = posture declaration: no engine resolution, just
+    // record each team's declared posture from its decisions.
+    if (round === 1) {
+      const decs = await dbGetAllDecisions(currentSession.id, 1);
+      for (const t of teamRows) {
+        const p = window.PraxisEngine.parsePosture((decs[t.id] || {}).posture);
+        await dbSaveTeamState(t.id, t.state || window.PraxisEngine.initState(window.SURYAN_CONFIG), p || t.posture, false);
+      }
+      showNotification('Postures recorded. Advance to Round 1 to begin play.', 'success');
+      if (btn) { btn.textContent = 'Resolve Round →'; btn.disabled = false; }
+      renderAdmin();
+      return;
+    }
+
+    const decisions = await dbGetAllDecisions(currentSession.id, round);
+    const engineTeams = teamRows.map(t => ({
+      id: t.id, name: t.display_name || t.slot, posture: t.posture,
+      posture_switched: !!t.posture_switched, state: t.state || null
+    }));
+    const res = window.PraxisEngine.resolveRound({
+      config: window.SURYAN_CONFIG, round, teams: engineTeams, decisions
+    });
+
+    // Persist outcomes + state, then (re)publish this round's market news.
+    for (const t of res.teams) {
+      await dbPublishCompetitiveOutcome(currentSession.id, t.id, round, t.outcome, t.detail);
+      await dbSaveTeamState(t.id, t.state, t.posture, t.posture_switched);
+    }
+    await dbClearMarketNews(currentSession.id, round);
+    await dbInsertMarketNews(currentSession.id, round, res.news);
+
+    _stateCache = null;
+    await loadStateFromDB();
+    renderAdmin();
+    showNotification('Round ' + (round - 1) + ' resolved — ' + res.teams.length + ' teams, ' + res.news.length + ' news items. Reveal Market News, then outcomes.', 'success');
+  } catch (e) {
+    console.error('resolveRound', e);
+    showNotification('Resolve failed: ' + e.message, 'error');
+  }
+  if (btn) { btn.textContent = 'Resolve Round →'; btn.disabled = false; }
+}
+
+// Final weighted scores for the End Session reveal (competitive only).
+async function computeSessionFinalScores() {
+  const teamRows = await dbGetTeams(currentSession.id);
+  const teams = teamRows.map(t => ({ id: t.id, name: t.display_name || t.slot, state: t.state || {} }));
+  const scores = window.PraxisEngine.computeFinalScores(window.SURYAN_CONFIG, teams);
+  return scores.map(s => ({ ...s, name: (teams.find(t => t.id === s.id) || {}).name }));
 }
 
 // =================================================
@@ -3607,6 +4009,7 @@ const _TEAM_NAME_POOLS = {
   volta: ['Quasar','Helix','Voltage','Surge','Pulse','Ignite','Spark','Photon','Dynamo','Catalyst','Flux','Flare','Plasma','Kelvin','Tesla','Beacon'],
   arc:   ['Vector','Trajectory','Apex','Vertex','Glide','Compass','Orbit','Tangent','Axis','Pivot','Vortex','Slipstream','Mach','Velocity','Drift','Span'],
   demo:  ['Nimbus','Cipher','Vault','Gateway','Tempo','Cargo','Conduit','Express','Relay','Dispatch','Cascade','Threshold','Spire','Atlas','Pioneer','Summit'],
+  suryan:['Helios','Aditya','Prabha','Kiran','Surya','Tejas','Ravi','Aftab','Roshni','Arka','Bhaskar','Diya','Ujjwal','Savitr','Mihir','Aruna'],
 };
 
 function _shuffleSlice(arr, n) {
@@ -3621,7 +4024,7 @@ function _genPassword() { return _shuffleSlice(_PWD_WORDS, 3).join('-'); }
 function _genTeamNames(slug, n) { return _shuffleSlice(_TEAM_NAME_POOLS[slug] || _TEAM_NAME_POOLS.volta, n); }
 function _slugify(s) { return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24) || 'team'; }
 function _maxRoundsForCase(slug) { return slug === 'demo' ? 4 : 5; }
-function _caseLabel(slug) { return slug==='volta' ? 'VOLTA Motors' : slug==='arc' ? 'ARC Motors' : 'ShopPulse (Demo)'; }
+function _caseLabel(slug) { return slug==='volta' ? 'VOLTA Motors' : slug==='arc' ? 'ARC Motors' : slug==='suryan' ? 'Suryan Energy' : 'ShopPulse (Demo)'; }
 
 function _genSessionCode() {
   // Skip 0/O/1/I/L to avoid read-aloud confusion. crypto-random when available.
@@ -3755,6 +4158,7 @@ function renderCohortWizard() {
           <option value="volta"${d.caseSlug==='volta'?' selected':''}>Case A — VOLTA Motors (5 rounds max)</option>
           <option value="arc"${d.caseSlug==='arc'?' selected':''}>Case B — ARC Motors (5 rounds max)</option>
           <option value="demo"${d.caseSlug==='demo'?' selected':''}>Demo — ShopPulse (4 rounds max)</option>
+          <option value="suryan"${d.caseSlug==='suryan'?' selected':''}>Case C — Suryan Energy · competitive (5 rounds max)</option>
         </select>
       </div>
       <div>
@@ -3867,9 +4271,8 @@ function renderCohortReview() {
   html += `</tbody></table></div>`;
 
   html += `<div style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;justify-content:flex-end">
-    <button class="btn-secondary" onclick="maSendTestEmail()">Send test to me</button>
     <button class="btn-secondary" onclick="maCopyAllCreds()">Copy all (TSV)</button>
-    <button class="btn-volt" onclick="maConfirmAndSend()">Send to all reps &amp; create cohort &rarr;</button>
+    <button class="btn-volt" onclick="maConfirmAndSend()">Save cohort &amp; continue &rarr;</button>
   </div></div>`;
 
   cont.innerHTML = html;
@@ -3894,11 +4297,38 @@ function maCopyAllCreds() {
   );
 }
 
-async function maSendTestEmail() {
+// Build the mailto: link for one team. Opens the GM's default email client with the
+// invitation pre-composed; GM hits Send. No backend, no API key, no rate limit.
+function _mailtoForTeam(d, t) {
+  const baseUrl = window.location.origin + window.location.pathname;
+  const url     = `${baseUrl}#/session/${d.sessionCode}/team/${t.username}`;
+  const subject = `Your Praxis team — ${t.teamName} (${d.cohort})`;
+  const body =
+    `Hi,\n\n` +
+    `You're representing Team ${t.teamName} in Praxis — the live leadership simulation for ${d.cohort}.\n\n` +
+    `Your login link:\n${url}\n\n` +
+    `Your team password:\n${t.password}\n\n` +
+    `Forward this email to your teammates so they can join the same team. The link drops everyone straight to the password screen.\n\n` +
+    `Questions? Reply to this email.\n\n` +
+    `— Praxis`;
+  return `mailto:${encodeURIComponent(t.repEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function maEmailRep(i) {
   const d = _maDraft;
-  if (!d.gmEmail) { showNotification('Add your GM email in step 1 first.', 'error'); return; }
-  // Phase 2: real Resend Edge Function. For now, stub.
-  showNotification(`(Phase 1 stub) Test email would go to ${d.gmEmail}. Edge Function lands in Phase 2.`, 'info');
+  if (!d || !d.teams || !d.teams[i]) return;
+  window.location.href = _mailtoForTeam(d, d.teams[i]);
+}
+
+function maEmailAllReps() {
+  const d = _maDraft;
+  if (!d || !d.teams) return;
+  // Most browsers block multiple mailto: navigations in a row. Open them spaced
+  // out via window.open so each one gets its own tab/composer.
+  d.teams.forEach((t, i) => {
+    setTimeout(() => { window.open(_mailtoForTeam(d, t), '_blank'); }, i * 400);
+  });
+  showNotification('Opening one email composer per team. Send each, then close the tab.', 'info');
 }
 
 async function maConfirmAndSend() {
@@ -3949,27 +4379,57 @@ async function maConfirmAndSend() {
 function renderCohortSent() {
   const cont = document.getElementById('masterAdminContent');
   const d = _maDraft;
+  const baseUrl = window.location.origin + window.location.pathname;
 
-  let html = `<div class="card" style="border-left:3px solid var(--volt);text-align:center;padding:48px 32px;max-width:640px;margin:0 auto">
-    <div style="font-size:44px;margin-bottom:8px">🎉</div>
-    <div class="card-title" style="font-size:22px;margin-bottom:6px">Cohort created</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:24px">${escapeHtml(d.cohort)} · ${escapeHtml(_caseLabel(d.caseSlug))} · ${d.teamCount} teams · ${d.rounds} rounds</div>
-
-    <div style="background:var(--wire-2);border-radius:8px;padding:16px;margin-bottom:18px;text-align:left">
-      <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Session join code</div>
-      <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--volt-dim);letter-spacing:3px">${escapeHtml(d.sessionCode)}</div>
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:6px">
+        <span style="font-size:24px">🎉</span>
+        <span class="admin-section-title" style="margin-bottom:0">Cohort saved · ready to invite</span>
+      </div>
+      <div class="card-title" style="font-size:20px">${escapeHtml(d.cohort)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">${d.teamCount} teams · ${d.rounds} rounds · ${escapeHtml(_caseLabel(d.caseSlug))} · session code <span style="font-family:var(--mono);color:var(--ink);font-weight:700;letter-spacing:2px">${escapeHtml(d.sessionCode)}</span></div>
     </div>
-
-    <div style="background:#fff8e1;border:1px solid #ffe0a0;border-radius:8px;padding:14px 16px;margin-bottom:18px;text-align:left">
-      <div style="font-size:12px;color:#7a5500;font-weight:600;margin-bottom:6px">⚠ Phase 1: emails not sent automatically yet</div>
-      <div style="font-size:12px;color:#7a5500;line-height:1.5">The cohort is saved to the database. Until the Resend Edge Function is deployed in Phase 2, copy credentials and forward them to reps yourself.</div>
-    </div>
-
-    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-      <button class="btn-secondary" onclick="maCopyAllCreds()">Copy all credentials</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-secondary" onclick="maCopyAllCreds()">Copy all (TSV)</button>
       <button class="btn-volt" onclick="maEnterFromDraft()">Enter session as Game Master &rarr;</button>
     </div>
-    <div style="margin-top:14px"><button class="btn-ghost" onclick="maExitWizard()">Back to all sessions</button></div>
+  </div>`;
+
+  html += `<div class="card" style="border-left:3px solid var(--volt)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="admin-section-title" style="margin-bottom:0">Send invitations</div>
+      <button class="btn-secondary" onclick="maEmailAllReps()" style="padding:8px 14px;font-size:12px">📧 Open all email composers (${d.teams.length})</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Click "Email rep" on each row to open your default email client with the invitation pre-composed. Hit Send in your client. (No emails are sent automatically.)</div>
+    <div style="overflow-x:auto">
+    <table class="ma-sessions-table" style="width:100%;font-size:13px;min-width:780px">
+      <thead><tr>
+        <th style="width:14%">Team</th>
+        <th style="width:14%">Username</th>
+        <th style="width:20%">Password</th>
+        <th style="width:24%">Rep email</th>
+        <th style="width:28%">Action</th>
+      </tr></thead>
+      <tbody>`;
+  d.teams.forEach((t, i) => {
+    const url = `${baseUrl}#/session/${d.sessionCode}/team/${t.username}`;
+    html += `<tr>
+      <td style="font-weight:600">${escapeHtml(t.teamName)}</td>
+      <td style="font-family:var(--mono);color:var(--volt-dim);font-weight:600">${escapeHtml(t.username)}</td>
+      <td style="font-family:var(--mono);font-size:12px">${escapeHtml(t.password)}</td>
+      <td style="font-size:12px">${escapeHtml(t.repEmail)}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn-volt" style="padding:6px 12px;font-size:11px" onclick="maEmailRep(${i})">📧 Email rep</button>
+        <button class="btn-ghost" style="padding:6px 10px;font-size:11px" title="Copy login URL" onclick="navigator.clipboard.writeText('${escapeHtml(url)}');showNotification('Login URL copied.','success')">Copy URL</button>
+      </td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>
+  </div>`;
+
+  html += `<div style="display:flex;justify-content:flex-end;margin-top:16px">
+    <button class="btn-ghost" onclick="maExitWizard()">Back to all sessions</button>
   </div>`;
 
   cont.innerHTML = html;
@@ -4112,7 +4572,7 @@ async function maEnterSession(sessionId) {
   if (!sess) return;
   currentSession = sess;
   const cSlug    = sess.cases ? sess.cases.slug : 'volta';
-  selectedCase   = cSlug==='volta'?'A':cSlug==='arc'?'B':'demo';
+  selectedCase   = cSlug==='volta'?'A':cSlug==='arc'?'B':cSlug==='suryan'?'C':'demo';
   applyCaseConfig();
   setSessionInURL(sess.code);
   _stateCache = null;
@@ -4156,18 +4616,30 @@ function _isLocalhost() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const code = getSessionCodeFromURL();
-  if (code) {
-    const sess = await dbGetSession(code);
+  const route = getRouteFromURL();
+
+  if (route.code) {
+    const sess = await dbGetSession(route.code);
     if (sess) {
       currentSession = sess;
       const cSlug    = (sess.cases ? sess.cases.slug : null) || 'volta';
-      selectedCase   = cSlug==='volta'?'A':cSlug==='arc'?'B':'demo';
+      selectedCase   = cSlug==='volta'?'A':cSlug==='arc'?'B':cSlug==='suryan'?'C':'demo';
       QUARTERS       = QUARTERS_BY_CASE[selectedCase] || QUARTERS_BY_CASE['A'];
-      _sessionPreselected = true;
-      showNotification('Session ' + code + ' loaded: ' + (sess.cohort_name||''), 'success');
+
+      if (route.team) {
+        // Full deep link: jump participants past the role chooser straight to password entry.
+        const team = await dbGetTeam(sess.id, route.team);
+        if (team) {
+          _pwTeamFromURL = team;
+          loginAsParticipant();
+        } else {
+          showNotification('Team "' + route.team + '" not found in session ' + route.code + '.', 'error');
+        }
+      } else {
+        showNotification('Session ' + route.code + ' loaded: ' + (sess.cohort_name||''), 'info');
+      }
     } else {
-      showNotification('Session "' + code + '" not found.', 'error');
+      showNotification('Session "' + route.code + '" not found.', 'error');
     }
   }
 
