@@ -1729,6 +1729,17 @@ async function dbGetSessionWeight(sessionId) {
     .eq('session_id', sessionId).maybeSingle();
   return data ? data.task_weight : null;
 }
+// Behavioural (People-axis) scoring via the score-behavioural Edge Function.
+// The Anthropic key stays server-side. ⚠️ Returns the raw score — GM/server use
+// only; do NOT render into participant-visible views (see function header).
+async function dbScoreBehavioural(responseText, roundContext) {
+  const sb = getSupabase(); if (!sb) return { error: 'no client' };
+  const { data, error } = await sb.functions.invoke('score-behavioural', {
+    body: { response_text: responseText, round_context: roundContext || '' },
+  });
+  if (error) return { error: error.message || 'scoring failed' };
+  return data;
+}
 
 // Cohort wizard backend — wraps the create_cohort RPC.
 // Caller must already be authenticated (Supabase OTP).
