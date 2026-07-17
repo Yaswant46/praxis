@@ -573,6 +573,85 @@
   // Real facilitator-provided scoring key (v1.0). Per-option, per-domain points;
   // answer-pattern contradiction pairs; insight lines + 90-day experiments.
   // Internal D/A/R/E letters + consistency/contradiction data are GM-only.
+  // Participant-facing question + option copy (no domain letters shown).
+  var QUESTIONNAIRE_CONTENT = {
+    Q1: { type: 'Dispositional', text: 'In high-stakes situations, how do you typically arrive at a decision?', options: {
+      A: 'I form a view quickly and refine it as information comes in.',
+      B: 'I wait until I have enough information before committing.',
+      C: 'I surface the key trade-off and decide based on which risk I\'m more willing to carry.',
+    } },
+    Q2: { type: 'Dispositional', text: 'When your team is moving toward a decision you\'re unsure about, you:', options: {
+      A: 'Voice your doubt clearly, even if it slows things down.',
+      B: 'Go along and course-correct later if needed.',
+      C: 'Ask one sharp question that forces the team to examine the assumption.',
+    } },
+    Q3: { type: 'Simulation', text: 'During the simulation, when a teammate was quiet or disengaged, you:', options: {
+      A: 'Noticed but stayed focused on the decision at hand.',
+      B: 'Paused to check in with them, even if it cost time.',
+      C: 'Brought them in by asking for their view directly.',
+    } },
+    Q4: { type: 'Dispositional', text: 'What drives you most when executing on a plan?', options: {
+      A: 'Hitting the outcome — the method is secondary.',
+      B: 'Making sure the team is aligned and moving together.',
+      C: 'Keeping the plan honest — adjusting when the data says to.',
+    } },
+    Q5: { type: 'Simulation', text: 'In the rounds where your team had limited time, how did you make the call?', options: {
+      A: 'I drove toward the most defensible option, even without consensus.',
+      B: 'I deferred to the person who seemed most confident.',
+      C: 'I tried to find the option that the team could collectively stand behind.',
+    } },
+    Q6: { type: 'Dispositional', text: 'When making decisions that affect others, you tend to:', options: {
+      A: 'Factor in people impact as a key variable alongside the outcome.',
+      B: 'Optimise for the outcome first, then manage the people side after.',
+      C: 'Look for solutions where the outcome and people impact are both acceptable.',
+    } },
+    Q7: { type: 'Simulation', text: 'In rounds where the ethical path and the winning path were in tension, you:', options: {
+      A: 'Chose what was right, even at the cost of the score.',
+      B: 'Found a way to justify the winning move as acceptable.',
+      C: 'Named the tension out loud but deferred to the team\'s call.',
+    } },
+    Q8: { type: 'Dispositional', text: 'After a poor outcome, your first instinct is to:', options: {
+      A: 'Identify what went wrong and fix the input for next time.',
+      B: 'Understand how the team is feeling before moving to solutions.',
+      C: 'Accept it and focus entirely on the next opportunity.',
+    } },
+    Q9: { type: 'Dispositional', text: 'In group settings, when you disagree with the direction, you:', options: {
+      A: 'State your position clearly, even knowing you might be outvoted.',
+      B: 'Look for a middle position that keeps the group together.',
+      C: 'Try to understand why others hold their view before advocating for yours.',
+    } },
+    Q10: { type: 'Simulation', text: 'Looking back at the simulation, the moments you felt most uncomfortable happened when:', options: {
+      A: 'The team moved too fast without thinking through consequences.',
+      B: 'We spent too long deliberating and lost clarity.',
+      C: 'The right answer and the winning answer weren\'t the same thing.',
+    } },
+    Q11: { type: 'Dispositional', text: 'You are most uncomfortable when a leader:', options: {
+      A: 'Moves too fast without hearing dissent.',
+      B: 'Prolongs debate when the direction is already clear.',
+      C: 'Bends their stated values when the stakes are high enough.',
+    } },
+    Q12: { type: 'Simulation', text: 'In rounds where your team disagreed, how did you handle it?', options: {
+      A: 'I pushed for the view I believed was right.',
+      B: 'I looked for the position that brought the team together.',
+      C: 'I tried to understand why people held the views they did before advocating for mine.',
+    } },
+    Q13: { type: 'Simulation', text: 'Looking back at your team\'s decisions across all rounds — the ones you\'re least comfortable with happened because:', options: {
+      A: 'We optimised too hard for the outcome and cut corners we shouldn\'t have.',
+      B: 'We spent too long aligning and ran out of time to think clearly.',
+      C: 'We didn\'t have enough information and made calls we couldn\'t fully stand behind.',
+    } },
+    Q14: { type: 'Dispositional', text: 'When you have more context than your team on something important, you:', options: {
+      A: 'Share it fully and let the team decide with complete information.',
+      B: 'Use it to steer the team toward what you believe is right.',
+      C: 'Check whether the context genuinely changes the answer before raising it.',
+    } },
+    Q15: { type: 'Simulation', text: 'There was at least one moment in the simulation where you privately disagreed with your team\'s direction. What did you do?', options: {
+      A: 'Said it clearly — my job is to put the right view on the table, not just to align.',
+      B: 'Let it go — the team\'s call matters more than being right.',
+      C: 'Raised it once, didn\'t push when it wasn\'t taken up, and committed to the direction.',
+    } },
+  };
+
   var DARE_SCORING_KEY = {
     version: '1.0',
     totalQuestions: 15,
@@ -714,7 +793,8 @@
     incidentTag: incidentTag, resolveRound: resolveRound, clamp: clamp,
     computeTwoAxisScore: computeTwoAxisScore, classifyQuadrant: classifyQuadrant,
     // Workstream B — DARE questionnaire (real key v1.0)
-    DARE_SCORING_KEY: DARE_SCORING_KEY, scoreQuestionnaire: scoreQuestionnaire,
+    DARE_SCORING_KEY: DARE_SCORING_KEY, QUESTIONNAIRE_CONTENT: QUESTIONNAIRE_CONTENT,
+    scoreQuestionnaire: scoreQuestionnaire,
     getInsightLine: getInsightLine, get90DayExperiment: get90DayExperiment,
     getQuadrantLabel: getQuadrantLabel, buildGMDashboardEntry: buildGMDashboardEntry,
   };
