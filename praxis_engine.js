@@ -541,6 +541,249 @@
     return { round: round, teams: teams, news: news };
   }
 
+  // ── Workstream B: two-axis (Task/People) scoring + quadrant ─────────────────
+  // Applies to ALL cases (not Suryan-specific). task_weight is GM-only and comes
+  // from session_secrets — NEVER from participant-readable data. People weight is
+  // always (100 − task_weight), computed. Composite is GM-view only; Task and
+  // People are shown separately to participants.
+  /**
+   * Combine a Task score and People score into the GM composite using the
+   * GM-only task weight. Returns task/people (participant-safe) plus the
+   * composite + weights (GM-only).
+   */
+  function computeTwoAxisScore(taskScore, peopleScore, taskWeight) {
+    var tw = clamp(Math.round(taskWeight), 0, 100);
+    var pw = 100 - tw;
+    var task = clamp(taskScore, 0, 100);
+    var people = clamp(peopleScore, 0, 100);
+    return {
+      task: round2(task), people: round2(people),
+      task_weight: tw, people_weight: pw,
+      composite: round2(task * tw / 100 + people * pw / 100),
+    };
+  }
+
+  // Backward-compatible label-only wrapper over the canonical getQuadrantLabel
+  // (hi 65 / lo 45). GM-dashboard / scorecard only.
+  function classifyQuadrant(task, people) {
+    return getQuadrantLabel(task, people).label;
+  }
+
+  // ── Workstream B: individual leadership questionnaire (DARE) ────────────────
+  // Real facilitator-provided scoring key (v1.0). Per-option, per-domain points;
+  // answer-pattern contradiction pairs; insight lines + 90-day experiments.
+  // Internal D/A/R/E letters + consistency/contradiction data are GM-only.
+  // Participant-facing question + option copy (no domain letters shown).
+  var QUESTIONNAIRE_CONTENT = {
+    Q1: { type: 'Dispositional', text: 'In high-stakes situations, how do you typically arrive at a decision?', options: {
+      A: 'I form a view quickly and refine it as information comes in.',
+      B: 'I wait until I have enough information before committing.',
+      C: 'I surface the key trade-off and decide based on which risk I\'m more willing to carry.',
+    } },
+    Q2: { type: 'Dispositional', text: 'When your team is moving toward a decision you\'re unsure about, you:', options: {
+      A: 'Voice your doubt clearly, even if it slows things down.',
+      B: 'Go along and course-correct later if needed.',
+      C: 'Ask one sharp question that forces the team to examine the assumption.',
+    } },
+    Q3: { type: 'Simulation', text: 'During the simulation, when a teammate was quiet or disengaged, you:', options: {
+      A: 'Noticed but stayed focused on the decision at hand.',
+      B: 'Paused to check in with them, even if it cost time.',
+      C: 'Brought them in by asking for their view directly.',
+    } },
+    Q4: { type: 'Dispositional', text: 'What drives you most when executing on a plan?', options: {
+      A: 'Hitting the outcome — the method is secondary.',
+      B: 'Making sure the team is aligned and moving together.',
+      C: 'Keeping the plan honest — adjusting when the data says to.',
+    } },
+    Q5: { type: 'Simulation', text: 'In the rounds where your team had limited time, how did you make the call?', options: {
+      A: 'I drove toward the most defensible option, even without consensus.',
+      B: 'I deferred to the person who seemed most confident.',
+      C: 'I tried to find the option that the team could collectively stand behind.',
+    } },
+    Q6: { type: 'Dispositional', text: 'When making decisions that affect others, you tend to:', options: {
+      A: 'Factor in people impact as a key variable alongside the outcome.',
+      B: 'Optimise for the outcome first, then manage the people side after.',
+      C: 'Look for solutions where the outcome and people impact are both acceptable.',
+    } },
+    Q7: { type: 'Simulation', text: 'In rounds where the ethical path and the winning path were in tension, you:', options: {
+      A: 'Chose what was right, even at the cost of the score.',
+      B: 'Found a way to justify the winning move as acceptable.',
+      C: 'Named the tension out loud but deferred to the team\'s call.',
+    } },
+    Q8: { type: 'Dispositional', text: 'After a poor outcome, your first instinct is to:', options: {
+      A: 'Identify what went wrong and fix the input for next time.',
+      B: 'Understand how the team is feeling before moving to solutions.',
+      C: 'Accept it and focus entirely on the next opportunity.',
+    } },
+    Q9: { type: 'Dispositional', text: 'In group settings, when you disagree with the direction, you:', options: {
+      A: 'State your position clearly, even knowing you might be outvoted.',
+      B: 'Look for a middle position that keeps the group together.',
+      C: 'Try to understand why others hold their view before advocating for yours.',
+    } },
+    Q10: { type: 'Simulation', text: 'Looking back at the simulation, the moments you felt most uncomfortable happened when:', options: {
+      A: 'The team moved too fast without thinking through consequences.',
+      B: 'We spent too long deliberating and lost clarity.',
+      C: 'The right answer and the winning answer weren\'t the same thing.',
+    } },
+    Q11: { type: 'Dispositional', text: 'You are most uncomfortable when a leader:', options: {
+      A: 'Moves too fast without hearing dissent.',
+      B: 'Prolongs debate when the direction is already clear.',
+      C: 'Bends their stated values when the stakes are high enough.',
+    } },
+    Q12: { type: 'Simulation', text: 'In rounds where your team disagreed, how did you handle it?', options: {
+      A: 'I pushed for the view I believed was right.',
+      B: 'I looked for the position that brought the team together.',
+      C: 'I tried to understand why people held the views they did before advocating for mine.',
+    } },
+    Q13: { type: 'Simulation', text: 'Looking back at your team\'s decisions across all rounds — the ones you\'re least comfortable with happened because:', options: {
+      A: 'We optimised too hard for the outcome and cut corners we shouldn\'t have.',
+      B: 'We spent too long aligning and ran out of time to think clearly.',
+      C: 'We didn\'t have enough information and made calls we couldn\'t fully stand behind.',
+    } },
+    Q14: { type: 'Dispositional', text: 'When you have more context than your team on something important, you:', options: {
+      A: 'Share it fully and let the team decide with complete information.',
+      B: 'Use it to steer the team toward what you believe is right.',
+      C: 'Check whether the context genuinely changes the answer before raising it.',
+    } },
+    Q15: { type: 'Simulation', text: 'There was at least one moment in the simulation where you privately disagreed with your team\'s direction. What did you do?', options: {
+      A: 'Said it clearly — my job is to put the right view on the table, not just to align.',
+      B: 'Let it go — the team\'s call matters more than being right.',
+      C: 'Raised it once, didn\'t push when it wasn\'t taken up, and committed to the direction.',
+    } },
+  };
+
+  var DARE_SCORING_KEY = {
+    version: '1.0',
+    totalQuestions: 15,
+    domains: ['D', 'A', 'R', 'E'],
+    domainLabels: {
+      D: 'Strategic Judgment', A: 'Execution Drive', R: 'People Leadership', E: 'Adaptive Integrity',
+    },
+    proficiencyLevels: {
+      L1: { label: 'Reactive',    min: 0,  max: 45,  descriptor: 'Responds to the situation as it arrives. No deliberate pattern.' },
+      L2: { label: 'Aware',       min: 46, max: 70,  descriptor: 'Recognises their default. Can name what\'s happening in the moment.' },
+      L3: { label: 'Intentional', min: 71, max: 100, descriptor: 'Chooses their response. Can flex across styles with purpose.' },
+    },
+    contradictionPairs: [
+      { id: 'CP1', q_a: 'Q2',  q_b: 'Q11', label: 'Dissent vs. Comfort with dissent',        contradicts: { A: ['B'], B: ['A'], C: [] } },
+      { id: 'CP2', q_a: 'Q4',  q_b: 'Q13', label: 'Execution driver vs. Discomfort source',  contradicts: { A: ['B'], B: ['A'], C: [] } },
+      { id: 'CP3', q_a: 'Q6',  q_b: 'Q14', label: 'People in decisions vs. Information power', contradicts: { A: ['B'], B: ['A'], C: [] } },
+      { id: 'CP4', q_a: 'Q2',  q_b: 'Q15', label: 'Dissent in the moment vs. in hindsight',  contradicts: { A: ['B'], B: ['A'], C: ['B'] } },
+    ],
+    consistencyIndex: {
+      High:     { maxFlags: 1, label: 'High',     descriptor: 'Responses are internally consistent. Profile is reliable.' },
+      Moderate: { maxFlags: 2, label: 'Moderate', descriptor: 'Some tension in responses. Worth probing in debrief.' },
+      Low:      { maxFlags: 4, label: 'Low',      descriptor: 'Significant internal contradiction. Self-perception gaps are large.' },
+    },
+    questions: {
+      Q1:  { primaryDomain: 'D', secondaryDomain: null, type: 'dispositional', contradictionRole: [],                    optionScores: { A: { D: 2, A: 3, R: 1, E: 1 }, B: { D: 1, A: 1, R: 2, E: 2 }, C: { D: 3, A: 2, R: 1, E: 2 } } },
+      Q2:  { primaryDomain: 'E', secondaryDomain: 'D',  type: 'dispositional', contradictionRole: ['CP1-q_a', 'CP4-q_a'], optionScores: { A: { D: 2, A: 1, R: 2, E: 3 }, B: { D: 1, A: 2, R: 1, E: 1 }, C: { D: 3, A: 2, R: 2, E: 2 } } },
+      Q3:  { primaryDomain: 'R', secondaryDomain: null, type: 'simulation',    contradictionRole: [],                    optionScores: { A: { D: 1, A: 2, R: 1, E: 1 }, B: { D: 1, A: 1, R: 2, E: 2 }, C: { D: 2, A: 2, R: 3, E: 1 } } },
+      Q4:  { primaryDomain: 'A', secondaryDomain: null, type: 'dispositional', contradictionRole: ['CP2-q_a'],           optionScores: { A: { D: 2, A: 3, R: 1, E: 1 }, B: { D: 1, A: 1, R: 3, E: 2 }, C: { D: 3, A: 2, R: 1, E: 3 } } },
+      Q5:  { primaryDomain: 'D', secondaryDomain: null, type: 'simulation',    contradictionRole: [],                    optionScores: { A: { D: 3, A: 3, R: 1, E: 2 }, B: { D: 1, A: 1, R: 2, E: 1 }, C: { D: 2, A: 1, R: 3, E: 2 } } },
+      Q6:  { primaryDomain: 'R', secondaryDomain: null, type: 'dispositional', contradictionRole: ['CP3-q_a'],           optionScores: { A: { D: 2, A: 2, R: 3, E: 3 }, B: { D: 2, A: 3, R: 1, E: 1 }, C: { D: 3, A: 2, R: 2, E: 2 } } },
+      Q7:  { primaryDomain: 'E', secondaryDomain: null, type: 'simulation',    contradictionRole: [],                    optionScores: { A: { D: 2, A: 2, R: 2, E: 3 }, B: { D: 2, A: 3, R: 1, E: 1 }, C: { D: 1, A: 1, R: 2, E: 2 } } },
+      Q8:  { primaryDomain: 'A', secondaryDomain: null, type: 'dispositional', contradictionRole: [],                    optionScores: { A: { D: 3, A: 3, R: 1, E: 2 }, B: { D: 1, A: 1, R: 3, E: 2 }, C: { D: 1, A: 2, R: 1, E: 1 } } },
+      Q9:  { primaryDomain: 'R', secondaryDomain: null, type: 'dispositional', contradictionRole: [],                    optionScores: { A: { D: 3, A: 2, R: 1, E: 3 }, B: { D: 1, A: 1, R: 2, E: 1 }, C: { D: 2, A: 1, R: 3, E: 2 } } },
+      Q10: { primaryDomain: 'E', secondaryDomain: null, type: 'simulation',    contradictionRole: [],                    optionScores: { A: { D: 2, A: 1, R: 2, E: 2 }, B: { D: 3, A: 3, R: 1, E: 1 }, C: { D: 2, A: 1, R: 2, E: 3 } } },
+      Q11: { primaryDomain: 'D', secondaryDomain: null, type: 'dispositional', contradictionRole: ['CP1-q_b'],           optionScores: { A: { D: 2, A: 1, R: 2, E: 3 }, B: { D: 3, A: 3, R: 1, E: 1 }, C: { D: 2, A: 1, R: 2, E: 3 } } },
+      Q12: { primaryDomain: 'R', secondaryDomain: null, type: 'simulation',    contradictionRole: [],                    optionScores: { A: { D: 3, A: 2, R: 1, E: 3 }, B: { D: 1, A: 1, R: 2, E: 1 }, C: { D: 2, A: 1, R: 3, E: 2 } } },
+      Q13: { primaryDomain: 'A', secondaryDomain: 'E',  type: 'simulation',    contradictionRole: ['CP2-q_b'],           optionScores: { A: { D: 2, A: 1, R: 2, E: 3 }, B: { D: 3, A: 3, R: 1, E: 1 }, C: { D: 1, A: 2, R: 1, E: 2 } } },
+      Q14: { primaryDomain: 'D', secondaryDomain: 'R',  type: 'dispositional', contradictionRole: ['CP3-q_b'],           optionScores: { A: { D: 2, A: 1, R: 3, E: 2 }, B: { D: 3, A: 3, R: 1, E: 1 }, C: { D: 3, A: 2, R: 2, E: 3 } } },
+      Q15: { primaryDomain: 'R', secondaryDomain: 'E',  type: 'simulation',    contradictionRole: ['CP4-q_b'],           optionScores: { A: { D: 3, A: 2, R: 2, E: 3 }, B: { D: 1, A: 1, R: 3, E: 1 }, C: { D: 2, A: 2, R: 2, E: 3 } } },
+    },
+  };
+
+  // Scores the 15-question questionnaire (see DARE_SCORING_KEY). Pure.
+  function scoreQuestionnaire(responses) {
+    responses = responses || {};
+    var raw = { D: 0, A: 0, R: 0, E: 0 };
+    var maxRaw = { D: 0, A: 0, R: 0, E: 0 };
+    Object.keys(DARE_SCORING_KEY.questions).forEach(function (qId) {
+      var qDef = DARE_SCORING_KEY.questions[qId];
+      var answer = responses[qId];
+      Object.keys(maxRaw).forEach(function (domain) {
+        maxRaw[domain] += Math.max.apply(null, Object.keys(qDef.optionScores).map(function (o) { return qDef.optionScores[o][domain] || 0; }));
+      });
+      if (!answer || !qDef.optionScores[answer]) return;
+      var scores = qDef.optionScores[answer];
+      Object.keys(raw).forEach(function (domain) { raw[domain] += scores[domain] || 0; });
+    });
+    var domainScores = {};
+    Object.keys(raw).forEach(function (d) { domainScores[d] = maxRaw[d] > 0 ? Math.round((raw[d] / maxRaw[d]) * 100) : 0; });
+    var proficiency = {};
+    Object.keys(domainScores).forEach(function (d) {
+      var s = domainScores[d];
+      proficiency[d] = s <= 45 ? 'L1' : s <= 70 ? 'L2' : 'L3';
+    });
+    var contradictionFlags = DARE_SCORING_KEY.contradictionPairs.map(function (pair) {
+      var aA = responses[pair.q_a], aB = responses[pair.q_b];
+      var fired = !!(aA && aB && pair.contradicts[aA] && pair.contradicts[aA].indexOf(aB) !== -1);
+      return { id: pair.id, q_a: pair.q_a, q_b: pair.q_b, label: pair.label, fired: fired };
+    });
+    var flagCount = contradictionFlags.filter(function (f) { return f.fired; }).length;
+    var consistencyIndex = flagCount <= 1 ? 'High' : flagCount <= 2 ? 'Moderate' : 'Low';
+    var entries = Object.keys(domainScores).map(function (d) { return [d, domainScores[d]]; });
+    var dominantDomain = entries.reduce(function (a, b) { return b[1] > a[1] ? b : a; })[0];
+    var growthEdgeDomain = entries.reduce(function (a, b) { return b[1] < a[1] ? b : a; })[0];
+    return { domainRaw: raw, domainScores: domainScores, proficiency: proficiency,
+      contradictionFlags: contradictionFlags, flagCount: flagCount, consistencyIndex: consistencyIndex,
+      dominantDomain: dominantDomain, growthEdgeDomain: growthEdgeDomain };
+  }
+
+  // Participant-facing insight for the lowest (growth-edge) domain. Scorecard only.
+  function getInsightLine(growthEdgeDomain) {
+    var lines = {
+      D: 'Your instinct is to move with the group. Your edge will come from forming your own view first.',
+      A: 'You think clearly but wait for permission to act. Start smaller and move sooner.',
+      R: 'You optimise for the outcome. The next level requires seeing the person behind the decision.',
+      E: 'You perform well under pressure. Watch what you\'re willing to flex when the stakes are highest.',
+    };
+    return lines[growthEdgeDomain] || '';
+  }
+
+  // Participant-facing 90-day experiment for the growth-edge domain. Scorecard only.
+  function get90DayExperiment(growthEdgeDomain) {
+    var experiments = {
+      D: 'In your next cross-functional meeting, form a view before the discussion starts. State it early.',
+      A: 'Pick one thing this week where you have enough information to move. Move without waiting for more.',
+      R: 'In your next team interaction, name one stakeholder concern before making your recommendation.',
+      E: 'Identify one value you hold as a leader. Write down what it would look like to compromise it. Use that as your line.',
+    };
+    return experiments[growthEdgeDomain] || '';
+  }
+
+  // Quadrant from Task/People scores (hi 65 / lo 45). GM dashboard + scorecard only.
+  function getQuadrantLabel(taskScore, peopleScore) {
+    var hi = 65, lo = 45;
+    var taskHigh = taskScore >= hi, taskLow = taskScore <= lo;
+    var pplHigh = peopleScore >= hi, pplLow = peopleScore <= lo;
+    if (taskHigh && pplHigh) return { label: 'Catalyst',  description: 'High task focus, high people focus. The target.' };
+    if (taskHigh && pplLow)  return { label: 'Executor',  description: 'Gets results. Risks burning people out.' };
+    if (taskLow  && pplHigh) return { label: 'Connector', description: 'Strong on people. Delivery is the growth edge.' };
+    if (taskLow  && pplLow)  return { label: 'Passenger', description: 'Disengaged on both axes.' };
+    return { label: 'Balancer', description: 'Compromise-driven. Avoids extremes.' };
+  }
+
+  // GM-visible record for one participant. Strip GM-only fields before sending to
+  // the participant scorecard view (contradictionFlags, consistencyIndex, etc.).
+  function buildGMDashboardEntry(participantEmail, teamName, responses, taskScore, peopleScore) {
+    var scored = scoreQuestionnaire(responses);
+    var quadrant = getQuadrantLabel(taskScore, peopleScore);
+    var lvl = DARE_SCORING_KEY.proficiencyLevels;
+    var dom = function (letter) { return { score: scored.domainScores[letter], proficiency: scored.proficiency[letter], label: lvl[scored.proficiency[letter]].label }; };
+    return {
+      participant: participantEmail, team: teamName,
+      domains: { strategicJudgment: dom('D'), executionDrive: dom('A'), peopleLeadership: dom('R'), adaptiveIntegrity: dom('E') },
+      taskScore: taskScore, peopleScore: peopleScore, quadrant: quadrant.label, quadrantDescription: quadrant.description,
+      consistencyIndex: scored.consistencyIndex, contradictionFlags: scored.contradictionFlags,
+      dominantDomain: DARE_SCORING_KEY.domainLabels[scored.dominantDomain],
+      growthEdgeDomain: DARE_SCORING_KEY.domainLabels[scored.growthEdgeDomain],
+      insightLine: getInsightLine(scored.growthEdgeDomain),
+      experiment90Day: get90DayExperiment(scored.growthEdgeDomain),
+    };
+  }
+
   var API = {
     SURYAN_CONFIG: SURYAN_CONFIG, parseDecisions: parseDecisions, parsePosture: parsePosture,
     initState: initState, resolveAuction: resolveAuction, computeWageIndex: computeWageIndex,
@@ -548,6 +791,12 @@
     computeDefects: computeDefects, computeAttrition: computeAttrition, cashWalk: cashWalk,
     computeSurvivability: computeSurvivability, computeFinalScores: computeFinalScores,
     incidentTag: incidentTag, resolveRound: resolveRound, clamp: clamp,
+    computeTwoAxisScore: computeTwoAxisScore, classifyQuadrant: classifyQuadrant,
+    // Workstream B — DARE questionnaire (real key v1.0)
+    DARE_SCORING_KEY: DARE_SCORING_KEY, QUESTIONNAIRE_CONTENT: QUESTIONNAIRE_CONTENT,
+    scoreQuestionnaire: scoreQuestionnaire,
+    getInsightLine: getInsightLine, get90DayExperiment: get90DayExperiment,
+    getQuadrantLabel: getQuadrantLabel, buildGMDashboardEntry: buildGMDashboardEntry,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

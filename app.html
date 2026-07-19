@@ -1345,6 +1345,9 @@ input, select, textarea { font-family: var(--sans); }
       <div class="nav-item" onclick="navigate('report')" id="nav-report">
         <span class="icon">📑</span> <span id="reportNavLabel">Team Report</span>
       </div>
+      <div class="nav-item" onclick="navigate('questionnaire')" id="nav-questionnaire" style="display:none">
+        <span class="icon">🧭</span> Leadership Profile
+      </div>
       <div id="adminNavItem" class="nav-item" onclick="navigate('admin')" style="display:none">
         <span class="icon">⬡</span> Admin Panel
         <span class="nav-badge" style="background:var(--purple)">GM</span>
@@ -1464,6 +1467,11 @@ input, select, textarea { font-family: var(--sans); }
       <!-- REPORT (team report for participants; cohort report for GM) -->
       <div id="page-report" class="page-section">
         <div id="reportContent"></div>
+      </div>
+
+      <!-- LEADERSHIP PROFILE (individual DARE questionnaire + scorecard) -->
+      <div id="page-questionnaire" class="page-section">
+        <div id="questionnaireContent"></div>
       </div>
 
       <!-- ADMIN -->
@@ -1710,6 +1718,39 @@ async function dbUpdateTeam(teamId, updates) {
   const { error } = await sb.from('teams').update(updates).eq('id', teamId);
   return !error;
 }
+// Split-tables secrecy: write GM-only session config (task_weight) to
+// session_secrets. Caller is the authenticated GM/master-admin, so RLS allows
+// it; participants (anon) can never read this table. people = 100 − task.
+async function dbSaveSessionWeight(sessionId, taskWeight) {
+  const sb = getSupabase(); if (!sb || sessionId == null) return false;
+  const tw = Math.max(0, Math.min(100, parseInt(taskWeight, 10) || 50));
+  const { error } = await sb.from('session_secrets')
+    .upsert({ session_id: sessionId, task_weight: tw, updated_at: new Date().toISOString() },
+            { onConflict: 'session_id' });
+  if (error) console.warn('dbSaveSessionWeight', error.message);
+  return !error;
+}
+// GM-only read (returns null for participants — RLS denies anon).
+async function dbGetSessionWeight(sessionId) {
+  const sb = getSupabase(); if (!sb) return null;
+  const { data } = await sb.from('session_secrets').select('task_weight')
+    .eq('session_id', sessionId).maybeSingle();
+  return data ? data.task_weight : null;
+}
+// Behavioural (People-axis) scoring via the score-behavioural Edge Function.
+// The Anthropic key stays server-side. Pass storeCtx {session_id, team_id, round}
+// for the participant-submit path: the function stores the score in the GM-only
+// decision_secrets table and returns only {ok:true} — the participant never sees
+// the numbers. Omit storeCtx (GM/test) to get the raw score back.
+async function dbScoreBehavioural(responseText, roundContext, storeCtx) {
+  const sb = getSupabase(); if (!sb) return { error: 'no client' };
+  const payload = { response_text: responseText, round_context: roundContext || '' };
+  if (storeCtx && storeCtx.session_id) Object.assign(payload, storeCtx);
+  const { data, error } = await sb.functions.invoke('score-behavioural', { body: payload });
+  if (error) return { error: error.message || 'scoring failed' };
+  return data;
+}
+
 // Cohort wizard backend — wraps the create_cohort RPC.
 // Caller must already be authenticated (Supabase OTP).
 // teamSpecs: [{ team_number, slot, display_name, username, password, representative_email }]
@@ -2281,6 +2322,8 @@ async function showApp() {
   document.getElementById('sidebarTeamName').textContent  = currentUser.teamName;
   document.getElementById('adminNavItem').style.display        = currentUser.isAdmin ? 'flex' : 'none';
   document.getElementById('masterAdminNavItem').style.display  = currentUser.isAdmin ? 'flex' : 'none';
+  // Leadership Profile — participants fill it; GM sees results on the same page.
+  { const qn = document.getElementById('nav-questionnaire'); if (qn) qn.style.display = currentSession ? 'flex' : 'none'; }
   // The same page hosts the Master Admin (superuser, sees all cohorts) and the
   // GM Console (regular GM, sees only their own).
   const maLabel = document.getElementById('masterAdminNavLabel');
@@ -2422,7 +2465,8 @@ function navigate(page) {
     dashboard:'Dashboard', case:'Case Brief', curveball:'Curveballs', decisions:'Decisions',
     assessment:'Assessment', history:'Decision Log', leaderboard:'Leaderboard',
     admin:'Admin Panel', 'master-admin': currentUser && currentUser.isSuperuser ? 'Master Admin' : 'GM Console',
-    report: currentUser && currentUser.isAdmin ? 'Cohort Report' : 'Team Report'
+    report: currentUser && currentUser.isAdmin ? 'Cohort Report' : 'Team Report',
+    questionnaire: 'Leadership Profile'
   };
   document.getElementById('topbarSubtitle').textContent = '/ ' + (titles[page] || page);
 
@@ -2438,6 +2482,7 @@ function navigate(page) {
   if (page === 'admin' && currentUser.isAdmin) renderAdmin();
   if (page === 'master-admin' && currentUser.isAdmin) renderMasterAdmin();
   if (page === 'report')                              renderReport();
+  if (page === 'questionnaire')                       renderQuestionnaire();
 }
 
 // =================================================
@@ -3687,6 +3732,12 @@ function renderDecisions() {
   });
 
   html += `</div>
+    <div class="decision-domain" style="margin-top:8px"><div class="domain-body" style="padding:16px">
+      <label class="field-label">Round reflection <span style="color:var(--faint);font-weight:400">— scored on your reasoning, not the outcome</span></label>
+      <textarea class="field-textarea" id="field_qualitative_response" maxlength="1200"
+        placeholder="Explain your reasoning for this round's key decision — what did you weigh, and why? (a few sentences)"
+        oninput="autosaveDraft('qualitative_response',this.value)"></textarea>
+    </div></div>
     <div class="submit-row">
       <button class="btn-primary" id="submitDecisionsBtn" onclick="submitDecisions()">Submit Team Decisions →</button>
       <div class="submit-note">Complete all domains before submitting.<br>Once submitted, decisions cannot be changed.</div>
@@ -3758,6 +3809,17 @@ async function submitDecisions() {
       });
     });
     await Promise.all(saves);
+
+    // Round reflection → save (anon-readable like other decisions) + behavioural
+    // score server-side into decision_secrets (GM-only). Optional; fire-and-forget
+    // so scoring latency/failure never blocks the submission.
+    const qEl = document.getElementById('field_qualitative_response');
+    const qtext = qEl ? qEl.value.trim() : '';
+    if (qtext) {
+      await dbSaveDecision(currentSession.id, currentTeam.id, state.currentRound, 'reflection', 'qualitative_response', qtext);
+      const rc = (getQuarters()[state.currentRound - 1] || {}).theme || '';
+      dbScoreBehavioural(qtext, rc, { session_id: currentSession.id, team_id: currentTeam.id, round: state.currentRound }).catch(() => {});
+    }
   }
 
   // Update local state
@@ -4138,6 +4200,200 @@ const LB_TEAMS = [
   { id:'team5', name:'Epsilon' }, { id:'team6', name:'Zeta' },
 ];
 const RANK_ICONS = ['🥇','🥈','🥉','4','5','6'];
+
+// =================================================
+//  LEADERSHIP PROFILE — individual DARE questionnaire + scorecard (participant)
+//  and results view (GM). Participant-safe fields never include DARE letters,
+//  consistency index, or contradiction flags.
+// =================================================
+async function dbSaveQuestionnaire(row) {
+  const sb = getSupabase(); if (!sb) return { error: 'no client' };
+  const { error } = await sb.from('individual_questionnaire_responses').insert(row);
+  return error ? { error: error.message } : { ok: true };
+}
+async function dbGetQuestionnaireResults(sessionId) { // GM only (RLS enforces)
+  const sb = getSupabase(); if (!sb) return [];
+  const { data } = await sb.from('individual_questionnaire_responses')
+    .select('*, teams(display_name,slot)').eq('session_id', sessionId).order('created_at');
+  return data || [];
+}
+function _qnKey() { return (currentSession && currentUser) ? 'praxis_qn_' + currentSession.id + '_' + (currentUser.teamId || currentUser.teamName) : null; }
+
+var _qnAnswers = {};
+function _qnPick(qid, opt, labelEl) {
+  _qnAnswers[qid] = opt;
+  labelEl.parentElement.querySelectorAll('label').forEach(l => l.style.borderColor = 'var(--wire)');
+  labelEl.style.borderColor = 'var(--volt)';
+  const radio = labelEl.querySelector('input'); if (radio) radio.checked = true;
+}
+
+function renderQuestionnaire() {
+  const cont = document.getElementById('questionnaireContent');
+  if (!cont) return;
+  if (currentUser.isAdmin) { renderQuestionnaireGM(cont); return; }
+  const key = _qnKey();
+  const saved = key ? localStorage.getItem(key) : null;
+  if (saved) { try { renderScorecard(cont, JSON.parse(saved)); return; } catch (e) { /* re-show form */ } }
+  _qnAnswers = {};
+  const Q = window.PraxisEngine.QUESTIONNAIRE_CONTENT;
+  let html = `<div style="max-width:720px">
+    <div style="font-size:20px;font-weight:800;color:var(--ink);margin-bottom:6px">🧭 Leadership Profile</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:22px">A short individual reflection on how you lead. 15 questions, about 5 minutes. Answer honestly — there are no right answers. Your responses are private to you and your facilitator.</div>`;
+  Object.keys(Q).forEach((qid, i) => {
+    const q = Q[qid];
+    html += `<div class="decision-domain" style="margin-bottom:14px"><div class="domain-body" style="padding:16px">
+      <div style="font-weight:700;color:var(--ink);margin-bottom:10px">${i + 1}. ${escapeHtml(q.text)}</div>`;
+    ['A', 'B', 'C'].forEach(o => {
+      html += `<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 11px;margin-bottom:6px;border:1px solid var(--wire);border-radius:8px;cursor:pointer" onclick="_qnPick('${qid}','${o}',this)">
+        <input type="radio" name="qn_${qid}" value="${o}" style="margin-top:3px">
+        <span style="font-size:13px;color:var(--ink)">${escapeHtml(q.options[o])}</span></label>`;
+    });
+    html += `</div></div>`;
+  });
+  html += `<div class="submit-row"><button class="btn-primary" id="qnSubmitBtn" onclick="submitQuestionnaire()">Submit &amp; see my profile →</button>
+    <div id="qnError" class="login-error"></div></div></div>`;
+  cont.innerHTML = html;
+}
+
+async function submitQuestionnaire() {
+  const total = Object.keys(window.PraxisEngine.QUESTIONNAIRE_CONTENT).length;
+  const answered = Object.keys(_qnAnswers).length;
+  const err = document.getElementById('qnError');
+  if (answered < total) { if (err) err.textContent = `Please answer all ${total} questions (${answered}/${total} done).`; return; }
+  const btn = document.getElementById('qnSubmitBtn'); if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  const scored = window.PraxisEngine.scoreQuestionnaire(_qnAnswers);
+  await dbSaveQuestionnaire({
+    session_id: currentSession ? currentSession.id : null,
+    team_id: currentUser.teamId || null,
+    participant_name: currentUser.teamName || null,
+    responses: _qnAnswers,
+    domain_scores: scored.domainScores, proficiency: scored.proficiency,
+    consistency_index: scored.consistencyIndex, contradiction_flags: scored.contradictionFlags,
+  });
+  const card = _buildScorecard(scored);
+  const key = _qnKey(); if (key) { try { localStorage.setItem(key, JSON.stringify(card)); } catch (e) {} }
+  renderScorecard(document.getElementById('questionnaireContent'), card);
+}
+
+// Participant-safe scorecard payload — NO domain letters, consistency, or flags.
+function _buildScorecard(scored) {
+  const NAMES = window.PraxisEngine.DARE_SCORING_KEY.domainLabels;
+  const LVL = window.PraxisEngine.DARE_SCORING_KEY.proficiencyLevels;
+  const domains = ['D', 'A', 'R', 'E'].map(d => ({
+    name: NAMES[d], score: scored.domainScores[d], level: scored.proficiency[d],
+    label: LVL[scored.proficiency[d]].label, descriptor: LVL[scored.proficiency[d]].descriptor,
+  }));
+  return { domains, growthEdge: NAMES[scored.growthEdgeDomain], dominant: NAMES[scored.dominantDomain],
+    insight: window.PraxisEngine.getInsightLine(scored.growthEdgeDomain),
+    experiment: window.PraxisEngine.get90DayExperiment(scored.growthEdgeDomain) };
+}
+
+function renderScorecard(cont, card) {
+  let html = `<div style="max-width:680px">
+    <div style="font-size:20px;font-weight:800;color:var(--ink);margin-bottom:4px">Your Leadership Profile</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Dominant strength: <b style="color:var(--ink)">${escapeHtml(card.dominant)}</b> · Growth edge: <b style="color:var(--ink)">${escapeHtml(card.growthEdge)}</b></div>`;
+  card.domains.forEach(d => {
+    html += `<div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+        <span style="font-weight:700;color:var(--ink)">${escapeHtml(d.name)}</span>
+        <span style="font-size:12px;color:var(--muted)">${d.score}/100 · ${d.level} ${escapeHtml(d.label)}</span></div>
+      <div style="height:9px;background:var(--wire-2);border-radius:5px;overflow:hidden"><div style="height:100%;width:${Math.max(3, d.score)}%;background:var(--volt)"></div></div>
+      <div style="font-size:11px;color:var(--faint);margin-top:4px">${escapeHtml(d.descriptor)}</div></div>`;
+  });
+  html += `<div style="background:var(--wire-2);border-radius:10px;padding:16px;margin-top:22px">
+      <div style="font-size:11px;font-weight:700;color:var(--volt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Your growth edge — ${escapeHtml(card.growthEdge)}</div>
+      <div style="font-size:14px;color:var(--ink);line-height:1.5;margin-bottom:12px">${escapeHtml(card.insight)}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">A 90-day experiment</div>
+      <div style="font-size:14px;color:var(--ink);line-height:1.5">${escapeHtml(card.experiment)}</div>
+    </div>
+    <div style="font-size:11px;color:var(--faint);margin-top:16px">✓ Submitted. Your facilitator can see your full profile.</div></div>`;
+  cont.innerHTML = html;
+}
+
+// Two-axis (Task/People) team data for the GM dashboard.
+//   Task   = performance: competitive → financial component (0–100); parallel → avg GM outcome score.
+//   People = avg behavioural score from decision_secrets (0–100), GM-only.
+//   composite + quadrant use the GM-only task_weight from session_secrets.
+async function dbGetTwoAxisData(sessionId) {
+  const sb = getSupabase(); if (!sb) return { teams: [] };
+  const [teamsR, dsR, ocR, wR] = await Promise.all([
+    sb.from('teams').select('*').eq('session_id', sessionId),
+    sb.from('decision_secrets').select('team_id, people_score').eq('session_id', sessionId),
+    sb.from('outcomes').select('team_id, score').eq('session_id', sessionId),
+    sb.from('session_secrets').select('task_weight').eq('session_id', sessionId).maybeSingle(),
+  ]);
+  const teams = teamsR.data || [];
+  const taskWeight = (wR.data && wR.data.task_weight != null) ? wR.data.task_weight : 50;
+  // People: avg people_score per team
+  const pAgg = {};
+  (dsR.data || []).forEach(r => { (pAgg[r.team_id] = pAgg[r.team_id] || []).push(r.people_score); });
+  const peopleByTeam = {}; Object.keys(pAgg).forEach(t => { const a = pAgg[t]; peopleByTeam[t] = Math.round(a.reduce((x, y) => x + y, 0) / a.length); });
+  // Task
+  const taskByTeam = {};
+  if (isCompetitiveSession() && window.PraxisEngine) {
+    const withState = teams.filter(t => t.state);
+    if (withState.length) {
+      const finals = window.PraxisEngine.computeFinalScores(window.SURYAN_CONFIG, withState.map(t => ({ id: t.id, name: t.display_name, state: t.state })));
+      finals.forEach(f => { taskByTeam[f.id] = Math.round(f.financial * 100); });
+    }
+  } else {
+    const oAgg = {}; (ocR.data || []).forEach(r => { if (r.score != null) (oAgg[r.team_id] = oAgg[r.team_id] || []).push(r.score); });
+    Object.keys(oAgg).forEach(t => { const a = oAgg[t]; taskByTeam[t] = Math.round(a.reduce((x, y) => x + y, 0) / a.length); });
+  }
+  const rows = teams.map(t => {
+    const task = taskByTeam[t.id]; const people = peopleByTeam[t.id];
+    const hasTask = task != null, hasPeople = people != null;
+    const two = window.PraxisEngine.computeTwoAxisScore(task || 0, people || 0, taskWeight);
+    const quad = (hasTask && hasPeople) ? window.PraxisEngine.getQuadrantLabel(task, people) : null;
+    return { id: t.id, name: t.display_name || t.slot, task: hasTask ? task : null, people: hasPeople ? people : null,
+      composite: (hasTask && hasPeople) ? two.composite : null, quadrant: quad };
+  }).sort((a, b) => (b.composite || -1) - (a.composite || -1));
+  return { teams: rows, taskWeight };
+}
+
+async function buildTwoAxisHTML(sessionId) {
+  const { teams, taskWeight } = await dbGetTwoAxisData(sessionId);
+  let html = `<div style="font-size:18px;font-weight:800;color:var(--ink);margin-bottom:4px">Two-Axis Dashboard — Task × People</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">GM-only. Composite weights Task ${taskWeight}% / People ${100 - taskWeight}%. Task &amp; People are shown separately to participants; the composite and quadrant are never shown to them during play.</div>`;
+  if (!teams.length) { return html + '<div style="color:var(--muted);margin-bottom:26px">No teams.</div>'; }
+  const qc = { Catalyst: 'var(--volt)', Executor: 'var(--amber)', Connector: 'var(--purple)', Passenger: 'var(--red)', Balancer: 'var(--muted)' };
+  teams.forEach((r, i) => {
+    const qlabel = r.quadrant ? r.quadrant.label : 'People pending';
+    const qcol = r.quadrant ? (qc[r.quadrant.label] || 'var(--muted)') : 'var(--faint)';
+    html += `<div style="display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--wire);border-radius:10px;padding:12px 16px;margin-bottom:8px">
+      <div style="font-size:16px;width:26px;text-align:center;color:var(--muted)">${i + 1}</div>
+      <div style="flex:1"><div style="font-weight:700;color:var(--ink)">${escapeHtml(r.name)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Task <b style="color:var(--ink)">${r.task != null ? r.task : '—'}</b> · People <b style="color:var(--ink)">${r.people != null ? r.people : '—'}</b>${r.composite != null ? ' · Composite <b style="color:var(--volt)">' + r.composite + '</b>' : ''}</div></div>
+      <span style="font-size:11px;font-weight:700;color:${qcol};text-transform:uppercase;letter-spacing:.4px">${escapeHtml(qlabel)}</span>
+    </div>`;
+  });
+  return html + '<div style="height:26px"></div>';
+}
+
+// GM results view — two-axis team dashboard + GM-only individual profiles.
+async function renderQuestionnaireGM(cont) {
+  cont.innerHTML = '<div style="padding:24px;color:var(--muted)">Loading…</div>';
+  const twoAxis = await buildTwoAxisHTML(currentSession.id);
+  const rows = await dbGetQuestionnaireResults(currentSession.id);
+  const NAMES = window.PraxisEngine.DARE_SCORING_KEY.domainLabels;
+  let html = twoAxis + `<div style="font-size:18px;font-weight:800;color:var(--ink);margin-bottom:4px">Leadership Profiles — GM view</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:18px">${rows.length} submission${rows.length === 1 ? '' : 's'}. Consistency + contradiction flags are visible to you only.</div>`;
+  if (!rows.length) { html += '<div style="color:var(--muted)">No submissions yet.</div>'; cont.innerHTML = html; return; }
+  rows.forEach(r => {
+    const ds = r.domain_scores || {}, pf = r.proficiency || {};
+    const fired = (r.contradiction_flags || []).filter(f => f.fired);
+    const ci = r.consistency_index || '—';
+    const ciColor = ci === 'Low' ? 'var(--red)' : ci === 'Moderate' ? 'var(--amber)' : 'var(--volt-dim)';
+    html += `<div style="background:var(--panel);border:1px solid var(--wire);border-radius:10px;padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <span style="font-weight:700;color:var(--ink)">${escapeHtml((r.teams && r.teams.display_name) || r.participant_name || 'Participant')}</span>
+        <span style="font-size:11px">Consistency: <b style="color:${ciColor}">${escapeHtml(ci)}</b>${fired.length ? ' · flags: ' + fired.map(f => escapeHtml(f.id)).join(',') : ''}</span></div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)">
+        ${['D', 'A', 'R', 'E'].map(d => `<span>${escapeHtml(NAMES[d])}: <b style="color:var(--ink)">${ds[d] != null ? ds[d] : '—'}</b>${pf[d] ? ' (' + pf[d] + ')' : ''}</span>`).join('')}
+      </div></div>`;
+  });
+  cont.innerHTML = html;
+}
 
 // =================================================
 //  REPORT  (team report for participants; cohort report + PDF export for GM)
@@ -5220,7 +5476,7 @@ async function renderMasterAdmin() {
 function maStartWizard() {
   if (!_maDraft) {
     _maDraft = {
-      cohort: '', caseSlug: 'volta', teamCount: 4, rounds: 5,
+      cohort: '', caseSlug: 'volta', teamCount: 4, rounds: 5, taskWeight: 50,
       gmEmail: (currentUser && currentUser.email) || '',
       repEmails: [], teams: [], sessionCode: '',
     };
@@ -5282,6 +5538,14 @@ function renderCohortWizard() {
           ${Array.from({length:maxRounds},(_,i)=>i+1).map(n=>`<option value="${n}"${d.rounds===n?' selected':''}>${n} round${n>1?'s':''} (Q1–Q${n})</option>`).join('')}
         </select>
       </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <label class="field-label">Task / People weight <span style="color:var(--faint);font-weight:400">(GM only — participants never see this)</span></label>
+      <select class="field-select" style="margin:0" onchange="_maDraft.taskWeight=parseInt(this.value)">
+        ${[20,30,40,50,60,70,80].map(w=>`<option value="${w}"${d.taskWeight===w?' selected':''}>Task ${w}% · People ${100-w}%</option>`).join('')}
+      </select>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Sets how the GM composite weights quantitative decisions vs. behavioural response. Locked once Round 1 opens. Stored in <code>session_secrets</code> — never sent to participant views.</div>
     </div>
 
     <div class="admin-section-title" style="font-size:10px;margin-top:8px">Representative email per team</div>
@@ -5399,7 +5663,7 @@ function wizardGoToStep2() {
       representative_email: '',
     });
   }
-  _wizardDraft = { cohort, caseSlug, teamCount, rounds, adminEmail, teams };
+  _wizardDraft = { cohort, caseSlug, teamCount, rounds, adminEmail, teams, taskWeight: _maDraft.taskWeight };
   wizardRenderStep2();
 }
 
@@ -5503,6 +5767,9 @@ async function wizardSubmit() {
     errEl.textContent = 'Could not create cohort: ' + (result.error || 'unknown error');
     return;
   }
+
+  // Persist GM-only task/people weight to the secrecy table (best-effort).
+  await dbSaveSessionWeight(result.sessionId, _wizardDraft.taskWeight);
 
   if (btn) { btn.textContent = 'Sending emails...'; }
   const sendResult = await dbSendCohortEmails(result.sessionId, null);

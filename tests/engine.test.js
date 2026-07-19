@@ -90,6 +90,76 @@ console.log('\n(e) R4 survivability ≈ 0 for a hollowed-out team');
   ok('hollow team fails the C&I gate (rep<90)', hollow.cni_gate === false);
 }
 
+console.log('\n(i) two-axis: task_weight + people_weight always sum to 100');
+{
+  let allSum = true;
+  for (const tw of [0, 10, 33, 50, 67, 90, 100]) {
+    const r = E.computeTwoAxisScore(80, 40, tw);
+    if (r.task_weight + r.people_weight !== 100) { allSum = false; }
+  }
+  ok('weights sum to 100 across tw ∈ {0,10,33,50,67,90,100}', allSum);
+  const r = E.computeTwoAxisScore(80, 40, 70); // 80*.7 + 40*.3 = 56 + 12 = 68
+  ok('composite = task·tw + people·pw', approx(r.composite, 68), 'got ' + r.composite);
+  ok('task/people passed through unweighted', r.task === 80 && r.people === 40);
+}
+
+console.log('\n(j) quadrant classification at boundary values (hi 65 / lo 45)');
+{
+  ok('(65,65) → Catalyst', E.classifyQuadrant(65, 65) === 'Catalyst');
+  ok('(65,45) → Executor', E.classifyQuadrant(65, 45) === 'Executor');
+  ok('(45,65) → Connector', E.classifyQuadrant(45, 65) === 'Connector');
+  ok('(45,45) → Passenger', E.classifyQuadrant(45, 45) === 'Passenger');
+  ok('(64,64) → Balancer (below hi, above lo)', E.classifyQuadrant(64, 64) === 'Balancer');
+  ok('(46,46) → Balancer (above lo, below hi)', E.classifyQuadrant(46, 46) === 'Balancer');
+  ok('(65,46) → Balancer (hi task, mid people)', E.classifyQuadrant(65, 46) === 'Balancer');
+  ok('getQuadrantLabel returns description', E.getQuadrantLabel(65, 65).description.length > 0);
+}
+
+console.log('\n(f) questionnaire scores sum + normalise correctly (real key)');
+{
+  const KEY = E.DARE_SCORING_KEY;
+  const resp = {}; for (let i = 1; i <= 15; i++) resp['Q' + i] = ['A', 'B', 'C'][i % 3];
+  // recompute raw + max independently from the key, then compare to the engine
+  const raw = { D: 0, A: 0, R: 0, E: 0 }, max = { D: 0, A: 0, R: 0, E: 0 };
+  for (const q of Object.keys(KEY.questions)) {
+    const qd = KEY.questions[q];
+    for (const d of ['D', 'A', 'R', 'E']) {
+      max[d] += Math.max(...Object.keys(qd.optionScores).map(o => qd.optionScores[o][d]));
+      raw[d] += qd.optionScores[resp[q]][d];
+    }
+  }
+  const r = E.scoreQuestionnaire(resp);
+  ok('raw domain sums match the key', ['D', 'A', 'R', 'E'].every(d => r.domainRaw[d] === raw[d]), JSON.stringify(r.domainRaw));
+  ok('normalised = round(raw/max·100)', ['D', 'A', 'R', 'E'].every(d => r.domainScores[d] === Math.round(raw[d] / max[d] * 100)), JSON.stringify(r.domainScores));
+  ok('proficiency L1/L2/L3 assigned', ['D', 'A', 'R', 'E'].every(d => ['L1', 'L2', 'L3'].includes(r.proficiency[d])));
+  ok('dominant/growth-edge domains identified', !!r.dominantDomain && !!r.growthEdgeDomain);
+}
+
+console.log('\n(g) contradiction pair Q2↔Q11 fires on inconsistent responses (real key)');
+{
+  const B = {}; for (let i = 1; i <= 15; i++) B['Q' + i] = 'C'; // neutral, fires nothing
+  const cp1 = f => f.id === 'CP1';
+  const inc = E.scoreQuestionnaire({ ...B, Q2: 'A', Q11: 'B' }); // contradicts.A = ['B'] → fires
+  ok('CP1 (Q2↔Q11) fires when Q2=A, Q11=B', inc.contradictionFlags.find(cp1).fired);
+  const con = E.scoreQuestionnaire({ ...B, Q2: 'A', Q11: 'A' }); // 'A' not in ['B'] → no fire
+  ok('CP1 does NOT fire when Q2=A, Q11=A', !con.contradictionFlags.find(cp1).fired);
+}
+
+console.log('\n(h) consistency index maps to 0/1/2/3-4 flag counts (real key)');
+{
+  const C = {}; for (let i = 1; i <= 15; i++) C['Q' + i] = 'C'; C.Q15 = 'C'; // 0 flags
+  ok('0 flags → High', (() => { const r = E.scoreQuestionnaire(C); return r.flagCount === 0 && r.consistencyIndex === 'High'; })());
+  const two = { ...C, Q2: 'A', Q11: 'B', Q4: 'A', Q13: 'B' }; // CP1 + CP2 (Q15='C' keeps CP4 off)
+  const r2 = E.scoreQuestionnaire(two);
+  ok('2 flags → Moderate', r2.flagCount === 2 && r2.consistencyIndex === 'Moderate', 'flags=' + r2.flagCount);
+  const three = { ...two, Q6: 'A', Q14: 'B' }; // + CP3
+  const r3 = E.scoreQuestionnaire(three);
+  ok('3 flags → Low', r3.flagCount === 3 && r3.consistencyIndex === 'Low', 'flags=' + r3.flagCount);
+  const four = { ...three, Q15: 'B' }; // + CP4 (Q2=A contradicts ['B'])
+  const r4 = E.scoreQuestionnaire(four);
+  ok('4 flags → Low', r4.flagCount === 4 && r4.consistencyIndex === 'Low', 'flags=' + r4.flagCount);
+}
+
 console.log('\n──────────────────────────────');
 console.log('  PASS ' + pass + '   FAIL ' + fail);
 process.exit(fail ? 1 : 0);
