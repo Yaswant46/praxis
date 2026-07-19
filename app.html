@@ -3732,6 +3732,12 @@ function renderDecisions() {
   });
 
   html += `</div>
+    <div class="decision-domain" style="margin-top:8px"><div class="domain-body" style="padding:16px">
+      <label class="field-label">Round reflection <span style="color:var(--faint);font-weight:400">— scored on your reasoning, not the outcome</span></label>
+      <textarea class="field-textarea" id="field_qualitative_response" maxlength="1200"
+        placeholder="Explain your reasoning for this round's key decision — what did you weigh, and why? (a few sentences)"
+        oninput="autosaveDraft('qualitative_response',this.value)"></textarea>
+    </div></div>
     <div class="submit-row">
       <button class="btn-primary" id="submitDecisionsBtn" onclick="submitDecisions()">Submit Team Decisions →</button>
       <div class="submit-note">Complete all domains before submitting.<br>Once submitted, decisions cannot be changed.</div>
@@ -3803,6 +3809,17 @@ async function submitDecisions() {
       });
     });
     await Promise.all(saves);
+
+    // Round reflection → save (anon-readable like other decisions) + behavioural
+    // score server-side into decision_secrets (GM-only). Optional; fire-and-forget
+    // so scoring latency/failure never blocks the submission.
+    const qEl = document.getElementById('field_qualitative_response');
+    const qtext = qEl ? qEl.value.trim() : '';
+    if (qtext) {
+      await dbSaveDecision(currentSession.id, currentTeam.id, state.currentRound, 'reflection', 'qualitative_response', qtext);
+      const rc = (getQuarters()[state.currentRound - 1] || {}).theme || '';
+      dbScoreBehavioural(qtext, rc, { session_id: currentSession.id, team_id: currentTeam.id, round: state.currentRound }).catch(() => {});
+    }
   }
 
   // Update local state
