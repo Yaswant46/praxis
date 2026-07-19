@@ -4293,12 +4293,73 @@ function renderScorecard(cont, card) {
   cont.innerHTML = html;
 }
 
-// GM results view — includes GM-only consistency + contradiction flags.
+// Two-axis (Task/People) team data for the GM dashboard.
+//   Task   = performance: competitive → financial component (0–100); parallel → avg GM outcome score.
+//   People = avg behavioural score from decision_secrets (0–100), GM-only.
+//   composite + quadrant use the GM-only task_weight from session_secrets.
+async function dbGetTwoAxisData(sessionId) {
+  const sb = getSupabase(); if (!sb) return { teams: [] };
+  const [teamsR, dsR, ocR, wR] = await Promise.all([
+    sb.from('teams').select('*').eq('session_id', sessionId),
+    sb.from('decision_secrets').select('team_id, people_score').eq('session_id', sessionId),
+    sb.from('outcomes').select('team_id, score').eq('session_id', sessionId),
+    sb.from('session_secrets').select('task_weight').eq('session_id', sessionId).maybeSingle(),
+  ]);
+  const teams = teamsR.data || [];
+  const taskWeight = (wR.data && wR.data.task_weight != null) ? wR.data.task_weight : 50;
+  // People: avg people_score per team
+  const pAgg = {};
+  (dsR.data || []).forEach(r => { (pAgg[r.team_id] = pAgg[r.team_id] || []).push(r.people_score); });
+  const peopleByTeam = {}; Object.keys(pAgg).forEach(t => { const a = pAgg[t]; peopleByTeam[t] = Math.round(a.reduce((x, y) => x + y, 0) / a.length); });
+  // Task
+  const taskByTeam = {};
+  if (isCompetitiveSession() && window.PraxisEngine) {
+    const withState = teams.filter(t => t.state);
+    if (withState.length) {
+      const finals = window.PraxisEngine.computeFinalScores(window.SURYAN_CONFIG, withState.map(t => ({ id: t.id, name: t.display_name, state: t.state })));
+      finals.forEach(f => { taskByTeam[f.id] = Math.round(f.financial * 100); });
+    }
+  } else {
+    const oAgg = {}; (ocR.data || []).forEach(r => { if (r.score != null) (oAgg[r.team_id] = oAgg[r.team_id] || []).push(r.score); });
+    Object.keys(oAgg).forEach(t => { const a = oAgg[t]; taskByTeam[t] = Math.round(a.reduce((x, y) => x + y, 0) / a.length); });
+  }
+  const rows = teams.map(t => {
+    const task = taskByTeam[t.id]; const people = peopleByTeam[t.id];
+    const hasTask = task != null, hasPeople = people != null;
+    const two = window.PraxisEngine.computeTwoAxisScore(task || 0, people || 0, taskWeight);
+    const quad = (hasTask && hasPeople) ? window.PraxisEngine.getQuadrantLabel(task, people) : null;
+    return { id: t.id, name: t.display_name || t.slot, task: hasTask ? task : null, people: hasPeople ? people : null,
+      composite: (hasTask && hasPeople) ? two.composite : null, quadrant: quad };
+  }).sort((a, b) => (b.composite || -1) - (a.composite || -1));
+  return { teams: rows, taskWeight };
+}
+
+async function buildTwoAxisHTML(sessionId) {
+  const { teams, taskWeight } = await dbGetTwoAxisData(sessionId);
+  let html = `<div style="font-size:18px;font-weight:800;color:var(--ink);margin-bottom:4px">Two-Axis Dashboard — Task × People</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">GM-only. Composite weights Task ${taskWeight}% / People ${100 - taskWeight}%. Task &amp; People are shown separately to participants; the composite and quadrant are never shown to them during play.</div>`;
+  if (!teams.length) { return html + '<div style="color:var(--muted);margin-bottom:26px">No teams.</div>'; }
+  const qc = { Catalyst: 'var(--volt)', Executor: 'var(--amber)', Connector: 'var(--purple)', Passenger: 'var(--red)', Balancer: 'var(--muted)' };
+  teams.forEach((r, i) => {
+    const qlabel = r.quadrant ? r.quadrant.label : 'People pending';
+    const qcol = r.quadrant ? (qc[r.quadrant.label] || 'var(--muted)') : 'var(--faint)';
+    html += `<div style="display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--wire);border-radius:10px;padding:12px 16px;margin-bottom:8px">
+      <div style="font-size:16px;width:26px;text-align:center;color:var(--muted)">${i + 1}</div>
+      <div style="flex:1"><div style="font-weight:700;color:var(--ink)">${escapeHtml(r.name)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Task <b style="color:var(--ink)">${r.task != null ? r.task : '—'}</b> · People <b style="color:var(--ink)">${r.people != null ? r.people : '—'}</b>${r.composite != null ? ' · Composite <b style="color:var(--volt)">' + r.composite + '</b>' : ''}</div></div>
+      <span style="font-size:11px;font-weight:700;color:${qcol};text-transform:uppercase;letter-spacing:.4px">${escapeHtml(qlabel)}</span>
+    </div>`;
+  });
+  return html + '<div style="height:26px"></div>';
+}
+
+// GM results view — two-axis team dashboard + GM-only individual profiles.
 async function renderQuestionnaireGM(cont) {
-  cont.innerHTML = '<div style="padding:24px;color:var(--muted)">Loading profiles…</div>';
+  cont.innerHTML = '<div style="padding:24px;color:var(--muted)">Loading…</div>';
+  const twoAxis = await buildTwoAxisHTML(currentSession.id);
   const rows = await dbGetQuestionnaireResults(currentSession.id);
   const NAMES = window.PraxisEngine.DARE_SCORING_KEY.domainLabels;
-  let html = `<div style="font-size:18px;font-weight:800;color:var(--ink);margin-bottom:4px">Leadership Profiles — GM view</div>
+  let html = twoAxis + `<div style="font-size:18px;font-weight:800;color:var(--ink);margin-bottom:4px">Leadership Profiles — GM view</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:18px">${rows.length} submission${rows.length === 1 ? '' : 's'}. Consistency + contradiction flags are visible to you only.</div>`;
   if (!rows.length) { html += '<div style="color:var(--muted)">No submissions yet.</div>'; cont.innerHTML = html; return; }
   rows.forEach(r => {
