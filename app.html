@@ -1563,6 +1563,10 @@ const THEMED_TEAM_NAMES = {
     'Pulse', 'Bazaar', 'Pivot', 'Cargo', 'Express', 'Vault',
     'Ledger', 'Pantry', 'Saffron', 'Marigold', 'Cardamom', 'Tangerine'
   ],
+  suryan: [
+    'Helios', 'Aditya', 'Prabha', 'Kiran', 'Surya', 'Tejas',
+    'Ravi', 'Roshni', 'Arka', 'Bhaskar', 'Savitr', 'Mihir'
+  ],
 };
 
 // 120-word pool for three-word passwords. Curated to be readable,
@@ -5588,6 +5592,7 @@ function openCohortWizard() {
             <option value="volta">Case A — VOLTA Motors (5 quarters)</option>
             <option value="arc">Case B — ARC Motors (5 quarters)</option>
             <option value="demo">Demo — ShopPulse (4 quarters)</option>
+            <option value="suryan">Case C — Suryan Energy · competitive (5 rounds)</option>
           </select>
         </div>
         <div><label class="field-label">Number of Teams</label>
@@ -5599,6 +5604,17 @@ function openCohortWizard() {
         </div>
         <div><label class="field-label">Rounds (Quarters)</label>
           <select id="wizRounds" class="field-select" style="margin:0"></select>
+        </div>
+        <div><label class="field-label">Task / People weight <span style="color:var(--faint);font-weight:400">(GM only)</span></label>
+          <select id="wizTaskWeight" class="field-select" style="margin:0">
+            <option value="20">Task 20% · People 80%</option>
+            <option value="30">Task 30% · People 70%</option>
+            <option value="40">Task 40% · People 60%</option>
+            <option value="50" selected>Task 50% · People 50%</option>
+            <option value="60">Task 60% · People 40%</option>
+            <option value="70">Task 70% · People 30%</option>
+            <option value="80">Task 80% · People 20%</option>
+          </select>
         </div>
       </div>
       <div style="margin-top:12px"><label class="field-label">Game Master Email</label>
@@ -5663,7 +5679,8 @@ function wizardGoToStep2() {
       representative_email: '',
     });
   }
-  _wizardDraft = { cohort, caseSlug, teamCount, rounds, adminEmail, teams, taskWeight: _maDraft.taskWeight };
+  const taskWeight = parseInt((document.getElementById('wizTaskWeight') || {}).value, 10) || 50;
+  _wizardDraft = { cohort, caseSlug, teamCount, rounds, adminEmail, teams, taskWeight };
   wizardRenderStep2();
 }
 
