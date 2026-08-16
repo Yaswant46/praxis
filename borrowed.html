@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Praxis · Borrowed People</title>
+<!--
+  PRAXIS · CASE 03 — BORROWED PEOPLE   ("The Uncomfortable Art of Leadership")
+  Leadership-Comp category. Standalone single-page app sharing the Praxis
+  Supabase project. Three role-scoped views gated by access code:
+    · Participant (team access code)
+    · Character   (character access code)  — the sealed console
+    · Facilitator (facilitator code)        — runs the room + projection
+  All spoilers (demand map, selections, ratings, requests-before-reveal,
+  style calls-before-debrief, headwind) live on deny-all tables and are
+  reached ONLY through the bp_* SECURITY DEFINER RPCs. See
+  supabase/borrowed_schema.sql.
+-->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0F0A; --panel:#131A14; --panel2:#182219;
+    --green:#1FB155; --amber:#C99A3A; --red:#C24A3F;
+    --text:#F4F5F0; --muted:rgba(244,245,240,.52); --faint:rgba(244,245,240,.32);
+    --line:rgba(244,245,240,.10);
+    --serif:Georgia,'Times New Roman',serif;
+    --body:Calibri,'Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);
+       font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,h4{font-family:var(--serif);font-weight:600;margin:0}
+  a{color:var(--green)}
+  button{font-family:var(--body);cursor:pointer}
+  .mono{font-family:'DM Mono',ui-monospace,Menlo,monospace}
+  .hidden{display:none!important}
+
+  /* ---------- Login ---------- */
+  .center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;max-width:460px;width:100%}
+  .brand{font-family:var(--serif);font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--green)}
+  .title{font-family:var(--serif);font-size:30px;margin:6px 0 2px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:22px}
+  label{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);margin:14px 0 6px}
+  input,select,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+       border-radius:8px;padding:11px 12px;font-family:var(--body);font-size:15px}
+  input:focus,select,textarea:focus{outline:none;border-color:var(--green)}
+  textarea{resize:vertical;min-height:64px}
+  .btn{background:var(--green);color:#06210f;border:none;border-radius:8px;padding:12px 16px;font-weight:700;font-size:15px;width:100%;margin-top:16px}
+  .btn:hover{filter:brightness(1.07)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+  .btn.amber{background:var(--amber);color:#231803}
+  .btn.red{background:var(--red);color:#fff}
+  .btn.sm{width:auto;padding:8px 13px;font-size:13px;margin-top:0}
+  .err{color:var(--red);font-size:13px;margin-top:12px;min-height:18px}
+  .disc{margin-top:18px;font-size:11px;color:var(--faint);text-align:center}
+  details{margin-top:20px;border-top:1px solid var(--line);padding-top:14px}
+  summary{cursor:pointer;color:var(--muted);font-size:13px}
+
+  /* ---------- App shell ---------- */
+  .shell{display:flex;min-height:100vh}
+  .side{width:230px;background:var(--panel);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;flex-shrink:0}
+  .side .who{font-family:var(--serif);font-size:16px;margin-bottom:2px}
+  .side .role{font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:18px}
+  .role.participant{color:var(--green)} .role.character{color:var(--amber)} .role.facilitator{color:var(--red)}
+  .phasepill{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:11px;margin-bottom:16px}
+  .phasepill b{display:block;font-family:var(--serif);font-size:14px;color:var(--text)}
+  .nav{display:flex;flex-direction:column;gap:2px;flex:1}
+  .nav a{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:8px;color:var(--muted);text-decoration:none;font-size:14px}
+  .nav a:hover{background:var(--panel2);color:var(--text)}
+  .nav a.on{background:rgba(31,177,85,.14);color:var(--text)}
+  .nav a .b{margin-left:auto;background:var(--red);color:#fff;border-radius:20px;font-size:10px;padding:1px 7px}
+  .main{flex:1;padding:30px 34px;max-width:1000px}
+  .topline{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .h{font-family:var(--serif);font-size:26px}
+  .lede{color:var(--muted);font-size:14px;margin-bottom:22px;max-width:70ch}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}
+  .panel h3{font-size:17px;margin-bottom:4px}
+  .panel .ph-sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .kv:last-child{border:none}
+  .kv .k{color:var(--muted)}
+  .tag{display:inline-block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:3px 8px;border-radius:5px;font-weight:700}
+  .tag.g{background:rgba(31,177,85,.16);color:var(--green)}
+  .tag.a{background:rgba(201,154,58,.16);color:var(--amber)}
+  .tag.r{background:rgba(194,74,63,.16);color:var(--red)}
+  .tag.m{background:rgba(244,245,240,.08);color:var(--muted)}
+  .band-exceeded{color:var(--green)} .band-delivered{color:#8fd6a6}
+  .band-partial{color:var(--amber)} .band-missed{color:var(--red)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);font-weight:600}
+  .bar{height:10px;background:var(--panel2);border-radius:6px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--green)}
+  .banner{background:rgba(201,154,58,.12);border:1px solid rgba(201,154,58,.4);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:14px}
+  .banner.red{background:rgba(194,74,63,.12);border-color:rgba(194,74,63,.4)}
+  .empty{color:var(--faint);font-size:14px;padding:14px 0}
+  .radio-row{display:flex;gap:8px;margin-top:6px}
+  .radio-row button{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px;font-size:14px}
+  .radio-row button.on{background:var(--green);color:#06210f;border-color:var(--green);font-weight:700}
+  .pips{display:flex;gap:5px;margin-top:8px}
+  .pips i{width:9px;height:9px;border-radius:50%;background:var(--panel2);border:1px solid var(--line)}
+  .pips i.done{background:var(--green);border-color:var(--green)}
+  .pips i.cur{background:var(--amber);border-color:var(--amber)}
+  .foot{margin-top:10px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .codechip{font-family:'DM Mono',monospace;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 9px;font-size:13px}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--green);color:var(--text);padding:11px 18px;border-radius:10px;font-size:14px;z-index:50;opacity:0;transition:opacity .2s}
+  .toast.show{opacity:1}
+  .toast.err{border-color:var(--red)}
+
+  /* ---------- Projection ---------- */
+  .proj{min-height:100vh;background:#060906;padding:30px 40px;display:flex;flex-direction:column}
+  .proj .pcorner{position:fixed;top:20px;right:28px;text-align:right}
+  .proj .pcorner .q{font-family:var(--serif);font-size:22px}
+  .proj .pcorner .ph{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--amber)}
+  .boards{display:grid;grid-template-columns:1fr 1fr;gap:26px;flex:1;align-content:start;margin-top:34px}
+  .board{background:#0d140e;border:1px solid var(--line);border-radius:16px;padding:26px 28px;opacity:1;transition:opacity .6s, transform .6s}
+  .board.reveal-hidden{opacity:0;transform:translateY(14px)}
+  .board h2{font-size:22px;margin-bottom:2px}
+  .board .bsub{color:var(--muted);font-size:13px;margin-bottom:20px}
+  .brow{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+  .brow .nm{width:150px;font-family:var(--serif);font-size:18px}
+  .brow .track{flex:1;height:20px;background:#111a12;border-radius:10px;overflow:hidden}
+  .brow .track > i{display:block;height:100%;background:linear-gradient(90deg,#1FB155,#31c96b);transition:width 1s}
+  .brow .val{width:70px;text-align:right;font-family:'DM Mono',monospace;font-size:16px}
+  .orgbar{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+  .orgbar .track{height:30px;background:#111a12;border-radius:10px;overflow:hidden;position:relative}
+  .orgbar .track > i{display:block;height:100%;background:linear-gradient(90deg,#C99A3A,#1FB155)}
+  .orgbar .target{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--red)}
+  .q2 .track > i{background:linear-gradient(90deg,#C99A3A,#e0b45a)}
+
+  @media(max-width:820px){
+    .shell{flex-direction:column} .side{width:100%;border-right:none;border-bottom:1px solid var(--line)}
+    .nav{flex-direction:row;flex-wrap:wrap} .main{padding:20px}
+    .grid2,.grid3,.boards{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login" class="center">
+  <div class="card">
+    <div class="brand">Praxis · Case 03</div>
+    <div class="title">Borrowed People</div>
+    <div class="sub">The Uncomfortable Art of Leadership</div>
+
+    <label>Access code</label>
+    <input id="accessCode" placeholder="e.g. TEAMA-K7Q2 · CHR-M3XP · FAC-9RTV" autocomplete="off"
+           onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn" onclick="doLogin()">Enter &rarr;</button>
+    <div id="loginErr" class="err"></div>
+    <div class="disc">Your team, character, or facilitator code was handed out in the room.<br>
+      One code decides which console you see.</div>
+
+    <details>
+      <summary>Facilitator — set up a new session</summary>
+      <label>Session name</label>
+      <input id="newSessionName" placeholder="e.g. Catalyst Cohort · Aug 2026">
+      <button class="btn amber" onclick="createSession()">Create session &amp; generate codes</button>
+      <div id="setupErr" class="err"></div>
+      <div id="setupOut"></div>
+    </details>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="app" class="shell hidden">
+  <aside class="side">
+    <div class="who" id="sideWho">—</div>
+    <div class="role" id="sideRole">—</div>
+    <div class="phasepill">
+      <span class="mono" id="sideQ" style="font-size:10px;letter-spacing:1px;color:var(--faint)">Q— · —</span>
+      <b id="sidePhase">—</b>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <button class="btn ghost sm" style="margin-top:14px" onclick="refresh()">↻ Refresh</button>
+    <button class="btn ghost sm" style="margin-top:8px" onclick="logout()">Sign out</button>
+  </aside>
+  <main class="main" id="view"></main>
+</div>
+
+<!-- ============ PROJECTION ============ -->
+<div id="projection" class="proj hidden">
+  <div class="pcorner"><div class="q" id="projQ">—</div><div class="ph" id="projPhase">—</div></div>
+  <div style="font-family:var(--serif);font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--green)">Praxis · Borrowed People</div>
+  <div class="boards">
+    <div class="board" id="board1">
+      <h2>Objective Completion</h2>
+      <div class="bsub">How much of each team's mandate landed — and the org against ₹14,200.</div>
+      <div id="board1rows"></div>
+      <div class="orgbar">
+        <div class="row" style="justify-content:space-between;margin-bottom:6px">
+          <span style="font-family:var(--serif);font-size:16px">Organisation</span>
+          <span class="mono" id="orgVal" style="font-size:15px">—</span>
+        </div>
+        <div class="track"><i id="orgFill" style="width:0%"></i><span class="target" id="orgTarget"></span></div>
+        <div id="orgNote" style="color:var(--muted);font-size:12px;margin-top:7px"></div>
+      </div>
+    </div>
+    <div class="board q2" id="board2">
+      <h2>Would We Work With Them Again</h2>
+      <div class="bsub">Character regard — score out of 9 per quarter, and cumulative.</div>
+      <div id="board2rows"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// =====================================================================
+//  Config — shares the Praxis Supabase project.
+// =====================================================================
+const SUPA_URL = 'https://towyztagdudjbxfevnus.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvd3l6dGFnZHVkamJ4ZmV2bnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NzA0NzQsImV4cCI6MjA5MTE0NjQ3NH0.57SNbO6ZtxxZOgd1OPlE3mT92F62-dTSavqVEWK2ENA';
+let sb = null;
+try { if (window.supabase && window.supabase.createClient) sb = window.supabase.createClient(SUPA_URL, SUPA_KEY); } catch(e){}
+
+const PHASES = ['BRIEF','TEAM_DISCUSSION','REQUESTS_OPEN','REQUESTS_LOCKED','RUNNER_WINDOW','OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF'];
+const PHASE_LABEL = {
+  BRIEF:'Brief', TEAM_DISCUSSION:'Team discussion', REQUESTS_OPEN:'Requests open',
+  REQUESTS_LOCKED:'Requests locked — the reveal', RUNNER_WINDOW:'Runner window',
+  OPEN_NEGOTIATION:'Open negotiation', SELECTION:'Selection', RESULTS:'Results', DEBRIEF:'Debrief'
+};
+const STYLES = ['commanding','visionary','affiliative','democratic','pacesetting','coaching'];
+const RUBRIC = [
+  ['knew','Knew what I cared about','Did they understand my actual stake — or guess?'],
+  ['asked','Asked, or told','Did they draw me out, or push their agenda at me?'],
+  ['better','Left me better than they found me','Did I walk away more able, or more drained?']
+];
+const BAND_PCT = {missed:0, partial:0.34, delivered:0.67, exceeded:1};
+
+// =====================================================================
+//  State + RPC
+// =====================================================================
+let CODE = null, S = null, chan = null, pollTimer = null, prevPhase = null;
+let VIEW = null;
+
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function $(id){return document.getElementById(id);}
+function toast(msg, isErr){ const t=$('toast'); t.textContent=msg; t.className='toast show'+(isErr?' err':''); setTimeout(()=>t.className='toast',2200); }
+
+async function rpc(fn, args){
+  if(!sb) throw new Error('Supabase SDK not loaded');
+  const { data, error } = await sb.rpc(fn, args||{});
+  if(error) throw new Error(error.message||'RPC error');
+  return data;
+}
+// role RPCs always carry the access code in both slots (bp_auth resolves by code)
+function auth(extra){ return Object.assign({p_session_code:CODE, p_access_code:CODE}, extra||{}); }
+
+// =====================================================================
+//  Login / session lifecycle
+// =====================================================================
+async function doLogin(){
+  const code = $('accessCode').value.trim();
+  $('loginErr').textContent='';
+  if(!code){ $('loginErr').textContent='Enter your access code.'; return; }
+  CODE = code;
+  try{
+    S = await rpc('bp_state', auth());
+    if(!S || !S.role) throw new Error('No session for that code.');
+    startSession();
+  }catch(e){ CODE=null; $('loginErr').textContent = friendly(e.message); }
+}
+
+function friendly(m){
+  if(/invalid_access_code/.test(m)) return 'That code was not recognised.';
+  return m;
+}
+
+function startSession(){
+  localStorage.setItem('bp_code', CODE);
+  $('login').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  VIEW = navFor(S.role)[0].id;
+  subscribe();
+  render();
+  if(pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(refresh, 5000);   // backup for RPC-fetched data
+}
+
+async function refresh(){
+  if(!CODE) return;
+  try{ S = await rpc('bp_state', auth()); render(); }catch(e){ /* transient */ }
+}
+
+function subscribe(){
+  if(!sb || !S) return;
+  if(chan){ sb.removeChannel(chan); chan=null; }
+  const sid = S.session.id;
+  chan = sb.channel('bp-'+sid)
+    .on('postgres_changes',{event:'*',schema:'public',table:'bp_sessions',filter:'id=eq.'+sid}, refresh)
+    .on('postgres_changes',{event:'*',schema:'public',table:'bp_quarter_results',filter:'session_id=eq.'+sid}, refresh)
+    .subscribe();
+}
+
+function logout(){
+  CODE=null; S=null; localStorage.removeItem('bp_code');
+  if(chan){ sb.removeChannel(chan); chan=null; }
+  if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+  $('app').classList.add('hidden'); $('login').classList.remove('hidden');
+  $('accessCode').value='';
+}
+
+async function createSession(){
+  const name = $('newSessionName').value.trim() || 'Borrowed People session';
+  $('setupErr').textContent='';
+  try{
+    const out = await rpc('bp_create_session', {p_name:name});
+    let h = '<div class="banner">Session created. Hand out these codes — keep the facilitator code to yourself.</div>';
+    h += '<div class="kv"><span class="k">Facilitator</span><span class="codechip">'+esc(out.facilitator_code)+'</span></div>';
+    h += '<div style="margin:12px 0 4px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint)">Teams</div>';
+    Object.keys(out.teams).forEach(k=>{ const t=out.teams[k];
+      h += '<div class="kv"><span class="k">'+esc(k)+' · '+esc(t.name)+'</span><span class="codechip">'+esc(t.code)+'</span></div>'; });
+    h += '<div style="margin:12px 0 4px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint)">Characters</div>';
+    Object.keys(out.characters).forEach(k=>{ const c=out.characters[k];
+      h += '<div class="kv"><span class="k">'+esc(c.name)+'</span><span class="codechip">'+esc(c.code)+'</span></div>'; });
+    h += '<button class="btn" style="margin-top:16px" onclick="loginWith(\''+esc(out.facilitator_code)+'\')">Enter as facilitator &rarr;</button>';
+    $('setupOut').innerHTML = h;
+  }catch(e){ $('setupErr').textContent = e.message; }
+}
+function loginWith(c){ $('accessCode').value=c; doLogin(); }
+
+// =====================================================================
+//  Nav definitions per role
+// =====================================================================
+function navFor(role){
+  if(role==='participant') return [
+    {id:'dash',icon:'⬡',label:'Dashboard'},
+    {id:'stake',icon:'🗺',label:'Stakeholder map'},
+    {id:'request',icon:'✎',label:'Request'},
+    {id:'reveal',icon:'👁',label:'Reveal'},
+    {id:'commit',icon:'🤝',label:'Commitments'},
+    {id:'observer',icon:'📝',label:'Observer'},
+    {id:'boards',icon:'▲',label:'Boards'},
+    {id:'debrief',icon:'◎',label:'Debrief'}
+  ];
+  if(role==='character') return [
+    {id:'incoming',icon:'📥',label:'Incoming'},
+    {id:'brief',icon:'🎭',label:'My brief'},
+    {id:'select',icon:'✔',label:'Select'},
+    {id:'rate',icon:'★',label:'Rate'},
+    {id:'ccommit',icon:'🤝',label:'Commitments'},
+    {id:'judge',icon:'⚖',label:'Q4 judgement'}
+  ];
+  return [
+    {id:'control',icon:'▶',label:'Phase control'},
+    {id:'monitor',icon:'📊',label:'Session monitor'},
+    {id:'drift',icon:'🎚',label:'Drift check'},
+    {id:'curveball',icon:'⚡',label:'Curveball'},
+    {id:'headwind',icon:'🌀',label:'Headwind'},
+    {id:'capacity',icon:'🎚',label:'Capacity'},
+    {id:'codes',icon:'🔑',label:'Codes'},
+    {id:'fboards',icon:'▲',label:'Boards'},
+    {id:'export',icon:'⬇',label:'Export'}
+  ];
+}
+
+function go(id){ VIEW=id; render(); }
+
+// =====================================================================
+//  Master render
+// =====================================================================
+function render(){
+  if(!S) return;
+  const s = S.session;
+  $('sideWho').textContent = S.display_name || '—';
+  const rl = $('sideRole'); rl.textContent = S.role; rl.className = 'role '+S.role;
+  $('sideQ').textContent = 'Q'+s.quarter+' · '+s.status;
+  $('sidePhase').textContent = PHASE_LABEL[s.phase]||s.phase;
+
+  // nav
+  const items = navFor(S.role);
+  $('nav').innerHTML = items.map(it=>{
+    const badge = navBadge(it.id);
+    return '<a class="'+(VIEW===it.id?'on':'')+'" onclick="go(\''+it.id+'\')">'
+      +'<span>'+it.icon+'</span> '+esc(it.label)
+      +(badge?'<span class="b">'+badge+'</span>':'')+'</a>';
+  }).join('');
+
+  // curveball banner (everyone)
+  const live = (S.curveballs_live||[]).filter(c=>c.quarter===s.quarter);
+  let banner = '';
+  live.forEach(c=>{ banner += '<div class="banner"><b>⚡ '+esc(c.label)+'</b> — '+esc(c.body)+'</div>'; });
+
+  const fn = {
+    dash:vDash, stake:vStake, request:vRequest, reveal:vReveal, commit:vCommit,
+    observer:vObserver, boards:vBoards, debrief:vDebrief,
+    incoming:vIncoming, brief:vBrief, select:vSelect, rate:vRate, ccommit:vCommit, judge:vJudge,
+    control:vControl, monitor:vMonitor, drift:vDrift, curveball:vCurveball, headwind:vHeadwind,
+    capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport
+  }[VIEW];
+  $('view').innerHTML = banner + (fn ? fn() : '<div class="empty">—</div>');
+}
+
+function navBadge(id){
+  if(!S) return '';
+  const s=S.session;
+  if(id==='reveal' && S.role==='participant' && phaseIdx(s.phase)>=phaseIdx('REQUESTS_LOCKED')) return '!';
+  if(id==='incoming' && S.role==='character' && phaseIdx(s.phase)>=phaseIdx('REQUESTS_LOCKED')){
+    const n=(S.incoming||[]).length; return n?String(n):'';
+  }
+  return '';
+}
+function phaseIdx(p){ return PHASES.indexOf(p); }
+function teamName(id){ const t=(S.teams||[]).find(t=>t.id===id); return t? (t.code+' · '+t.name):'—'; }
+function teamCode(id){ const t=(S.teams||[]).find(t=>t.id===id); return t?t.code:'?'; }
+function bandCell(b){ return b?'<span class="band-'+b+'">'+b+'</span>':'<span class="empty">—</span>'; }
+
+// =====================================================================
+//  PARTICIPANT views
+// =====================================================================
+function myTeam(){ return (S.teams||[]).find(t=>t.id===S.team_id) || {}; }
+function myObjective(){ const t=myTeam(); return (S.objectives||[]).find(o=>o.key===t.objective_key)||{}; }
+
+function vDash(){
+  const t=myTeam(), o=myObjective();
+  const totalPts = (S.results||[]).filter(r=>r.team_id===S.team_id).reduce((a,r)=>a+(r.points||0),0);
+  const pct = Math.round(totalPts/12*100);
+  let seats='';
+  const seatMap = S.my_seats||{};
+  ['lead','runner','analyst','observer','watch'].forEach(k=>{ if(seatMap[k]) seats+='<div class="kv"><span class="k">'+k+'</span><span>assigned</span></div>'; });
+  return `
+  <div class="topline"><span class="tag g">Team ${esc(t.code||'')}</span><h1 class="h">${esc(t.name||'')}</h1></div>
+  <p class="lede">${esc(o.description||'')}</p>
+  <div class="grid2">
+    <div class="panel"><h3>Your objective</h3><div class="ph-sub">${esc(o.label||'')}</div>
+      <div class="kv"><span class="k">Quarter</span><span>Q${S.session.quarter} of 4</span></div>
+      <div class="kv"><span class="k">Phase</span><span>${esc(PHASE_LABEL[S.session.phase])}</span></div>
+      <div class="kv"><span class="k">Cumulative</span><span>${totalPts}/12 pts · ${pct}%</span></div>
+      <div class="bar" style="margin-top:10px"><i style="width:${pct}%"></i></div>
+    </div>
+    <div class="panel"><h3>Seat assignments</h3><div class="ph-sub">This quarter</div>
+      ${seats||'<div class="empty">The facilitator has not assigned seats for this quarter.</div>'}
+    </div>
+  </div>`;
+}
+
+function vStake(){
+  const s=S.session;
+  const preOpen = s.quarter===1 && phaseIdx(s.phase) < phaseIdx('REQUESTS_OPEN');
+  const postOpen = s.quarter===4 && (s.phase==='DEBRIEF' || s.status==='closed');
+  const maps = S.my_stakeholder||{};
+  const chars = S.characters||[];
+  function gridForm(phase){
+    const existing = maps[phase];
+    if(existing){
+      let rows = chars.map(c=>{ const v=existing[c.key]||{}; return '<div class="kv"><span class="k">'+esc(c.name)+'</span><span>power '+(v.power||'—')+' · interest '+(v.interest||'—')+'</span></div>'; }).join('');
+      return '<div class="banner">Submitted — locked.</div>'+rows;
+    }
+    let rows = chars.map(c=>`
+      <div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:8px 0">
+        <span style="width:150px">${esc(c.name)}</span>
+        <label style="margin:0;flex:0">Power</label>
+        <select id="pw_${phase}_${c.key}" style="width:70px">${[1,2,3,4,5].map(n=>'<option>'+n+'</option>').join('')}</select>
+        <label style="margin:0;flex:0">Interest</label>
+        <select id="in_${phase}_${c.key}" style="width:70px">${[1,2,3,4,5].map(n=>'<option>'+n+'</option>').join('')}</select>
+      </div>`).join('');
+    return rows + `<button class="btn" onclick="submitStake('${phase}')">Submit &amp; lock the ${phase}-map</button>`;
+  }
+  let body;
+  if(preOpen) body = '<div class="panel"><h3>Pre-simulation map</h3><div class="ph-sub">Place each character on power (1–5) and interest (1–5). You get one shot — submitting locks it.</div>'+gridForm('pre')+'</div>';
+  else if(postOpen){
+    body = '<div class="panel"><h3>Post-simulation map</h3><div class="ph-sub">Now that you have worked the room — where do they really sit? The gap from your pre-map is the point.</div>'+gridForm('post')+'</div>';
+    if(maps.pre) body += deltaPanel(maps.pre, maps.post);
+  }
+  else body = '<div class="panel"><div class="empty">The stakeholder map is open only before Q1 and after Q4. It is closed right now.</div>'+(maps.pre?deltaPanel(maps.pre, maps.post):'')+'</div>';
+  return `<h1 class="h">Stakeholder map</h1><p class="lede">Five characters plus the Sponsor, on a 5×5 power / interest grid.</p>${body}`;
+}
+function deltaPanel(pre, post){
+  const chars=S.characters||[];
+  let rows = chars.map(c=>{ const a=pre[c.key]||{}, b=(post||{})[c.key]||{};
+    const dp = (b.power!=null&&a.power!=null)?(b.power-a.power):null;
+    const di = (b.interest!=null&&a.interest!=null)?(b.interest-a.interest):null;
+    return '<div class="kv"><span class="k">'+esc(c.name)+'</span><span>Δpower '+(dp==null?'—':(dp>0?'+':'')+dp)+' · Δinterest '+(di==null?'—':(di>0?'+':'')+di)+'</span></div>'; }).join('');
+  return '<div class="panel"><h3>Pre → post shift</h3><div class="ph-sub">Where your read of the room changed.</div>'+rows+'</div>';
+}
+async function submitStake(phase){
+  const chars=S.characters||[]; const payload={};
+  chars.forEach(c=>{ payload[c.key]={power:+$('pw_'+phase+'_'+c.key).value, interest:+$('in_'+phase+'_'+c.key).value}; });
+  try{ await rpc('bp_submit_stakeholder', auth({p_phase:phase, p_payload:payload})); toast('Map locked.'); refresh(); }
+  catch(e){ toast(e.message,true); }
+}
+
+function vRequest(){
+  const s=S.session; const chars=S.characters||[];
+  const open = s.phase==='REQUESTS_OPEN';
+  const req = S.my_request||{};
+  const sc = S.my_style_calls||{};
+  const locked = phaseIdx(s.phase) >= phaseIdx('REQUESTS_LOCKED');
+  if(!open && !req.primary && !locked)
+    return '<h1 class="h">Request</h1><p class="lede">Requests are not open yet. Wait for the facilitator to open the requests window.</p>';
+  const opt = (sel)=>chars.map(c=>'<option value="'+c.id+'"'+(sel===c.id?' selected':'')+'>'+esc(c.name)+' — '+esc(c.role_label)+'</option>').join('');
+  const styleOpts = (sel)=>STYLES.map(x=>'<option'+(sel===x?' selected':'')+'>'+x+'</option>').join('');
+  let form;
+  if(open){
+    form = `
+    <div class="panel"><h3>Who do you need?</h3>
+      <div class="ph-sub">Pick the primary and secondary character you think your objective depends on this quarter. Requesting the wrong person is a real way to fail — no hints.</div>
+      <label>Primary</label><select id="reqP">${opt(req.primary)}</select>
+      <label>Secondary</label><select id="reqS">${opt(req.secondary)}</select>
+    </div>
+    <div class="panel"><h3>Style Calls</h3><div class="ph-sub">Lead and Runner each declare the leadership style they will use — and one line of why. Sealed until the debrief.</div>
+      <div class="grid2">
+        <div><label>Lead — style</label><select id="scLeadStyle">${styleOpts(sc.lead&&sc.lead.style)}</select>
+          <label>Lead — rationale</label><textarea id="scLeadWhy" placeholder="One line.">${esc(sc.lead&&sc.lead.rationale||'')}</textarea></div>
+        <div><label>Runner — style</label><select id="scRunStyle">${styleOpts(sc.runner&&sc.runner.style)}</select>
+          <label>Runner — rationale</label><textarea id="scRunWhy" placeholder="One line.">${esc(sc.runner&&sc.runner.rationale||'')}</textarea></div>
+      </div>
+      <button class="btn" onclick="submitRequest()">Submit request + both Style Calls</button>
+    </div>`;
+  } else {
+    const pc = chars.find(c=>c.id===req.primary), scd=chars.find(c=>c.id===req.secondary);
+    form = `<div class="panel"><div class="banner">Locked for Q${s.quarter}.</div>
+      <div class="kv"><span class="k">Primary</span><span>${esc(pc?pc.name:'—')}</span></div>
+      <div class="kv"><span class="k">Secondary</span><span>${esc(scd?scd.name:'—')}</span></div>
+      <div class="kv"><span class="k">Lead style</span><span>${esc(sc.lead?sc.lead.style:'—')}</span></div>
+      <div class="kv"><span class="k">Runner style</span><span>${esc(sc.runner?sc.runner.style:'—')}</span></div>
+    </div>`;
+  }
+  return `<h1 class="h">Request</h1><p class="lede">Q${s.quarter} — name who you need and how you will lead.</p>${form}`;
+}
+async function submitRequest(){
+  const p=$('reqP').value, sec=$('reqS').value;
+  if(p===sec){ toast('Primary and secondary must differ.',true); return; }
+  try{
+    await rpc('bp_submit_request', auth({p_primary:p, p_secondary:sec}));
+    await rpc('bp_submit_style_call', auth({p_seat:'lead', p_style:$('scLeadStyle').value, p_rationale:$('scLeadWhy').value}));
+    await rpc('bp_submit_style_call', auth({p_seat:'runner', p_style:$('scRunStyle').value, p_rationale:$('scRunWhy').value}));
+    toast('Request + Style Calls submitted.'); refresh();
+  }catch(e){ toast(e.message,true); }
+}
+
+function vReveal(){
+  const s=S.session;
+  if(phaseIdx(s.phase) < phaseIdx('REQUESTS_LOCKED'))
+    return '<h1 class="h">The reveal</h1><p class="lede">Sealed until the facilitator locks requests. Everyone sees everyone at the same moment.</p>';
+  const rev = S.reveal||[];
+  let rows = (S.teams||[]).map(t=>{ const r=rev.find(x=>x.team_id===t.id)||{};
+    return `<tr><td>${esc(t.code)} · ${esc(t.name)}</td><td>${esc(r.primary_name||'—')}</td><td>${esc(r.secondary_name||'—')}</td></tr>`;
+  }).join('');
+  return `<h1 class="h">The reveal</h1><p class="lede">Every team's request for Q${s.quarter}, side by side. Who doubled up? Who is exposed?</p>
+    <div class="panel"><table><thead><tr><th>Team</th><th>Primary</th><th>Secondary</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function vCommit(){
+  const s=S.session; const isChar = S.role==='character';
+  const list = S.commitments||[];
+  let rows = list.map(c=>{
+    const mine = !isChar && (c.from===S.team_id || c.to===S.team_id);
+    let actions='';
+    if(!isChar){
+      if(c.to===S.team_id && !c.confirmed) actions += '<button class="btn sm" onclick="confirmCommit(\''+c.id+'\')">Confirm</button> ';
+      if(mine){ const side=c.from===S.team_id?'from':'to'; const val=c['honoured_'+side];
+        actions += '<button class="btn sm ghost" onclick="markHon(\''+c.id+'\',true)">Honoured</button> '
+                +  '<button class="btn sm red" onclick="markHon(\''+c.id+'\',false)">Broke</button>';
+      }
+    }
+    const hf=c.honoured_from, ht=c.honoured_to;
+    const broke = hf===false||ht===false;
+    return `<tr><td>Q${c.quarter}</td><td>${esc(teamCode(c.from))} → ${esc(teamCode(c.to))}</td>
+      <td>${esc(c.text)}</td>
+      <td>${c.confirmed?'<span class="tag g">confirmed</span>':'<span class="tag m">unconfirmed</span>'} ${broke?'<span class="tag r">broken</span>':''}</td>
+      <td>${actions}</td></tr>`;
+  }).join('');
+  let form='';
+  if(!isChar){
+    const others=(S.teams||[]).filter(t=>t.id!==S.team_id);
+    form = `<div class="panel"><h3>Log a deal</h3><div class="ph-sub">Max 2 per quarter. The other team confirms; at quarter end both sides mark honoured or broken. Nothing is enforced — it is just visible.</div>
+      <label>With</label><select id="cmTo">${others.map(t=>'<option value="'+t.id+'">'+esc(t.code+' · '+t.name)+'</option>').join('')}</select>
+      <label>The deal</label><textarea id="cmText" placeholder="What did you promise each other?"></textarea>
+      <button class="btn" onclick="logCommit()">Log commitment</button></div>`;
+  }
+  return `<h1 class="h">Commitments board</h1><p class="lede">Deals struck across teams — kept and broken alike.</p>
+    ${form}
+    <div class="panel"><table><thead><tr><th>Q</th><th>Deal</th><th>Terms</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="5"><span class="empty">No commitments logged.</span></td></tr>'}</tbody></table></div>`;
+}
+async function logCommit(){ try{ await rpc('bp_log_commitment', auth({p_to_team:$('cmTo').value, p_text:$('cmText').value})); toast('Logged.'); refresh(); }catch(e){ toast(e.message,true); } }
+async function confirmCommit(id){ try{ await rpc('bp_confirm_commitment', auth({p_id:id})); refresh(); }catch(e){ toast(e.message,true); } }
+async function markHon(id,v){ try{ await rpc('bp_mark_honoured', auth({p_id:id, p_honoured:v})); refresh(); }catch(e){ toast(e.message,true); } }
+
+function vObserver(){
+  const s=S.session; const o=S.my_observer||{};
+  const styleOpts=STYLES.map(x=>'<option'+(o.style===x?' selected':'')+'>'+x+'</option>').join('');
+  return `<h1 class="h">Observer entry</h1><p class="lede">If you hold the observer seat this quarter: which leadership style did you actually see your team use? Compared with what they declared, that gap is the lesson.</p>
+    <div class="panel"><label>Observed style</label><select id="obStyle">${styleOpts}</select>
+      <label>Note (optional)</label><textarea id="obNote" placeholder="What did it look like on the ground?">${esc(o.note||'')}</textarea>
+      <button class="btn" onclick="submitObserver()">Save observation</button></div>`;
+}
+async function submitObserver(){ try{ await rpc('bp_submit_observer', auth({p_style:$('obStyle').value, p_note:$('obNote').value})); toast('Saved.'); refresh(); }catch(e){ toast(e.message,true); } }
+
+function vDebrief(){
+  const s=S.session;
+  if(s.phase!=='DEBRIEF') return '<h1 class="h">Debrief</h1><p class="lede">Opens when the facilitator moves this quarter to debrief. Then your sealed Style Calls meet the observer log.</p>';
+  const scs=(S.style_calls||[]).filter(x=>x.team_id===S.team_id);
+  const ob=(S.observer_logs||[]).find(x=>x.team_id===S.team_id);
+  let rows = scs.map(x=>{ const gap = ob && ob.observed_style!==x.style;
+    return `<tr><td>${esc(x.seat)}</td><td>${esc(x.style)}</td><td>${esc(x.rationale||'')}</td>
+      <td>${ob?esc(ob.observed_style):'—'}</td><td>${gap?'<span class="tag r">gap</span>':(ob?'<span class="tag g">match</span>':'—')}</td></tr>`;
+  }).join('');
+  return `<h1 class="h">Debrief — Q${s.quarter}</h1><p class="lede">What you declared, against what the room saw.</p>
+    <div class="panel"><table><thead><tr><th>Seat</th><th>Declared</th><th>Why</th><th>Observed</th><th></th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="5"><span class="empty">No Style Calls for this quarter.</span></td></tr>'}</tbody></table>
+      ${ob&&ob.note?'<div class="ph-sub" style="margin-top:12px">Observer note: '+esc(ob.note)+'</div>':''}</div>`;
+}
+
+// =====================================================================
+//  CHARACTER console
+// =====================================================================
+function vIncoming(){
+  const s=S.session;
+  if(phaseIdx(s.phase) < phaseIdx('REQUESTS_LOCKED'))
+    return '<h1 class="h">Incoming</h1><p class="lede">You will see who named you the moment requests lock. Until then, nothing.</p>';
+  const inc=S.incoming||[];
+  let rows=inc.map(r=>`<tr><td>${esc(teamName(r.team_id))}</td><td>${r.as==='primary'?'<span class="tag g">primary</span>':'<span class="tag a">secondary</span>'}</td></tr>`).join('');
+  return `<h1 class="h">Incoming</h1><p class="lede">Every team that named you this quarter. Some need you badly; some guessed wrong.</p>
+    <div class="panel"><table><thead><tr><th>Team</th><th>Named you as</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="2"><span class="empty">No team named you this quarter.</span></td></tr>'}</tbody></table></div>`;
+}
+
+function vBrief(){
+  const b=S.my_brief||{};
+  return `<h1 class="h">My brief · Q${S.session.quarter}</h1><p class="lede">Your posture for this quarter. Play it straight — the whole case depends on you not going soft.</p>
+    <div class="panel"><h3>${esc(b.posture||'—')}</h3><div class="ph-sub">Sample lines</div>
+      <div style="font-family:var(--serif);font-size:18px;line-height:1.6">${esc(b.sample_lines||'')}</div>
+      ${b.video_url?'<video controls src="'+esc(b.video_url)+'" style="width:100%;margin-top:14px;border-radius:10px"></video>':''}
+    </div>
+    <div class="banner">Capacity this quarter: you may pick <b>${S.my_capacity==null?'—':S.my_capacity}</b> team(s).</div>`;
+}
+
+function vSelect(){
+  const s=S.session;
+  if(s.phase!=='SELECTION') return '<h1 class="h">Select</h1><p class="lede">Selection opens when the facilitator calls it. You will pick who you actually give your time to — capped by your capacity this quarter.</p>';
+  const cap=S.my_capacity||0;
+  const inc=S.incoming||[];
+  const mine=S.my_selections||[];
+  const picked = {}; mine.forEach(m=>picked[m.team_id]=m.reason);
+  // candidates = teams that named you (incoming) — but you can pick any team; show incoming first
+  const teams=S.teams||[];
+  let rows = teams.map(t=>{
+    const named = inc.find(i=>i.team_id===t.id);
+    const on = picked[t.id]!=null;
+    return `<div class="panel" style="padding:14px">
+      <div class="row" style="justify-content:space-between">
+        <label style="margin:0"><input type="checkbox" id="sel_${t.id}" ${on?'checked':''} style="width:auto"> ${esc(t.code)} · ${esc(t.name)}</label>
+        ${named?(named.as==='primary'?'<span class="tag g">named you primary</span>':'<span class="tag a">named you secondary</span>'):'<span class="tag m">did not name you</span>'}
+      </div>
+      <textarea id="rsn_${t.id}" placeholder="Required — why give this team your time?" style="margin-top:8px">${esc(picked[t.id]||'')}</textarea>
+    </div>`;
+  }).join('');
+  return `<h1 class="h">Select</h1><p class="lede">Pick up to <b>${cap}</b> team(s). Each pick needs a real reason. Selection is final at results — no appeals.</p>
+    ${rows}<button class="btn" onclick="submitSelect(${cap})">Lock my selection</button>`;
+}
+async function submitSelect(cap){
+  const picks=[];
+  (S.teams||[]).forEach(t=>{ if($('sel_'+t.id) && $('sel_'+t.id).checked){ picks.push({team_id:t.id, reason:($('rsn_'+t.id).value||'').trim()}); } });
+  if(picks.length>cap){ toast('Over capacity — pick at most '+cap+'.',true); return; }
+  if(picks.some(p=>!p.reason)){ toast('Every pick needs a reason.',true); return; }
+  try{ await rpc('bp_select_teams', auth({p_picks:picks})); toast('Selection locked.'); refresh(); }catch(e){ toast(e.message,true); }
+}
+
+function vRate(){
+  const s=S.session;
+  const dealt=S.my_selections||[];
+  const ratings=S.my_ratings||{};
+  if(!dealt.length) return '<h1 class="h">Rate</h1><p class="lede">Once you have selected teams, rate each one you dealt with against the fixed rubric. Rate honestly — compression is how a character quietly breaks the case.</p>';
+  let cards = dealt.map(d=>{
+    const r=ratings[d.team_id]||{};
+    let fields = RUBRIC.map(f=>`
+      <div style="margin-top:10px"><div style="font-size:14px">${esc(f[1])}</div>
+        <div class="ph-sub" style="margin:2px 0 4px">${esc(f[2])}</div>
+        <div class="radio-row" id="rt_${d.team_id}_${f[0]}">
+          ${[1,2,3].map(n=>'<button onclick="pick(\''+d.team_id+'\',\''+f[0]+'\','+n+')" class="'+((r[f[0]]===n)?'on':'')+'">'+n+'</button>').join('')}
+        </div></div>`).join('');
+    return `<div class="panel"><h3>${esc(teamName(d.team_id))}</h3>${fields}
+      <button class="btn" style="margin-top:14px" onclick="submitRate('${d.team_id}')">Save rating</button></div>`;
+  }).join('');
+  return `<h1 class="h">Rate</h1><p class="lede">Three 1–3 scores per team. 1 = poor, 3 = strong. This feeds Board 2, aggregated only.</p>${cards}`;
+}
+let RATE_BUF={};
+function pick(team,field,n){ RATE_BUF[team]=RATE_BUF[team]||{}; RATE_BUF[team][field]=n;
+  const box=$('rt_'+team+'_'+field); if(box) Array.from(box.children).forEach((b,i)=>b.className=(i+1===n?'on':'')); }
+async function submitRate(team){
+  const cur=Object.assign({}, (S.my_ratings||{})[team]||{}, RATE_BUF[team]||{});
+  const knew=cur.knew, asked=cur.asked, better=cur.better;
+  if(!knew||!asked||!better){ toast('Score all three.',true); return; }
+  try{ await rpc('bp_rate_team', auth({p_team:team, p_knew:knew, p_asked:asked, p_better:better})); toast('Rating saved.'); refresh(); }catch(e){ toast(e.message,true); }
+}
+
+function vJudge(){
+  const s=S.session;
+  const dealt=S.teams||[];
+  const j=S.my_judgements||{};
+  if(s.quarter<4) return '<h1 class="h">Q4 judgement</h1><p class="lede">Your final verdict opens in Q4: for each team, would you work with them again — and why. It is read out to the room.</p>';
+  let cards=dealt.map(t=>{ const cur=j[t.id]||{};
+    return `<div class="panel"><h3>${esc(t.code)} · ${esc(t.name)}</h3>
+      <div class="radio-row" style="max-width:280px">
+        <button id="jy_${t.id}" class="${cur.again===true?'on':''}" onclick="setJudge('${t.id}',true)">Work with again</button>
+        <button id="jn_${t.id}" class="${cur.again===false?'on':''}" onclick="setJudge('${t.id}',false)">Would not</button>
+      </div>
+      <textarea id="jr_${t.id}" placeholder="Why?" style="margin-top:10px">${esc(cur.reason||'')}</textarea>
+      <button class="btn" style="margin-top:10px" onclick="submitJudge('${t.id}')">Save verdict</button></div>`;
+  }).join('');
+  return `<h1 class="h">Q4 judgement</h1><p class="lede">The part nobody enjoys. Say it plainly.</p>${cards}`;
+}
+let JUDGE_BUF={};
+function setJudge(t,v){ JUDGE_BUF[t]=v; $('jy_'+t).className=(v?'on':''); $('jn_'+t).className=(v?'':'on'); }
+async function submitJudge(t){
+  const again = (t in JUDGE_BUF)?JUDGE_BUF[t]:((S.my_judgements||{})[t]||{}).again;
+  if(again==null){ toast('Pick a verdict.',true); return; }
+  try{ await rpc('bp_judge_team', auth({p_team:t, p_again:again, p_reason:$('jr_'+t).value})); toast('Saved.'); refresh(); }catch(e){ toast(e.message,true); }
+}
+
+// =====================================================================
+//  FACILITATOR
+// =====================================================================
+function vControl(){
+  const s=S.session;
+  const idx=phaseIdx(s.phase);
+  let pips = PHASES.map((p,i)=>'<i class="'+(i<idx?'done':(i===idx?'cur':''))+'" title="'+PHASE_LABEL[p]+'"></i>').join('');
+  const nextLabel = s.phase==='DEBRIEF' ? (s.quarter>=4?'Close session':'Advance to Q'+(s.quarter+1)+' brief') : ('Advance → '+PHASE_LABEL[PHASES[idx+1]]);
+  const revealNote = s.phase==='REQUESTS_OPEN' ? '<div class="banner">Next step locks requests — <b>the reveal</b>. Make sure every team has submitted (Session monitor).</div>'
+                   : (PHASES[idx+1]==='RESULTS' ? '<div class="banner red">Next step runs scoring and publishes both boards. Selections become final.</div>' : '');
+  return `<h1 class="h">Phase control</h1><p class="lede">You set the pace. Nothing auto-advances.</p>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <div><div class="ph-sub" style="margin:0">Quarter ${s.quarter} of 4 · ${esc(s.status)}</div>
+          <h2 style="font-size:24px">${esc(PHASE_LABEL[s.phase])}</h2></div>
+      </div>
+      <div class="pips" style="margin:14px 0 18px">${pips}</div>
+      ${revealNote}
+      <div class="row">
+        <button class="btn amber sm" style="width:auto" onclick="stepBack()">◀ Step back</button>
+        <button class="btn sm" style="width:auto;flex:1" onclick="advance()">${esc(nextLabel)} ▶</button>
+      </div>
+      <div class="ph-sub" style="margin-top:10px">Step-back is logged and never deletes data.</div>
+    </div>
+    <div class="panel"><h3>Projection</h3><div class="ph-sub">Put both boards on the wall. Opens a full-screen view in a new tab.</div>
+      <button class="btn ghost sm" style="width:auto" onclick="openProjection()">Open projection ↗</button></div>`;
+}
+async function advance(){ try{ const r=await rpc('bp_advance_phase', auth()); S.session.phase=r.phase; S.session.quarter=r.quarter; S.session.status=r.status; toast('→ '+(PHASE_LABEL[r.phase]||r.phase)); refresh(); }catch(e){ toast(e.message,true); } }
+async function stepBack(){ try{ const r=await rpc('bp_step_back', auth()); toast('◀ '+(PHASE_LABEL[r.phase]||r.phase)); refresh(); }catch(e){ toast(e.message,true); } }
+function openProjection(){ window.open('borrowed.html?projection='+S.session.id,'_blank'); }
+
+function vMonitor(){
+  const m=S.monitor||[];
+  let rows=m.map(x=>`<tr><td>${esc(x.code)}</td>
+    <td>${x.has_request?'<span class="tag g">✓</span>':'<span class="tag r">missing</span>'}</td>
+    <td>${x.style_calls>=2?'<span class="tag g">2/2</span>':'<span class="tag a">'+x.style_calls+'/2</span>'}</td>
+    <td>${x.has_observer?'<span class="tag g">✓</span>':'<span class="tag m">—</span>'}</td></tr>`).join('');
+  return `<h1 class="h">Session monitor</h1><p class="lede">Who has submitted what this quarter. Chase the red before you advance.</p>
+    <div class="panel"><table><thead><tr><th>Team</th><th>Request</th><th>Style Calls</th><th>Observer</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function vDrift(){
+  const d=S.drift||[];
+  let rows=d.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.selected}</td><td>${x.rated}</td><td>${x.spread}</td>
+    <td>${x.compressed?'<span class="tag r">compressed</span>':'<span class="tag g">spread</span>'}</td></tr>`).join('');
+  return `<h1 class="h">Character drift check</h1><p class="lede">The single most useful number you have. A character going soft shows up as rating <b>compression</b> — every team scored within a point of each other. Chase the red flags between quarters.</p>
+    <div class="panel"><table><thead><tr><th>Character</th><th>Teams picked</th><th>Rated</th><th>Spread</th><th>Flag</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="5"><span class="empty">No ratings yet this quarter.</span></td></tr>'}</tbody></table></div>`;
+}
+
+function vCurveball(){
+  const cbs=S.curveballs||[];
+  let rows=cbs.map(c=>`<div class="panel" style="padding:14px">
+    <div class="row" style="justify-content:space-between">
+      <div><b>${esc(c.label)}</b><div class="ph-sub" style="margin:2px 0 0">${esc(c.body)}</div></div>
+      ${c.triggered_at?'<span class="tag a">fired</span>':'<button class="btn sm" style="width:auto" onclick="fireCurve(\''+c.key+'\')">Fire ⚡</button>'}
+    </div></div>`).join('');
+  return `<h1 class="h">Curveballs</h1><p class="lede">Fire one and it hits every screen in the room at once. <b>character_pulled</b> is designed to be fired after requests lock.</p>${rows}`;
+}
+async function fireCurve(key){ try{ await rpc('bp_trigger_curveball', auth({p_key:key})); toast('Fired.'); refresh(); }catch(e){ toast(e.message,true); } }
+
+function vHeadwind(){
+  const s=S.session; const hw=S.headwind!=null?S.headwind:6000;
+  return `<h1 class="h">Headwind</h1><p class="lede">The hidden macro drag on the org total, ₹3,000–9,000. Set it whenever. Reveal it in Q3 — until then the room only sees gross, "before headwind."</p>
+    <div class="panel">
+      <label>Headwind (₹) — <span id="hwOut">${hw}</span></label>
+      <input type="range" min="3000" max="9000" step="500" value="${hw}" id="hwSlider" oninput="document.getElementById('hwOut').textContent=this.value">
+      <div class="row" style="margin-top:14px">
+        <button class="btn sm" style="width:auto" onclick="saveHeadwind()">Set headwind</button>
+        <button class="btn amber sm" style="width:auto" onclick="revealHeadwind()">${s.headwind_revealed?'Revealed ✓':'Reveal to room'}</button>
+      </div>
+      <div class="ph-sub" style="margin-top:10px">${s.headwind_revealed?'The headwind is live on the boards.':'Currently hidden. Org bar shows gross only.'}</div>
+    </div>`;
+}
+async function saveHeadwind(){ try{ await rpc('bp_set_headwind', auth({p_value:+$('hwSlider').value})); toast('Headwind set.'); refresh(); }catch(e){ toast(e.message,true); } }
+async function revealHeadwind(){ try{ await rpc('bp_reveal_headwind', auth()); toast('Headwind revealed.'); refresh(); }catch(e){ toast(e.message,true); } }
+
+function vCapacity(){
+  const chars=(S.characters||[]).filter(c=>c.key!=='sponsor');
+  const cap=S.capacity||[];
+  function slots(cid,q){ const r=cap.find(x=>x.character_id===cid&&x.quarter===q); return r?r.slots:'—'; }
+  let rows=chars.map(c=>{
+    let cells=[1,2,3,4].map(q=>`<td><input style="width:56px" type="number" min="0" max="5" id="cap_${c.id}_${q}" value="${slots(c.id,q)}"></td>`).join('');
+    return `<tr><td>${esc(c.name)}</td>${cells}<td><button class="btn sm" style="width:auto" onclick="saveCap('${c.id}')">Save</button></td></tr>`;
+  }).join('');
+  return `<h1 class="h">Capacity override</h1><p class="lede">Slots each character can give per quarter. Q3 is preloaded to 1 — the squeeze. Edit if the room needs it.</p>
+    <div class="panel"><table><thead><tr><th>Character</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+async function saveCap(cid){
+  try{ for(let q=1;q<=4;q++){ await rpc('bp_set_capacity', auth({p_character_id:cid, p_quarter:q, p_slots:+$('cap_'+cid+'_'+q).value})); }
+    toast('Capacity saved.'); refresh(); }catch(e){ toast(e.message,true); }
+}
+
+function vCodes(){
+  const tc=S.team_codes||{};
+  const chars=S.characters||[];
+  let t=Object.keys(tc).sort().map(k=>`<div class="kv"><span class="k">Team ${esc(k)}</span><span class="codechip">${esc(tc[k])}</span></div>`).join('');
+  let c=chars.map(ch=>`<div class="kv"><span class="k">${esc(ch.name)}</span><span class="codechip">${esc(ch.access_code)}</span></div>`).join('');
+  return `<h1 class="h">Access codes</h1><p class="lede">Hand these out. Keep your own facilitator code off the wall.</p>
+    <div class="grid2">
+      <div class="panel"><h3>Teams</h3>${t}</div>
+      <div class="panel"><h3>Characters</h3>${c}</div>
+    </div>`;
+}
+
+async function vExportRun(){
+  try{ const data=await rpc('bp_export', auth());
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download='borrowed-people-'+S.session.id.slice(0,8)+'.json'; a.click(); URL.revokeObjectURL(url);
+    toast('Exported.');
+  }catch(e){ toast(e.message,true); }
+}
+function vExport(){
+  return `<h1 class="h">Session export</h1><p class="lede">Full JSON — every request, selection, rating, style call, commitment, judgement and the audit log. For the post-session debrief pack.</p>
+    <div class="panel"><button class="btn" style="width:auto" onclick="vExportRun()">⬇ Download session JSON</button></div>`;
+}
+
+// =====================================================================
+//  BOARDS (participant + facilitator, in-app)
+// =====================================================================
+async function loadBoards(){
+  try{ const b=await rpc('bp_boards',{p_session_id:S.session.id}); renderBoardsInto('view_boards', b); }catch(e){}
+}
+function vBoards(){ setTimeout(loadBoards,0); return '<h1 class="h">Boards</h1><p class="lede">Objective completion, and whether the characters would work with each team again.</p><div id="view_boards"><div class="empty">Loading…</div></div>'; }
+
+function renderBoardsInto(elId, b){
+  const el=$(elId); if(!el) return;
+  const teams=b.teams||[];
+  let b1 = teams.map(t=>{ const pct=Math.round((t.total_points||0)/12*100);
+    return `<div class="brow"><span class="nm">${esc(t.code)} · ${esc(t.name)}</span>
+      <span class="track"><i style="width:${pct}%"></i></span><span class="val">${pct}%</span></div>`; }).join('');
+  const org=b.org||{};
+  let orgHtml;
+  if(b.headwind_revealed){ const net=org.net||0; const pct=Math.max(0,Math.min(100,Math.round(net/ (b.target_value||14200) *100)));
+    orgHtml=`<div class="row" style="justify-content:space-between;margin:14px 0 6px"><b>Organisation (net)</b><span class="mono">₹${net.toLocaleString('en-IN')} ${org.target_hit?'· <span class="band-exceeded">target hit</span>':'· <span class="band-missed">short</span>'}</span></div><div class="bar"><i style="width:${pct}%"></i></div>`;
+  } else { const gross=org.gross||0; const pct=Math.max(0,Math.min(100,Math.round(gross/(b.target_value||14200)*100)));
+    orgHtml=`<div class="row" style="justify-content:space-between;margin:14px 0 6px"><b>Organisation (before headwind)</b><span class="mono">₹${gross.toLocaleString('en-IN')}</span></div><div class="bar"><i style="width:${pct}%"></i></div>`; }
+
+  let b2 = teams.map(t=>{ const qs=t.quarters||{}; const vals=[1,2,3,4].map(q=>qs[q]?qs[q].avg_rating:null);
+    const present=vals.filter(v=>v!=null); const cum = present.length? (present.reduce((a,v)=>a+ (+v),0)/present.length):null;
+    let cells=vals.map(v=>'<td>'+(v!=null?(+v).toFixed(1):'—')+'</td>').join('');
+    return `<tr><td>${esc(t.code)} · ${esc(t.name)}</td>${cells}<td><b>${cum!=null?cum.toFixed(1):'—'}</b></td></tr>`; }).join('');
+
+  el.innerHTML = `
+    <div class="panel"><h3>Board 1 — Objective completion</h3><div class="ph-sub">Share of each mandate delivered, and the org against ₹${(b.target_value||14200).toLocaleString('en-IN')}.</div>
+      ${b1||'<div class="empty">No results yet.</div>'}${orgHtml}</div>
+    <div class="panel"><h3>Board 2 — Would we work with them again</h3><div class="ph-sub">Character regard out of 9, per quarter and cumulative.</div>
+      <table><thead><tr><th>Team</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Cum</th></tr></thead><tbody>${b2||''}</tbody></table></div>`;
+}
+
+// =====================================================================
+//  PROJECTION (standalone, ?projection=<session_id>)
+// =====================================================================
+let projSid=null, projPoll=null;
+async function projLoad(){
+  try{
+    const b = await rpc('bp_boards',{p_session_id:projSid});
+    $('projQ').textContent = 'Quarter '+b.quarter+' / 4';
+    $('projPhase').textContent = PHASE_LABEL[b.phase]||b.phase;
+    // Board 1 rows
+    const teams=b.teams||[];
+    $('board1rows').innerHTML = teams.map(t=>{ const pct=Math.round((t.total_points||0)/12*100);
+      return `<div class="brow"><span class="nm">${esc(t.code)} · ${esc(t.name)}</span><span class="track"><i style="width:${pct}%"></i></span><span class="val">${pct}%</span></div>`; }).join('');
+    // Org
+    const org=b.org||{}; const target=b.target_value||14200;
+    if(b.headwind_revealed){ const net=org.net||0; const pct=Math.max(0,Math.min(100,Math.round(net/target*100)));
+      $('orgFill').style.width=pct+'%'; $('orgVal').innerHTML='₹'+net.toLocaleString('en-IN')+(org.target_hit?' · <span class="band-exceeded">HIT</span>':' · <span class="band-missed">SHORT</span>');
+      $('orgNote').textContent='Net of ₹'+(org.headwind||0).toLocaleString('en-IN')+' headwind · target ₹'+target.toLocaleString('en-IN');
+      $('orgTarget').style.left='100%';
+    } else { const gross=org.gross||0; const pct=Math.max(0,Math.min(100,Math.round(gross/target*100)));
+      $('orgFill').style.width=pct+'%'; $('orgVal').textContent='₹'+gross.toLocaleString('en-IN')+' (before headwind)';
+      $('orgNote').textContent='Headwind still hidden · target ₹'+target.toLocaleString('en-IN');
+      $('orgTarget').style.left='100%';
+    }
+    // Board 2
+    $('board2rows').innerHTML = teams.map(t=>{ const qs=t.quarters||{}; const present=[1,2,3,4].map(q=>qs[q]?+qs[q].avg_rating:null).filter(v=>v!=null);
+      const cum=present.length?(present.reduce((a,v)=>a+v,0)/present.length):0; const pct=Math.round(cum/9*100);
+      return `<div class="brow"><span class="nm">${esc(t.code)} · ${esc(t.name)}</span><span class="track"><i style="width:${pct}%"></i></span><span class="val">${cum?cum.toFixed(1):'—'}/9</span></div>`; }).join('');
+
+    // Reveal animation on entry to RESULTS
+    if(b.phase==='RESULTS' && prevPhase!=='RESULTS'){ runReveal(); }
+    prevPhase=b.phase;
+  }catch(e){}
+}
+function runReveal(){
+  const b1=$('board1'), b2=$('board2');
+  b1.classList.add('reveal-hidden'); b2.classList.add('reveal-hidden');
+  setTimeout(()=>b1.classList.remove('reveal-hidden'), 200);       // Board 1 first
+  setTimeout(()=>b2.classList.remove('reveal-hidden'), 2200);      // two-second gap — the room reacts
+}
+function startProjection(sid){
+  projSid=sid;
+  $('login').classList.add('hidden'); $('app').classList.add('hidden');
+  $('projection').classList.remove('hidden');
+  projLoad();
+  if(sb){ sb.channel('proj-'+sid)
+    .on('postgres_changes',{event:'*',schema:'public',table:'bp_sessions',filter:'id=eq.'+sid}, projLoad)
+    .on('postgres_changes',{event:'*',schema:'public',table:'bp_quarter_results',filter:'session_id=eq.'+sid}, projLoad)
+    .subscribe(); }
+  projPoll=setInterval(projLoad, 5000);
+}
+
+// =====================================================================
+//  Boot
+// =====================================================================
+(function boot(){
+  const params=new URLSearchParams(location.search);
+  const proj=params.get('projection');
+  if(proj){ startProjection(proj); return; }
+  const saved=localStorage.getItem('bp_code');
+  if(saved){ $('accessCode').value=saved; CODE=saved;
+    rpc('bp_state', auth()).then(st=>{ S=st; startSession(); }).catch(()=>{ CODE=null; localStorage.removeItem('bp_code'); });
+  }
+})();
+</script>
+</body>
+</html>
