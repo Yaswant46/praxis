@@ -1,0 +1,29 @@
+# Netlify configuration for Praxis.
+# Static site — no build step. Serves the repo root as-is.
+#
+# The single entry URL you share with participants is:  <your-site>/join
+# (a clean alias for enter.html). They enter a cohort code + email and are
+# routed into their seat. app.html and borrowed.html are also served directly.
+
+[build]
+  publish = "."
+  command = ""
+
+# Clean, shareable aliases for the unified entry page.
+[[redirects]]
+  from = "/join"
+  to = "/enter.html"
+  status = 200
+
+[[redirects]]
+  from = "/enter"
+  to = "/enter.html"
+  status = 200
+
+# Sensible security headers for a static app.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "SAMEORIGIN"

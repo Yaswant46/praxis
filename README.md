@@ -126,6 +126,9 @@ from the Manage panel at any time.
 | File                                          | What it is                                  |
 |-----------------------------------------------|---------------------------------------------|
 | `index.html`                                  | Landing page (redirects to `app.html`)      |
+| `enter.html`                                  | Unified entry — cohort code + email → routed access |
+| `netlify.toml` / `NETLIFY.md`                 | Netlify hosting config + one-time setup steps |
+| `supabase/enrollments_schema.sql`             | Roster: `enrollments` table + `enroll_login` / `enroll_bulk` RPCs |
 | `app.html`                                    | The whole app — UI, JS, Supabase client     |
 | `supabase_schema.sql`                         | Tables, RLS policies, RPCs, realtime config |
 | `borrowed.html`                               | Case 03 · Borrowed People — 3-role app + projection |
