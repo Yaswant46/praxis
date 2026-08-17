@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Praxis · Enter Simulation</title>
+<!--
+  PRAXIS · UNIFIED ENTRY
+  The single URL every participant is pointed to. Enter a cohort code and
+  your email; the pre-registered roster routes you straight into your
+  specific access (team / character / facilitator) in the right engine.
+  Backend: enroll_login RPC (see supabase/enrollments_schema.sql).
+-->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0F0A; --panel:#131A14; --panel2:#182219;
+    --green:#1FB155; --amber:#C99A3A; --red:#C24A3F;
+    --text:#F4F5F0; --muted:rgba(244,245,240,.55); --faint:rgba(244,245,240,.34);
+    --line:rgba(244,245,240,.10);
+    --serif:Georgia,'Times New Roman',serif;
+    --body:Calibri,'Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);
+       min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:34px;max-width:440px;width:100%}
+  .brand{font-family:var(--serif);font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--green)}
+  h1{font-family:var(--serif);font-weight:600;font-size:30px;margin:8px 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:26px;line-height:1.5}
+  label{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);margin:16px 0 6px}
+  input{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+       border-radius:9px;padding:12px 13px;font-family:var(--body);font-size:16px}
+  input:focus{outline:none;border-color:var(--green)}
+  .btn{background:var(--green);color:#06210f;border:none;border-radius:9px;padding:13px 16px;font-weight:700;font-size:16px;width:100%;margin-top:22px;cursor:pointer}
+  .btn:hover{filter:brightness(1.07)}
+  .btn:disabled{opacity:.6;cursor:default}
+  .err{color:var(--red);font-size:14px;margin-top:14px;min-height:20px}
+  .ok{color:var(--green);font-size:14px;margin-top:14px}
+  .foot{margin-top:22px;font-size:12px;color:var(--faint);text-align:center;line-height:1.6}
+  .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.3);border-top-color:#06210f;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">Praxis</div>
+    <h1>Enter your simulation</h1>
+    <div class="sub">Type the cohort code your facilitator gave you and the email you registered with. You'll be taken straight to your seat.</div>
+
+    <label>Cohort code</label>
+    <input id="cohort" placeholder="e.g. CATALYST-AUG" autocomplete="off" autocapitalize="characters"
+           onkeydown="if(event.key==='Enter')document.getElementById('email').focus()">
+    <label>Email</label>
+    <input id="email" type="email" placeholder="you@example.com" autocomplete="email"
+           onkeydown="if(event.key==='Enter')go()">
+
+    <button class="btn" id="btn" onclick="go()">Enter &rarr;</button>
+    <div id="msg" class="err"></div>
+    <div class="foot">Access is pre-registered. If your email isn't recognised, ask your facilitator to add you to the roster.</div>
+  </div>
+
+<script>
+const SUPA_URL = 'https://towyztagdudjbxfevnus.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvd3l6dGFnZHVkamJ4ZmV2bnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NzA0NzQsImV4cCI6MjA5MTE0NjQ3NH0.57SNbO6ZtxxZOgd1OPlE3mT92F62-dTSavqVEWK2ENA';
+let sb=null; try{ if(window.supabase&&window.supabase.createClient) sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);}catch(e){}
+
+function msg(t,ok){ const m=document.getElementById('msg'); m.textContent=t; m.className=ok?'ok':'err'; }
+
+// Prefill cohort from ?cohort= for pre-baked links.
+(function(){ const c=new URLSearchParams(location.search).get('cohort'); if(c) document.getElementById('cohort').value=c; })();
+
+async function go(){
+  const cohort=document.getElementById('cohort').value.trim();
+  const email=document.getElementById('email').value.trim();
+  const btn=document.getElementById('btn');
+  msg('');
+  if(!cohort){ msg('Enter your cohort code.'); return; }
+  if(!email || email.indexOf('@')<1){ msg('Enter a valid email.'); return; }
+  if(!sb){ msg('Could not reach the server. Refresh and try again.'); return; }
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span>Finding your seat…';
+  try{
+    const { data, error } = await sb.rpc('enroll_login', { p_cohort_code:cohort, p_email:email });
+    if(error) throw error;
+    route(data);
+  }catch(e){
+    const m=(e&&e.message)||'';
+    if(/not_enrolled/.test(m)) msg('That email isn’t on the roster for this cohort. Check the spelling, or ask your facilitator.');
+    else msg(m||'Something went wrong. Try again.');
+    btn.disabled=false; btn.textContent='Enter →';
+  }
+}
+
+function route(d){
+  if(!d || !d.app){ msg('No access found for that email.'); return; }
+  if(d.app==='borrowed'){
+    // Hand off to the Borrowed People engine with the resolved access code.
+    location.href = 'borrowed.html?code=' + encodeURIComponent(d.access_code);
+    return;
+  }
+  if(d.app==='praxis'){
+    // Round-based engine: land on the cohort's login (email prefill).
+    // Full email->team auto-login handoff is the next increment.
+    const base = 'app.html#/session/' + encodeURIComponent(d.session_ref||'');
+    location.href = base + (d.email?('?email='+encodeURIComponent(d.email)):'');
+    return;
+  }
+  msg('Unknown simulation type for your enrollment.');
+}
+</script>
+</body>
+</html>

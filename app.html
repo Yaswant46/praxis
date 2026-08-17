@@ -5594,6 +5594,7 @@ function renderCohortWizard() {
 function openCohortWizard() {
   const slot = document.getElementById('cohortWizardSlot');
   if (!slot) return;
+  _wizBpMode = false;
   const isMaster   = !!currentUser.isSuperuser;
   const lockedEmail = isMaster ? '' : (currentUser.email || '');
 
@@ -5610,6 +5611,7 @@ function openCohortWizard() {
             <option value="arc">Case B — ARC Motors (5 quarters)</option>
             <option value="demo">Demo — ShopPulse (4 quarters)</option>
             <option value="suryan">Case C — Suryan Energy · competitive (5 rounds)</option>
+            <option value="borrowed-people">Case 03 — Borrowed People · Leadership-Comp · live (4 quarters)</option>
           </select>
         </div>
         <div><label class="field-label">Number of Teams</label>
@@ -5654,19 +5656,104 @@ function closeCohortWizard() {
   if (slot) slot.innerHTML = '';
 }
 
+var _wizBpMode = false;
+
 function wizardOnCaseChange() {
-  // Populate the Rounds dropdown with 1..maxQuarters for the chosen case.
   const caseSlug = document.getElementById('wizCase')?.value || 'volta';
-  const max      = caseSlug === 'demo' ? 4 : 5;
-  const sel      = document.getElementById('wizRounds');
+
+  // Borrowed People is a different engine (live, 3-role, phase-driven) — it is
+  // not created by the round-based wizard. Swap in its own creator.
+  if (caseSlug === 'borrowed-people') { renderBorrowedCreator(); return; }
+
+  // Coming back from the Borrowed People creator to a round-based case:
+  // rebuild the normal Step-1 wizard, preserving the typed cohort name.
+  if (_wizBpMode) {
+    const name = (document.getElementById('wizCohort')?.value || '').trim();
+    _wizBpMode = false;
+    openCohortWizard();
+    const c = document.getElementById('wizCohort'); if (c) c.value = name;
+    const cs = document.getElementById('wizCase');  if (cs) cs.value = caseSlug;
+  }
+
+  // Populate the Rounds dropdown with 1..maxQuarters for the chosen case.
+  const max = caseSlug === 'demo' ? 4 : 5;
+  const sel = document.getElementById('wizRounds');
   if (!sel) return;
-  const current  = parseInt(sel.value) || max;
+  const current = parseInt(sel.value) || max;
   let html = '';
   for (let i = 1; i <= max; i++) {
     html += `<option value="${i}"${i === current || (current > max && i === max) ? ' selected' : ''}>${i} round${i===1?'':'s'}</option>`;
   }
   sel.innerHTML = html;
   if (!sel.value) sel.value = String(max);
+}
+
+// Borrowed People creator — replaces the wizard body. Keeps a Case dropdown so
+// the GM can switch back to a round-based case.
+function renderBorrowedCreator() {
+  _wizBpMode = true;
+  const slot = document.getElementById('cohortWizardSlot');
+  if (!slot) return;
+  const name = (document.getElementById('wizCohort')?.value || '').trim();
+  slot.innerHTML = `
+    <div class="card" style="border:1px dashed var(--wire);background:var(--surface)">
+      <div class="admin-section-title">Create a Borrowed People session</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><label class="field-label">Session name</label>
+          <input type="text" id="wizCohort" class="login-input" placeholder="e.g. Catalyst · Aug"
+            value="${escapeHtml(name)}"
+            style="background:var(--bg);border-color:var(--wire);color:var(--ink);margin:0;padding:11px 14px;font-size:13px;width:100%"></div>
+        <div><label class="field-label">Case</label>
+          <select id="wizCase" class="field-select" style="margin:0" onchange="wizardOnCaseChange()">
+            <option value="volta">Case A — VOLTA Motors (5 quarters)</option>
+            <option value="arc">Case B — ARC Motors (5 quarters)</option>
+            <option value="demo">Demo — ShopPulse (4 quarters)</option>
+            <option value="suryan">Case C — Suryan Energy · competitive (5 rounds)</option>
+            <option value="borrowed-people" selected>Case 03 — Borrowed People · Leadership-Comp · live (4 quarters)</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6">
+        Borrowed People is a <b>live, in-room, facilitator-run</b> case — three roles (teams, characters, facilitator),
+        four quarters, its own scoring. It doesn't use emailed team passwords. Creating it mints
+        <b>access codes</b>; hand those out, or add email logins under the console's <b>Enrollments</b> tab
+        so people enter via the single link with a cohort code + email.
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button class="btn-ghost" onclick="closeCohortWizard()">Cancel</button>
+        <button class="btn-volt" onclick="wizardCreateBorrowed()">Create session & get codes →</button>
+      </div>
+      <div id="bpCreateResult" style="margin-top:12px"></div>
+    </div>`;
+}
+
+async function wizardCreateBorrowed() {
+  const name = (document.getElementById('wizCohort')?.value || '').trim() || 'Borrowed People session';
+  const res  = document.getElementById('bpCreateResult');
+  res.innerHTML = '<div style="color:var(--muted);font-size:13px">Creating…</div>';
+  try {
+    if (!_supabaseClient) initSupabase();
+    const { data, error } = await _supabaseClient.rpc('bp_create_session', { p_name: name });
+    if (error) throw error;
+    const chip = (v) => `<span style="font-family:var(--mono);background:var(--bg);border:1px solid var(--wire);border-radius:5px;padding:2px 8px">${escapeHtml(v)}</span>`;
+    let teamRows = Object.keys(data.teams || {}).sort().map(k =>
+      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--wire)"><span>${escapeHtml(k)} · ${escapeHtml(data.teams[k].name)}</span>${chip(data.teams[k].code)}</div>`).join('');
+    let charRows = Object.keys(data.characters || {}).map(k =>
+      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--wire)"><span>${escapeHtml(data.characters[k].name)}</span>${chip(data.characters[k].code)}</div>`).join('');
+    res.innerHTML = `
+      <div class="card" style="background:var(--bg);border:1px solid var(--wire)">
+        <div style="font-weight:700;margin-bottom:8px">Session created — hand out these codes</div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--wire)"><span><b>Facilitator (admin)</b></span>${chip(data.facilitator_code)}</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin:10px 0 2px">Teams</div>${teamRows}
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin:10px 0 2px">Characters</div>${charRows}
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <a class="btn-volt" href="borrowed.html?code=${encodeURIComponent(data.facilitator_code)}" target="_blank" style="text-decoration:none">Open facilitator console →</a>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">Tip: in the console, the <b>Enrollments</b> tab lets you bulk-upload a roster (email → seat) so people sign in with the single link.</div>
+      </div>`;
+  } catch (e) {
+    res.innerHTML = `<div class="login-error">${escapeHtml(e.message || 'Could not create session.')}</div>`;
+  }
 }
 
 function wizardGoToStep2() {

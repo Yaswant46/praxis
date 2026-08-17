@@ -369,6 +369,7 @@ function navFor(role){
     {id:'headwind',icon:'🌀',label:'Headwind'},
     {id:'capacity',icon:'🎚',label:'Capacity'},
     {id:'playas',icon:'👥',label:'Play as'},
+    {id:'enroll',icon:'✉',label:'Enrollments'},
     {id:'codes',icon:'🔑',label:'Codes'},
     {id:'fboards',icon:'▲',label:'Boards'},
     {id:'export',icon:'⬇',label:'Export'}
@@ -450,7 +451,7 @@ function render(){
     observer:vObserver, boards:vBoards, debrief:vDebrief,
     incoming:vIncoming, brief:vBrief, select:vSelect, rate:vRate, ccommit:vCommit, judge:vJudge,
     control:vControl, monitor:vMonitor, drift:vDrift, curveball:vCurveball, headwind:vHeadwind,
-    capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas
+    capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll
   }[VIEW];
   $('view').innerHTML = banner + (fn ? fn() : '<div class="empty">—</div>');
 }
@@ -879,6 +880,86 @@ function vCodes(){
     </div>`;
 }
 
+// ---- Enrollments (roster: cohort code + email -> access) ----
+let ENROLL_COHORT = '';
+function vEnroll(){
+  const cohort = ENROLL_COHORT || '';
+  setTimeout(loadRoster, 0);
+  return `<h1 class="h">Enrollments</h1>
+    <p class="lede">Pre-register who plays what. Give everyone one link — the entry page — plus a <b>cohort code</b>; they sign in with that code and their email and land in exactly the seat you assign here.</p>
+    <div class="panel"><h3>Cohort code</h3><div class="ph-sub">A short label you share with this cohort (e.g. CATALYST-AUG). It maps every email below to this session.</div>
+      <input id="enCohort" value="${esc(cohort)}" placeholder="CATALYST-AUG" oninput="ENROLL_COHORT=this.value" style="max-width:320px">
+    </div>
+    <div class="panel"><h3>Upload roster (CSV)</h3>
+      <div class="ph-sub">Columns: <b>email, name, assignment</b>. Assignment = a team (<b>Team A</b>…<b>Team E</b> or A–E), a character (<b>Arjun, Neha, Raghav, Farida, Devika, Sponsor</b>), or <b>Facilitator</b>.</div>
+      <div class="row">
+        <button class="btn ghost sm" style="width:auto" onclick="downloadTemplate()">⬇ Download CSV template</button>
+        <label class="btn amber sm" style="width:auto;display:inline-block">Choose CSV…
+          <input type="file" accept=".csv,text/csv" style="display:none" onchange="uploadRoster(this)"></label>
+      </div>
+      <div id="enResult" style="margin-top:12px"></div>
+    </div>
+    <div class="panel"><h3>Current roster</h3><div class="ph-sub">Everyone registered for this session.</div>
+      <div id="enRoster"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+function downloadTemplate(){
+  const csv = 'email,name,assignment\n'
+    + 'alice@example.com,Alice Rao,Team A\n'
+    + 'bob@example.com,Bob Singh,Arjun\n'
+    + 'carol@example.com,Carol Lee,Facilitator\n';
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='praxis-roster-template.csv'; a.click();
+}
+// Minimal CSV parse: header row + email,name,assignment. Handles quoted fields.
+function parseCSV(text){
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim().length);
+  if(!lines.length) return [];
+  const split=(l)=>{ const out=[]; let cur='',q=false;
+    for(let i=0;i<l.length;i++){ const c=l[i];
+      if(q){ if(c==='"'){ if(l[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+      else { if(c==='"') q=true; else if(c===','){ out.push(cur); cur=''; } else cur+=c; } }
+    out.push(cur); return out.map(s=>s.trim()); };
+  let start=0; const head=split(lines[0]).map(h=>h.toLowerCase());
+  const hasHeader = head.includes('email') || head.includes('assignment');
+  const idx = { email:head.indexOf('email'), name:head.indexOf('name'), assignment:head.indexOf('assignment') };
+  if(hasHeader) start=1;
+  const rows=[];
+  for(let i=start;i<lines.length;i++){ const c=split(lines[i]); if(!c.length) continue;
+    const email = hasHeader && idx.email>=0 ? c[idx.email] : c[0];
+    const name  = hasHeader && idx.name>=0 ? c[idx.name]  : c[1];
+    const assign= hasHeader && idx.assignment>=0 ? c[idx.assignment] : c[2];
+    if((email||'').trim()) rows.push({email:email||'', name:name||'', assignment:assign||''});
+  }
+  return rows;
+}
+async function uploadRoster(input){
+  const file=input.files && input.files[0]; if(!file) return;
+  const cohort=(ENROLL_COHORT||$('enCohort').value||'').trim();
+  if(!cohort){ toast('Set a cohort code first.',true); input.value=''; return; }
+  const text=await file.text(); const rows=parseCSV(text);
+  if(!rows.length){ toast('No rows found in that CSV.',true); input.value=''; return; }
+  try{
+    const res=await rpc('enroll_bulk', {p_admin_code:CODE, p_cohort_code:cohort, p_app:'borrowed', p_session_ref:S.session.id, p_rows:rows});
+    const bad=(res.rows||[]).filter(r=>!r.ok);
+    let h='<div class="banner">Enrolled <b>'+res.enrolled+'</b> of '+res.total+'. Cohort code: <span class="codechip">'+esc(cohort)+'</span></div>';
+    if(bad.length){ h+='<div class="banner red"><b>'+bad.length+' row(s) skipped:</b><br>'
+        + bad.map(b=>esc(b.email||'(no email)')+' — '+esc(b.assignment||'')+' → '+esc(b.reason)).join('<br>')+'</div>'; }
+    $('enResult').innerHTML=h; toast('Roster uploaded.'); loadRoster();
+  }catch(e){ toast(e.message,true); }
+  input.value='';
+}
+async function loadRoster(){
+  const el=$('enRoster'); if(!el) return;
+  try{ const list=await rpc('enroll_list', {p_admin_code:CODE, p_session_ref:S.session.id});
+    if(!list || !list.length){ el.innerHTML='<div class="empty">No one enrolled yet. Upload a CSV above.</div>'; return; }
+    el.innerHTML='<table><thead><tr><th>Email</th><th>Name</th><th>Assignment</th><th>Role</th><th>Cohort</th></tr></thead><tbody>'
+      + list.map(r=>`<tr><td>${esc(r.email)}</td><td>${esc(r.name||'')}</td><td>${esc(r.assignment||'')}</td><td>${esc(r.role||'')}</td><td>${esc(r.cohort_code||'')}</td></tr>`).join('')
+      + '</tbody></table>';
+  }catch(e){ el.innerHTML='<div class="empty">'+esc(e.message)+'</div>'; }
+}
+
 function vPlayas(){
   const teams=(S.teams||[]).map(t=>({code:t.code,name:t.name,accessCode:(S.team_codes||{})[t.code]}));
   const chars=(S.characters||[]);
@@ -997,6 +1078,15 @@ function startProjection(sid){
   const params=new URLSearchParams(location.search);
   const proj=params.get('projection');
   if(proj){ startProjection(proj); return; }
+  // Handoff from the unified entry page: ?code=<access_code> auto-logs in.
+  const handoff=params.get('code');
+  if(handoff){
+    CODE=handoff;
+    rpc('bp_state', auth()).then(st=>{ S=st; startSession();
+      history.replaceState(null,'','borrowed.html'); })   // strip the code from the URL bar
+      .catch(e=>{ CODE=null; $('accessCode').value=handoff; $('loginErr').textContent=friendly(e.message||''); });
+    return;
+  }
   const saved=localStorage.getItem('bp_code');
   if(saved){ $('accessCode').value=saved; CODE=saved;
     rpc('bp_state', auth()).then(st=>{ S=st; startSession(); }).catch(()=>{ CODE=null; localStorage.removeItem('bp_code'); });
