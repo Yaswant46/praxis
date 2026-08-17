@@ -191,9 +191,7 @@ ALTER TABLE curveballs ADD COLUMN IF NOT EXISTS impact JSONB DEFAULT '{}'::jsonb
 --    insert/update sessions, teams, outcomes, or curveballs.
 --  - All writes from a Game Master require an authenticated session
 --    (Supabase OTP login) where auth.email() matches admin_email,
---    OR the caller is the master admin (x22yaswanta@iima.ac.in while
---    on the Resend sandbox; switch back to ross.harvey92@gmail.com once
---    a Resend domain is verified).
+--    OR the caller is the master admin (ross.harvey92@gmail.com).
 --  - Decisions stay open to anon for v2; gating decisions by team
 --    identity requires a per-team JWT (planned for a follow-up).
 -- =============================================================
@@ -250,7 +248,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION praxis_is_master_admin() RETURNS BOOLEAN
 LANGUAGE sql STABLE AS $$
-  SELECT praxis_caller_email() = 'x22yaswanta@iima.ac.in';
+  SELECT praxis_caller_email() = 'ross.harvey92@gmail.com';
 $$;
 
 CREATE OR REPLACE FUNCTION praxis_is_session_gm(p_session_id UUID) RETURNS BOOLEAN

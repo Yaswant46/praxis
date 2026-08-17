@@ -2094,11 +2094,12 @@ function defaultMetrics() {
 // =================================================
 //  SUPERUSER
 // =================================================
-// Must match the Resend account's signup email while we're still on the
-// resend.dev sandbox sender, otherwise the SMTP relay rejects the OTP.
-// Switch back to ross.harvey92@gmail.com (and update the SQL helper) once
-// a Resend domain is verified.
-const SUPERUSER_EMAIL = 'x22yaswanta@iima.ac.in';
+// The master-admin email. Logging in as GM with this address unlocks the
+// Master Admin view (all cohorts). Enforced server-side too — keep this in
+// sync with praxis_is_master_admin() in supabase_schema.sql. Note: GM login
+// sends an OTP to this address, so the Supabase Auth SMTP sender must be able
+// to deliver to it.
+const SUPERUSER_EMAIL = 'ross.harvey92@gmail.com';
 
 // =================================================
 //  AUTH — LOGIN FLOW
