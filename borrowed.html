@@ -227,6 +227,7 @@
       <div id="board2rows"></div>
     </div>
   </div>
+  <div id="projStory" style="max-width:1100px;margin:22px auto 0;padding:0 40px;display:none"></div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -272,6 +273,11 @@ let VIEW = null;
 // holds their real facilitator code and ROSTER caches every login so they can
 // hop between identities (and back) without re-entering codes.
 let ADMIN_CODE = null, ROSTER = null;
+// Org storyline: published chapters (all roles read) + the facilitator's
+// last-generated (unpublished) draft.
+let ORG_STORIES = [];
+let NARR = { quarter:null, body:'', spine:null, model:'' };
+let _narrSelQ = null;
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function $(id){return document.getElementById(id);}
@@ -319,7 +325,15 @@ function startSession(){
 
 async function refresh(){
   if(!CODE) return;
-  try{ S = await rpc('bp_state', auth()); render(); }catch(e){ /* transient */ }
+  try{ S = await rpc('bp_state', auth()); await loadStories(); render(); }catch(e){ /* transient */ }
+}
+// Published org chapters are a public table — every role reads them directly.
+async function loadStories(){
+  try{ if(sb && S && S.session){
+    const { data } = await sb.from('bp_org_story')
+      .select('quarter,body,published_at').eq('session_id', S.session.id).order('quarter');
+    ORG_STORIES = data || [];
+  }}catch(e){ /* transient */ }
 }
 
 function subscribe(){
@@ -329,6 +343,7 @@ function subscribe(){
   chan = sb.channel('bp-'+sid)
     .on('postgres_changes',{event:'*',schema:'public',table:'bp_sessions',filter:'id=eq.'+sid}, refresh)
     .on('postgres_changes',{event:'*',schema:'public',table:'bp_quarter_results',filter:'session_id=eq.'+sid}, refresh)
+    .on('postgres_changes',{event:'*',schema:'public',table:'bp_org_story',filter:'session_id=eq.'+sid}, refresh)
     .subscribe();
 }
 
@@ -368,8 +383,8 @@ function navFor(role){
     {id:'stake',icon:'🗺',label:'Stakeholder map'},
     {id:'request',icon:'✎',label:'Request'},
     {id:'reveal',icon:'👁',label:'Reveal'},
-    {id:'observer',icon:'📝',label:'Observer'},
     {id:'boards',icon:'▲',label:'Boards'},
+    {id:'story',icon:'📖',label:'Story so far'},
     {id:'debrief',icon:'◎',label:'Debrief'}
   ];
   if(role==='character') return [
@@ -377,6 +392,7 @@ function navFor(role){
     {id:'brief',icon:'🎭',label:'My brief'},
     {id:'select',icon:'✔',label:'Select'},
     {id:'rate',icon:'★',label:'Rate'},
+    {id:'story',icon:'📖',label:'Story so far'},
     {id:'judge',icon:'⚖',label:'Q4 judgement'}
   ];
   return [
@@ -387,6 +403,8 @@ function navFor(role){
     {id:'headwind',icon:'🌀',label:'Headwind'},
     {id:'capacity',icon:'🎚',label:'Capacity'},
     {id:'playas',icon:'👥',label:'Play as'},
+    {id:'orgstory',icon:'📖',label:'Org story'},
+    {id:'observerlog',icon:'📝',label:'Observer log'},
     {id:'assist',icon:'✦',label:'AI assist'},
     {id:'enroll',icon:'✉',label:'Enrollments'},
     {id:'codes',icon:'🔑',label:'Codes'},
@@ -471,7 +489,7 @@ function render(){
     incoming:vIncoming, brief:vBrief, select:vSelect, rate:vRate, judge:vJudge,
     control:vControl, monitor:vMonitor, drift:vDrift, curveball:vCurveball, headwind:vHeadwind,
     capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll,
-    assist:vAssist
+    assist:vAssist, story:vStory, orgstory:vOrgStory, observerlog:vObserverLog
   }[VIEW];
   $('view').innerHTML = banner + (fn ? fn() : '<div class="empty">—</div>');
 }
@@ -1098,6 +1116,124 @@ function vAssist(){
 }
 
 // =====================================================================
+//  ORG STORYLINE  ("the Meridian")
+//  Facilitator generates a quarter's chapter from the deterministic spine
+//  (via the bp-narrative edge function), reviews it, then publishes it to
+//  every team + character login. Participants & characters read it.
+// =====================================================================
+function storyHtml(t){
+  return String(t||'').replace(/\r/g,'').split(/\n\s*\n/)
+    .filter(p=>p.trim())
+    .map(p=>'<p>'+esc(p.trim()).replace(/\n/g,'<br>')+'</p>').join('');
+}
+function narrFacts(sp){
+  if(!sp) return '';
+  const m=sp.meter||{}, mo=sp.momentum||{};
+  let meter;
+  if(sp.is_final && m.net!=null){
+    meter='Net ₹'+m.net+' / ₹'+(m.target||14200)+' · '+
+      (m.target_hit?'<span style="color:var(--green)">target hit</span>':'<span style="color:var(--red)">short of target</span>');
+  } else {
+    meter='Provisional ₹'+(m.provisional_gross||0)+' / ₹'+(m.target||14200)+
+      (sp.headwind_revealed?(' · headwind ₹'+sp.headwind):'');
+  }
+  let ach='';
+  if(sp.is_final && Array.isArray(sp.achievements)){
+    ach='<div class="mrow" style="margin-top:9px;flex-wrap:wrap;gap:6px">'+sp.achievements.map(a=>{
+      const cls=a.status==='achieved'?'g':a.status==='warning'?'a':'m';
+      const mk=a.status==='achieved'?'✓ ':a.status==='warning'?'! ':'○ ';
+      return '<span class="tag '+cls+'">'+mk+esc(a.label)+'</span>';
+    }).join('')+'</div>';
+  }
+  return '<div class="ai-meta">Momentum: '+esc(mo.tier||'—')+' ('+(mo.points||0)+' pts this quarter) · '+meter+'</div>'+ach;
+}
+function selQ(){ return _narrSelQ || (S && S.session ? S.session.quarter : 1); }
+function narrPick(q){ _narrSelQ=q; render(); }
+function vStory(){
+  const list=(ORG_STORIES||[]).slice().sort((a,b)=>a.quarter-b.quarter);
+  if(!list.length) return '<h1 class="h">The Meridian — the story so far</h1><p class="lede">Your facilitator publishes the organisation’s story here after each quarter. Nothing has been published yet.</p>';
+  const chapters=list.map(c=>'<div class="panel"><div class="ph-sub">Quarter '+esc(c.quarter)+'</div><div class="ai-body">'+storyHtml(c.body)+'</div></div>').join('');
+  return '<h1 class="h">The Meridian — the story so far</h1><p class="lede">How the organisation moved, quarter by quarter — the sum of every team’s choices.</p>'+chapters;
+}
+function vOrgStory(){
+  const sq=selQ();
+  const published=(ORG_STORIES||[]).find(c=>+c.quarter===+sq);
+  const draft=(NARR.body && +NARR.quarter===+sq)?NARR:null;
+  const qbtns=[1,2,3,4].map(q=>'<button class="btn sm '+((+sq===q)?'':'ghost')+'" style="width:auto" onclick="narrPick('+q+')">Q'+q+'</button>').join(' ');
+  let body;
+  if(draft){
+    body=narrFacts(draft.spine)+'<div class="ai-body">'+storyHtml(draft.body)+'</div>'
+      +'<div class="mrow" style="margin-top:14px"><button class="btn" style="width:auto" onclick="narrPublish()">▲ Publish to every login</button>'
+      +'<button class="btn ghost sm" style="width:auto" onclick="narrGenerate()">↻ Regenerate</button></div>'
+      +(published?'<div class="ai-hint" style="margin-top:8px">Publishing replaces the version already live for Q'+sq+'.</div>':'');
+  } else if(published){
+    body='<div class="ai-meta">Published and live for Q'+sq+'</div><div class="ai-body">'+storyHtml(published.body)+'</div>'
+      +'<div class="mrow" style="margin-top:14px"><button class="btn ghost sm" style="width:auto" onclick="narrGenerate()">↻ Regenerate this chapter</button></div>';
+  } else {
+    body='<div class="empty">No chapter yet for Q'+sq+'. Run this quarter’s results first, then press Generate.</div>';
+  }
+  return '<h1 class="h">Org story — the Meridian</h1>'
+    +'<p class="lede">Generate the organisation’s chapter for a quarter from the live results, review it, then publish it to every team and character login. The facts — bands, meter, scorecard — are computed exactly; the AI only writes the words around them.</p>'
+    +'<div class="panel"><div class="ph-sub">Quarter</div><div class="mrow" style="margin-top:4px">'+qbtns+'</div>'
+    +'<div class="mrow" style="margin-top:12px"><button class="btn amber" id="narr_btn" style="width:auto" onclick="narrGenerate()">✦ Generate chapter for Q'+sq+'</button>'
+    +'<span class="ai-hint">Uses your Anthropic key server-side; a few seconds.</span></div></div>'
+    +'<div id="narr_out" class="panel ai-panel">'+body+'</div>';
+}
+async function narrGenerate(){
+  const q=selQ(); const out=$('narr_out'), btn=$('narr_btn');
+  if(btn){ btn.disabled=true; btn.textContent='Generating…'; }
+  if(out) out.innerHTML='<div class="empty">Writing the chapter for Q'+q+'… a few seconds.</div>';
+  try{
+    const res=await fetch(SUPA_URL+'/functions/v1/bp-narrative',{
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', apikey:SUPA_KEY, Authorization:'Bearer '+SUPA_KEY },
+      body:JSON.stringify({ code:CODE, quarter:q })
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok || data.error){
+      const map={ assistant_not_configured:'The narrator isn’t configured — set the ANTHROPIC_API_KEY secret on the bp-narrative edge function.',
+                  forbidden:'This is facilitator-only.', bad_quarter:'Pick a quarter between 1 and 4.',
+                  refusal:'The narrator declined to write this chapter.' };
+      if(out) out.innerHTML='<div class="banner red">'+esc(map[data.error]||data.detail||data.error||('Request failed ('+res.status+').'))+'</div>';
+      return;
+    }
+    NARR={ quarter:q, body:data.narrative, spine:data.spine, model:data.model };
+    render();
+  }catch(e){ if(out) out.innerHTML='<div class="banner red">'+esc(e.message||'Could not reach the narrator.')+'</div>'; }
+  finally{ if(btn){ btn.disabled=false; } }
+}
+async function narrPublish(){
+  if(!NARR.body){ toast('Generate a chapter first.',true); return; }
+  try{ await rpc('bp_publish_story', auth({p_quarter:NARR.quarter, p_body:NARR.body}));
+    toast('Published to every login.'); await loadStories(); render();
+  }catch(e){ toast(e.message,true); }
+}
+
+// ---- Facilitator: key in the observed style (offline observer) ----
+function vObserverLog(){
+  const teams=S.teams||[]; const mon=S.monitor||[];
+  const rows=teams.map(t=>{
+    const m=mon.find(x=>x.team_id===t.id);
+    const done=m&&m.has_observer;
+    return '<div class="panel"><div class="row" style="justify-content:space-between">'
+      +'<h3>'+esc(t.code)+' · '+esc(t.name)+'</h3>'
+      +(done?'<span class="tag g">recorded ✓</span>':'<span class="tag m">not set</span>')+'</div>'
+      +'<label>Observed style</label><select id="ob_'+t.id+'">'+styleOptionsHtml('')+'</select>'
+      +'<label>Note (optional)</label><textarea id="obn_'+t.id+'" placeholder="What did the observer report seeing?"></textarea>'
+      +'<button class="btn sm" style="width:auto" onclick="saveObserverLog(\''+t.id+'\')">Save observed style</button></div>';
+  }).join('');
+  return '<h1 class="h">Observer log</h1>'
+    +'<p class="lede">The observer sits out and watches — then tells you the style they saw. Key it in here for the current quarter (Q'+(S.session?S.session.quarter:'—')+'). It stays sealed until this quarter’s debrief, exactly as before — you’re just entering it on their behalf so they can stay out of the team’s console.</p>'
+    +rows;
+}
+async function saveObserverLog(tid){
+  const style=$('ob_'+tid).value, note=$('obn_'+tid).value;
+  try{ await rpc('bp_set_observer', auth({p_team:tid, p_style:style, p_note:note}));
+    toast('Observed style saved.'); refresh();
+  }catch(e){ toast(e.message,true); }
+}
+
+// =====================================================================
 //  BOARDS (participant + facilitator, in-app)
 // =====================================================================
 async function loadBoards(){
@@ -1159,6 +1295,20 @@ async function projLoad(){
       const cum=present.length?(present.reduce((a,v)=>a+v,0)/present.length):0; const pct=Math.round(cum/9*100);
       return `<div class="brow"><span class="nm">${esc(t.code)} · ${esc(t.name)}</span><span class="track"><i style="width:${pct}%"></i></span><span class="val">${cum?cum.toFixed(1):'—'}/9</span></div>`; }).join('');
 
+    // Latest published org chapter on the wall
+    try{
+      const { data } = await sb.from('bp_org_story').select('quarter,body')
+        .eq('session_id', projSid).order('quarter',{ascending:false}).limit(1);
+      const el=$('projStory');
+      if(el){
+        if(data && data.length){
+          el.style.display='block';
+          el.innerHTML='<div style="font-family:var(--serif);font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--green);margin-bottom:8px">The Meridian · Quarter '+esc(data[0].quarter)+'</div>'
+            +'<div style="font-family:var(--serif);font-size:19px;line-height:1.55;color:var(--text)">'+storyHtml(data[0].body)+'</div>';
+        } else { el.style.display='none'; }
+      }
+    }catch(e){}
+
     // Reveal animation on entry to RESULTS
     if(b.phase==='RESULTS' && prevPhase!=='RESULTS'){ runReveal(); }
     prevPhase=b.phase;
@@ -1178,6 +1328,7 @@ function startProjection(sid){
   if(sb){ sb.channel('proj-'+sid)
     .on('postgres_changes',{event:'*',schema:'public',table:'bp_sessions',filter:'id=eq.'+sid}, projLoad)
     .on('postgres_changes',{event:'*',schema:'public',table:'bp_quarter_results',filter:'session_id=eq.'+sid}, projLoad)
+    .on('postgres_changes',{event:'*',schema:'public',table:'bp_org_story',filter:'session_id=eq.'+sid}, projLoad)
     .subscribe(); }
   projPoll=setInterval(projLoad, 5000);
 }
