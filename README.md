@@ -135,6 +135,8 @@ from the Manage panel at any time.
 | `supabase/borrowed_schema.sql`                | Case 03 backend — `bp_*` tables, RLS, RPCs, scoring engine |
 | `supabase/functions/send-cohort-emails/`      | Deno Edge Function (Brevo transport)        |
 | `supabase/functions/bp-assist/`               | Deno Edge Function — on-demand AI facilitator assistant (Anthropic key server-side) |
+| `supabase/functions/bp-narrative/`            | Deno Edge Function — org storyline narrator (deterministic spine + Claude prose) |
+| `migrations/007_org_story.sql`                | Org story table + `bp_org_spine` / `bp_publish_story` / `bp_set_observer` |
 | `404.html`                                    | GitHub Pages SPA fallback                   |
 
 ---
@@ -210,15 +212,35 @@ is 80% emotional intelligence / 20% business outcome.
 
 ### Three roles, one page, gated by access code
 - **Participant** (team code) — dashboard, stakeholder map (pre/post), request +
-  Style Calls, the reveal, commitments, observer entry, boards, debrief.
+  Style Calls, the reveal, boards, the **org story so far**, debrief.
 - **Character** (character code) — the **sealed console**: incoming requests,
   escalation brief, capacity-capped selection, the fixed 3×(1–3) rating rubric,
-  Q4 judgement.
+  the **org story so far**, Q4 judgement.
 - **Facilitator** (facilitator code) — manual phase control, session monitor,
   the **drift check** (rating-compression flag), curveballs, hidden headwind +
-  reveal, capacity override, **Play as** (admin override — act as any team or
-  character), the on-demand **AI assist**, code handout, JSON export, and the
+  reveal, capacity override, **Play as** (admin override), the on-demand
+  **AI assist**, the **Org story** generator/publisher, the **Observer log**
+  (keyed in from the offline observer), code handout, JSON export, and the
   wall **projection** (`borrowed.html?projection=<session_id>`).
+
+### The observer sits out
+The team's observer watches without playing, so the observed style is **keyed in
+by the facilitator** on the **Observer log** tab (from what the observer reports
+offline) — not entered in a team login. The debrief is unchanged: declared Style
+Calls still meet the observed style, and the gap is still the lesson.
+
+### Org storyline — "the Meridian" (real-time, on-demand)
+After running a quarter's results, the facilitator opens **Org story**, picks the
+quarter, and presses **Generate**. The `bp-narrative` edge function pulls the
+**deterministic spine** (`bp_org_spine` — each programme's band, momentum, the
+org meter, and, at year-end, the couplings + achievement scorecard) through the
+facilitator-gated RPC, then asks Claude to write **one chapter of prose around
+those fixed facts** (the facts are computed in SQL, never invented by the model).
+The facilitator reviews/regenerates, then **Publish** pushes the chapter to
+**every team and character login** (and the projection wall) live over Realtime.
+The Anthropic key stays in the edge function. Setup mirrors the assistant: deploy
+`supabase/functions/bp-narrative/`, set `ANTHROPIC_API_KEY` (optional
+`BP_NARRATIVE_MODEL`, default `claude-opus-5`).
 
 ### AI facilitator assistant (on-demand)
 The **AI assist** tab never runs on its own. When the facilitator presses
