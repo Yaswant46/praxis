@@ -6393,6 +6393,12 @@ function _isLocalhost() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Deep link: #/gm (from the unified entry page) lands straight on the
+  // Game Master / Admin email step instead of the role chooser.
+  if (/^#\/?gm\b/i.test(window.location.hash) && typeof loginAsGM === 'function') {
+    loginAsGM();
+    return;
+  }
   const code = getSessionCodeFromURL();
   if (code) {
     const sess = await dbGetSession(code);

@@ -38,6 +38,11 @@
   .err{color:var(--red);font-size:14px;margin-top:14px;min-height:20px}
   .ok{color:var(--green);font-size:14px;margin-top:14px}
   .foot{margin-top:22px;font-size:12px;color:var(--faint);text-align:center;line-height:1.6}
+  .foot a{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--line)}
+  .foot a:hover{color:var(--green);border-bottom-color:var(--green)}
+  .gmrow{margin-top:20px;padding-top:18px;border-top:1px solid var(--line);text-align:center;font-size:13px;color:var(--faint)}
+  .gmrow a{display:inline-block;margin-top:8px;color:var(--amber);text-decoration:none;font-weight:600;letter-spacing:.3px}
+  .gmrow a:hover{filter:brightness(1.12)}
   .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.3);border-top-color:#06210f;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes sp{to{transform:rotate(360deg)}}
 </style>
@@ -58,6 +63,11 @@
     <button class="btn" id="btn" onclick="go()">Enter &rarr;</button>
     <div id="msg" class="err"></div>
     <div class="foot">Access is pre-registered. If your email isn't recognised, ask your facilitator to add you to the roster.</div>
+
+    <div class="gmrow">
+      Running the session?
+      <br><a href="app.html#/gm">Game Master / Admin login &rarr;</a>
+    </div>
   </div>
 
 <script>
