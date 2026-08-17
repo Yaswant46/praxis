@@ -1261,6 +1261,10 @@ input, select, textarea { font-family: var(--sans); }
         <span style="font-size:12px;font-weight:600;color:rgba(255,255,255,.4)">Participant Login</span>
       </div>
       <div class="login-step-indicator">Select your simulation case</div>
+      <div style="display:flex;align-items:center;gap:10px;margin:2px 0 10px;">
+        <span style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--volt)">Business Strategy</span>
+        <span style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></span>
+      </div>
       <div class="case-cards">
         <div class="case-card" id="caseCardA" onclick="selectCase('A')">
           <span class="cc-tag">Case A</span>
@@ -1280,6 +1284,18 @@ input, select, textarea { font-family: var(--sans); }
           <span class="cc-sub">Quick-commerce growth vs. margin. Simpler decisions, faster rounds.</span>
           <span class="cc-chip" style="color:var(--amber)">Seed Stage &middot; Introductory</span>
         </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin:6px 0 10px;">
+        <span style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--amber)">Leadership-Comp</span>
+        <span style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></span>
+      </div>
+      <div class="case-cards">
+        <a class="case-card" href="borrowed.html" style="grid-column:span 2;border-color:rgba(255,143,0,0.3);background:rgba(255,143,0,0.05);text-decoration:none;">
+          <span class="cc-tag" style="color:var(--amber)">Case 03</span>
+          <span class="cc-title">Borrowed People &mdash; The Uncomfortable Art of Leadership</span>
+          <span class="cc-sub">Live, in-room, facilitator-driven. Team / Character / Facilitator access codes. Opens the dedicated console &rarr;</span>
+          <span class="cc-chip" style="color:var(--amber)">Live &middot; Complex</span>
+        </a>
       </div>
       <button class="login-btn" id="caseNextBtn" onclick="proceedToTeamSelect()" disabled style="opacity:0.4">Select a case to continue &rarr;</button>
     </div>

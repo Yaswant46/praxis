@@ -32,6 +32,12 @@ You only do this once per Supabase project.
 Go to **Supabase → SQL Editor → New Query**, paste `supabase_schema.sql`, and
 **Run**. Idempotent — safe to re-run if you change the file later.
 
+Then, to enable the **Leadership-Comp** family (Case 03 · Borrowed People),
+run `supabase/borrowed_schema.sql` the same way. It is fully namespaced with a
+`bp_` prefix (its own tables + RPCs) so it never touches the round-based cases,
+and is idempotent. Confirm the scoring engine with `SELECT * FROM bp_selftest();`
+(all three rows should read `pass = t`).
+
 ### 2. Set up Brevo
 
 1. Sign up at [brevo.com](https://www.brevo.com) (free plan: 300 emails/day, no card).
@@ -122,6 +128,8 @@ from the Manage panel at any time.
 | `index.html`                                  | Landing page (redirects to `app.html`)      |
 | `app.html`                                    | The whole app — UI, JS, Supabase client     |
 | `supabase_schema.sql`                         | Tables, RLS policies, RPCs, realtime config |
+| `borrowed.html`                               | Case 03 · Borrowed People — 3-role app + projection |
+| `supabase/borrowed_schema.sql`                | Case 03 backend — `bp_*` tables, RLS, RPCs, scoring engine |
 | `supabase/functions/send-cohort-emails/`      | Deno Edge Function (Brevo transport)        |
 | `404.html`                                    | GitHub Pages SPA fallback                   |
 
@@ -185,3 +193,44 @@ Reuse the engine with different numbers: add a `CASE_CONTENT`/`DECISION_DOMAINS`
 `mode='competitive'` + a `config` JSONB, and (if mechanics differ) extend the
 engine. Parallel-mode cases are untouched — every competitive path is gated by
 `isCompetitiveSession()`.
+
+---
+
+## Leadership-Comp · Case 03 — Borrowed People
+
+*"The Uncomfortable Art of Leadership."* A live, in-room, facilitator-driven
+simulation — 30 people, one room, four hours. Unlike the round-based cases it
+runs on its **own engine** (`borrowed.html` + `supabase/borrowed_schema.sql`),
+registered in the catalog under the **Leadership-Comp** category. Scoring intent
+is 80% emotional intelligence / 20% business outcome.
+
+### Three roles, one page, gated by access code
+- **Participant** (team code) — dashboard, stakeholder map (pre/post), request +
+  Style Calls, the reveal, commitments, observer entry, boards, debrief.
+- **Character** (character code) — the **sealed console**: incoming requests,
+  escalation brief, capacity-capped selection, the fixed 3×(1–3) rating rubric,
+  Q4 judgement.
+- **Facilitator** (facilitator code) — manual phase control, session monitor,
+  the **drift check** (rating-compression flag), curveballs, hidden headwind +
+  reveal, capacity override, code handout, JSON export, and the wall
+  **projection** (`borrowed.html?projection=<session_id>`).
+
+### How it stays honest
+Every spoiler — the demand map, selections before results, Style Calls before
+debrief, requests before the reveal, the headwind — lives on a **deny-all**
+table. All reads/writes go through `bp_*` `SECURITY DEFINER` RPCs that check the
+caller's access code and the session's phase, so the character console is sealed
+at the RLS layer, not just the UI. Realtime publishes only the phase pointer and
+published results.
+
+### Phase machine (facilitator advances each step, per quarter Q1–Q4)
+`BRIEF → TEAM_DISCUSSION → REQUESTS_OPEN → REQUESTS_LOCKED (the reveal) →
+RUNNER_WINDOW → OPEN_NEGOTIATION → SELECTION → RESULTS (engine runs) → DEBRIEF`.
+Step-back is logged to `bp_events` and never deletes data.
+
+### Setup
+1. Run `supabase/borrowed_schema.sql` in the SQL Editor.
+2. `SELECT * FROM bp_selftest();` → all three §6 sanity checks pass.
+3. From `borrowed.html`, open *Facilitator — set up a new session* to provision a
+   playable session and generate the team / character / facilitator codes, or run
+   `SELECT bp_create_session('Cohort name');`.

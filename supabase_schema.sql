@@ -20,15 +20,30 @@ CREATE TABLE IF NOT EXISTS cases (
   slug        TEXT UNIQUE NOT NULL,
   name        TEXT NOT NULL,
   subtitle    TEXT,
-  difficulty  TEXT DEFAULT 'intermediate'
+  difficulty  TEXT DEFAULT 'intermediate',
+  category    TEXT NOT NULL DEFAULT 'Business Strategy'
 );
 
-INSERT INTO cases (slug, name, subtitle, difficulty)
+-- Category groups the case catalog. The round-based decision cases live
+-- under "Business Strategy"; "Leadership-Comp" (leadership competency)
+-- is a distinct family of live, facilitator-driven leadership cases that
+-- run on their own engine (see supabase/borrowed_schema.sql + borrowed.html).
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'Business Strategy';
+
+INSERT INTO cases (slug, name, subtitle, difficulty, category)
 VALUES
-  ('volta', 'VOLTA Motors', 'Navigating the Inflection: Scale, Survival, and Unit Economics', 'complex'),
-  ('arc',   'ARC Motors',   'The Velocity Trap: Product Development Under Market Shift',       'intermediate'),
-  ('demo',  'ShopPulse',    'The Last Mile Problem: Growth vs. Margin in Quick Commerce',      'introductory')
+  ('volta', 'VOLTA Motors', 'Navigating the Inflection: Scale, Survival, and Unit Economics', 'complex',      'Business Strategy'),
+  ('arc',   'ARC Motors',   'The Velocity Trap: Product Development Under Market Shift',       'intermediate', 'Business Strategy'),
+  ('demo',  'ShopPulse',    'The Last Mile Problem: Growth vs. Margin in Quick Commerce',      'introductory', 'Business Strategy'),
+  ('borrowed-people', 'Borrowed People', 'The Uncomfortable Art of Leadership', 'complex', 'Leadership-Comp')
 ON CONFLICT (slug) DO NOTHING;
+
+-- Backfill category on any pre-existing rows that were created before the
+-- column existed (idempotent).
+UPDATE cases SET category = 'Business Strategy'
+  WHERE slug IN ('volta','arc','demo') AND (category IS NULL OR category = '');
+UPDATE cases SET category = 'Leadership-Comp'
+  WHERE slug = 'borrowed-people';
 
 
 -- =============================================================
