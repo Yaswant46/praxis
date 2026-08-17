@@ -110,6 +110,15 @@
   .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--green);color:var(--text);padding:11px 18px;border-radius:10px;font-size:14px;z-index:50;opacity:0;transition:opacity .2s}
   .toast.show{opacity:1}
   .toast.err{border-color:var(--red)}
+  /* Admin override */
+  .ovrbar{display:flex;align-items:center;gap:12px;background:rgba(194,74,63,.16);border:1px solid var(--red);
+          border-radius:10px;padding:10px 14px;margin-bottom:18px;font-size:14px;flex-wrap:wrap}
+  .ovrbar b{color:var(--text)}
+  .playas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:6px}
+  .playas-btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:9px;
+              padding:12px;text-align:left;font-size:14px}
+  .playas-btn:hover{border-color:var(--red)}
+  .playas-btn .pa-sub{display:block;font-size:11px;color:var(--muted);margin-top:2px}
 
   /* ---------- Projection ---------- */
   .proj{min-height:100vh;background:#060906;padding:30px 40px;display:flex;flex-direction:column}
@@ -239,6 +248,10 @@ const BAND_PCT = {missed:0, partial:0.34, delivered:0.67, exceeded:1};
 // =====================================================================
 let CODE = null, S = null, chan = null, pollTimer = null, prevPhase = null;
 let VIEW = null;
+// Admin override: when a facilitator "plays as" a team/character, ADMIN_CODE
+// holds their real facilitator code and ROSTER caches every login so they can
+// hop between identities (and back) without re-entering codes.
+let ADMIN_CODE = null, ROSTER = null;
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function $(id){return document.getElementById(id);}
@@ -300,7 +313,7 @@ function subscribe(){
 }
 
 function logout(){
-  CODE=null; S=null; localStorage.removeItem('bp_code');
+  CODE=null; S=null; ADMIN_CODE=null; ROSTER=null; localStorage.removeItem('bp_code');
   if(chan){ sb.removeChannel(chan); chan=null; }
   if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
   $('app').classList.add('hidden'); $('login').classList.remove('hidden');
@@ -355,6 +368,7 @@ function navFor(role){
     {id:'curveball',icon:'⚡',label:'Curveball'},
     {id:'headwind',icon:'🌀',label:'Headwind'},
     {id:'capacity',icon:'🎚',label:'Capacity'},
+    {id:'playas',icon:'👥',label:'Play as'},
     {id:'codes',icon:'🔑',label:'Codes'},
     {id:'fboards',icon:'▲',label:'Boards'},
     {id:'export',icon:'⬇',label:'Export'}
@@ -362,6 +376,33 @@ function navFor(role){
 }
 
 function go(id){ VIEW=id; render(); }
+
+// ---- Admin override (play as any participant) ----
+function captureRoster(){
+  if(S && S.role==='facilitator'){
+    ROSTER = {
+      teams: (S.teams||[]).map(t=>({code:t.code, name:t.name, accessCode:(S.team_codes||{})[t.code]})),
+      characters: (S.characters||[]).map(c=>({key:c.key, name:c.name, accessCode:c.access_code}))
+    };
+  }
+}
+async function actAs(accessCode){
+  if(!accessCode){ toast('No code for that identity.',true); return; }
+  if(!ADMIN_CODE) ADMIN_CODE = CODE;   // remember the real facilitator code
+  CODE = accessCode;
+  try{ S = await rpc('bp_state', auth()); }
+  catch(e){ CODE = ADMIN_CODE; ADMIN_CODE=null; toast(e.message,true); return; }
+  VIEW = navFor(S.role)[0].id;
+  render();
+}
+async function returnToAdmin(){
+  if(!ADMIN_CODE) return;
+  CODE = ADMIN_CODE; ADMIN_CODE = null;
+  try{ S = await rpc('bp_state', auth()); }catch(e){ toast(e.message,true); return; }
+  VIEW = navFor('facilitator')[0].id;
+  render();
+}
+function switchIdentity(val){ if(val===ADMIN_CODE) returnToAdmin(); else actAs(val); }
 
 // =====================================================================
 //  Master render
@@ -383,9 +424,25 @@ function render(){
       +(badge?'<span class="b">'+badge+'</span>':'')+'</a>';
   }).join('');
 
+  captureRoster();
+
+  // admin override banner + identity hopper (only while impersonating)
+  let banner = '';
+  if(ADMIN_CODE && ROSTER){
+    const cur = CODE;
+    const opt = (val,label)=>'<option value="'+esc(val)+'"'+(val===cur?' selected':'')+'>'+esc(label)+'</option>';
+    let opts = opt(ADMIN_CODE,'Facilitator (you)');
+    ROSTER.teams.forEach(t=>{ if(t.accessCode) opts += opt(t.accessCode,'Team '+t.code+' · '+t.name); });
+    ROSTER.characters.forEach(c=>{ if(c.accessCode) opts += opt(c.accessCode, c.name+' (character)'); });
+    banner += '<div class="ovrbar">⚠ <b>Admin override</b> — acting as <b>'+esc(S.display_name)+'</b>'
+      + '<span style="flex:1"></span>'
+      + '<label style="margin:0;text-transform:none;letter-spacing:0;color:var(--muted)">Jump to</label>'
+      + '<select style="width:auto" onchange="switchIdentity(this.value)">'+opts+'</select>'
+      + '<button class="btn sm" style="width:auto" onclick="returnToAdmin()">Return to facilitator</button></div>';
+  }
+
   // curveball banner (everyone)
   const live = (S.curveballs_live||[]).filter(c=>c.quarter===s.quarter);
-  let banner = '';
   live.forEach(c=>{ banner += '<div class="banner"><b>⚡ '+esc(c.label)+'</b> — '+esc(c.body)+'</div>'; });
 
   const fn = {
@@ -393,7 +450,7 @@ function render(){
     observer:vObserver, boards:vBoards, debrief:vDebrief,
     incoming:vIncoming, brief:vBrief, select:vSelect, rate:vRate, ccommit:vCommit, judge:vJudge,
     control:vControl, monitor:vMonitor, drift:vDrift, curveball:vCurveball, headwind:vHeadwind,
-    capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport
+    capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas
   }[VIEW];
   $('view').innerHTML = banner + (fn ? fn() : '<div class="empty">—</div>');
 }
@@ -820,6 +877,19 @@ function vCodes(){
       <div class="panel"><h3>Teams</h3>${t}</div>
       <div class="panel"><h3>Characters</h3>${c}</div>
     </div>`;
+}
+
+function vPlayas(){
+  const teams=(S.teams||[]).map(t=>({code:t.code,name:t.name,accessCode:(S.team_codes||{})[t.code]}));
+  const chars=(S.characters||[]);
+  const tbtn = teams.map(t=>`<button class="playas-btn" onclick="actAs('${esc(t.accessCode)}')">
+      Team ${esc(t.code)} · ${esc(t.name)}<span class="pa-sub">participant view</span></button>`).join('');
+  const cbtn = chars.map(c=>`<button class="playas-btn" onclick="actAs('${esc(c.access_code)}')">
+      ${esc(c.name)}<span class="pa-sub">${esc(c.role_label)} — character console</span></button>`).join('');
+  return `<h1 class="h">Play as</h1>
+    <p class="lede">Admin override. Step into any team or character to submit on their behalf — for solo testing or to unblock a table that is stuck. A red bar keeps it obvious you are impersonating, and lets you hop straight to another identity or back to yourself. Phase gates still apply, so advance phases as needed.</p>
+    <div class="panel"><h3>Teams</h3><div class="ph-sub">Participant console</div><div class="playas-grid">${tbtn}</div></div>
+    <div class="panel"><h3>Characters</h3><div class="ph-sub">The sealed console</div><div class="playas-grid">${cbtn}</div></div>`;
 }
 
 async function vExportRun(){
