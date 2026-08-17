@@ -134,6 +134,7 @@ from the Manage panel at any time.
 | `borrowed.html`                               | Case 03 · Borrowed People — 3-role app + projection |
 | `supabase/borrowed_schema.sql`                | Case 03 backend — `bp_*` tables, RLS, RPCs, scoring engine |
 | `supabase/functions/send-cohort-emails/`      | Deno Edge Function (Brevo transport)        |
+| `supabase/functions/bp-assist/`               | Deno Edge Function — on-demand AI facilitator assistant (Anthropic key server-side) |
 | `404.html`                                    | GitHub Pages SPA fallback                   |
 
 ---
@@ -215,8 +216,24 @@ is 80% emotional intelligence / 20% business outcome.
   Q4 judgement.
 - **Facilitator** (facilitator code) — manual phase control, session monitor,
   the **drift check** (rating-compression flag), curveballs, hidden headwind +
-  reveal, capacity override, code handout, JSON export, and the wall
-  **projection** (`borrowed.html?projection=<session_id>`).
+  reveal, capacity override, **Play as** (admin override — act as any team or
+  character), the on-demand **AI assist**, code handout, JSON export, and the
+  wall **projection** (`borrowed.html?projection=<session_id>`).
+
+### AI facilitator assistant (on-demand)
+The **AI assist** tab never runs on its own. When the facilitator presses
+**Analyze now**, the `bp-assist` edge function reads the current sealed session
+state (through the facilitator-gated `bp_export` RPC — so a non-facilitator code
+gets a 403) and asks Claude for three things: the **key moves** just made,
+**contradictions & risks** (wrong-character requests vs. the demand map, Style
+Calls that clash with the observer log, characters "going soft" via rating
+compression), and pointed **debrief questions**. The Anthropic key lives only in
+the edge function, never in the page.
+
+Setup: deploy `supabase/functions/bp-assist/`, then set the `ANTHROPIC_API_KEY`
+secret (Supabase → **Edge Functions → Secrets**, or
+`supabase secrets set ANTHROPIC_API_KEY=...`). Optional `BP_ASSIST_MODEL`
+overrides the model (default `claude-opus-5`).
 
 ### How it stays honest
 Every spoiler — the demand map, selections before results, Style Calls before
