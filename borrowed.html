@@ -236,6 +236,15 @@ const PHASE_LABEL = {
   OPEN_NEGOTIATION:'Open negotiation', SELECTION:'Selection', RESULTS:'Results', DEBRIEF:'Debrief'
 };
 const STYLES = ['commanding','visionary','affiliative','democratic','pacesetting','coaching'];
+// Goleman's six leadership styles — proper-case label + a one-line definition.
+const STYLE_DEFS = {
+  commanding:  {label:'Commanding',  def:'“Do what I tell you.” Demands immediate compliance. Decisive in a crisis; corrosive if it’s your default.'},
+  visionary:   {label:'Visionary',   def:'“Come with me.” Sets a clear direction and rallies people to it. Powerful when the team needs a north star.'},
+  affiliative: {label:'Affiliative', def:'“People come first.” Builds harmony and trust. Heals rifts and lifts morale; can dodge hard feedback.'},
+  democratic:  {label:'Democratic',  def:'“What do you think?” Builds buy-in through participation. Great for input; slow when the clock is running.'},
+  pacesetting: {label:'Pacesetting', def:'“Do as I do, now.” Sets high standards and models them. Lifts a capable team; can overwhelm and burn out.'},
+  coaching:    {label:'Coaching',    def:'“Try this.” Develops people for the long term. Builds capability; needs time and a willing learner.'}
+};
 const RUBRIC = [
   ['knew','Knew what I cared about','Did they understand my actual stake — or guess?'],
   ['asked','Asked, or told','Did they draw me out, or push their agenda at me?'],
@@ -348,7 +357,6 @@ function navFor(role){
     {id:'stake',icon:'🗺',label:'Stakeholder map'},
     {id:'request',icon:'✎',label:'Request'},
     {id:'reveal',icon:'👁',label:'Reveal'},
-    {id:'commit',icon:'🤝',label:'Commitments'},
     {id:'observer',icon:'📝',label:'Observer'},
     {id:'boards',icon:'▲',label:'Boards'},
     {id:'debrief',icon:'◎',label:'Debrief'}
@@ -358,7 +366,6 @@ function navFor(role){
     {id:'brief',icon:'🎭',label:'My brief'},
     {id:'select',icon:'✔',label:'Select'},
     {id:'rate',icon:'★',label:'Rate'},
-    {id:'ccommit',icon:'🤝',label:'Commitments'},
     {id:'judge',icon:'⚖',label:'Q4 judgement'}
   ];
   return [
@@ -447,9 +454,9 @@ function render(){
   live.forEach(c=>{ banner += '<div class="banner"><b>⚡ '+esc(c.label)+'</b> — '+esc(c.body)+'</div>'; });
 
   const fn = {
-    dash:vDash, stake:vStake, request:vRequest, reveal:vReveal, commit:vCommit,
+    dash:vDash, stake:vStake, request:vRequest, reveal:vReveal,
     observer:vObserver, boards:vBoards, debrief:vDebrief,
-    incoming:vIncoming, brief:vBrief, select:vSelect, rate:vRate, ccommit:vCommit, judge:vJudge,
+    incoming:vIncoming, brief:vBrief, select:vSelect, rate:vRate, judge:vJudge,
     control:vControl, monitor:vMonitor, drift:vDrift, curveball:vCurveball, headwind:vHeadwind,
     capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll
   }[VIEW];
@@ -469,6 +476,13 @@ function phaseIdx(p){ return PHASES.indexOf(p); }
 function teamName(id){ const t=(S.teams||[]).find(t=>t.id===id); return t? (t.code+' · '+t.name):'—'; }
 function teamCode(id){ const t=(S.teams||[]).find(t=>t.id===id); return t?t.code:'?'; }
 function bandCell(b){ return b?'<span class="band-'+b+'">'+b+'</span>':'<span class="empty">—</span>'; }
+function styleLabel(k){ return (STYLE_DEFS[k]&&STYLE_DEFS[k].label)||k; }
+function styleOptionsHtml(sel){ return STYLES.map(k=>'<option value="'+k+'"'+(sel===k?' selected':'')+'>'+STYLE_DEFS[k].label+'</option>').join(''); }
+function styleReckoner(){
+  return '<div class="panel"><h3>Leadership styles — ready reckoner</h3><div class="ph-sub">Goleman’s six. Declare the posture you will actually lead with.</div>'
+    + STYLES.map(k=>'<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b>'+STYLE_DEFS[k].label+'</b> — <span style="color:var(--muted)">'+esc(STYLE_DEFS[k].def)+'</span></div>').join('')
+    + '</div>';
+}
 
 // =====================================================================
 //  PARTICIPANT views
@@ -554,7 +568,7 @@ function vRequest(){
   if(!open && !req.primary && !locked)
     return '<h1 class="h">Request</h1><p class="lede">Requests are not open yet. Wait for the facilitator to open the requests window.</p>';
   const opt = (sel)=>chars.map(c=>'<option value="'+c.id+'"'+(sel===c.id?' selected':'')+'>'+esc(c.name)+' — '+esc(c.role_label)+'</option>').join('');
-  const styleOpts = (sel)=>STYLES.map(x=>'<option'+(sel===x?' selected':'')+'>'+x+'</option>').join('');
+  const styleOpts = (sel)=>styleOptionsHtml(sel);
   let form;
   if(open){
     form = `
@@ -571,7 +585,8 @@ function vRequest(){
           <label>Runner — rationale</label><textarea id="scRunWhy" placeholder="One line.">${esc(sc.runner&&sc.runner.rationale||'')}</textarea></div>
       </div>
       <button class="btn" onclick="submitRequest()">Submit request + both Style Calls</button>
-    </div>`;
+    </div>
+    ${styleReckoner()}`;
   } else {
     const pc = chars.find(c=>c.id===req.primary), scd=chars.find(c=>c.id===req.secondary);
     form = `<div class="panel"><div class="banner">Locked for Q${s.quarter}.</div>
@@ -643,15 +658,27 @@ async function logCommit(){ try{ await rpc('bp_log_commitment', auth({p_to_team:
 async function confirmCommit(id){ try{ await rpc('bp_confirm_commitment', auth({p_id:id})); refresh(); }catch(e){ toast(e.message,true); } }
 async function markHon(id,v){ try{ await rpc('bp_mark_honoured', auth({p_id:id, p_honoured:v})); refresh(); }catch(e){ toast(e.message,true); } }
 
+let _obEdit=false;
 function vObserver(){
-  const s=S.session; const o=S.my_observer||{};
-  const styleOpts=STYLES.map(x=>'<option'+(o.style===x?' selected':'')+'>'+x+'</option>').join('');
-  return `<h1 class="h">Observer entry</h1><p class="lede">If you hold the observer seat this quarter: which leadership style did you actually see your team use? Compared with what they declared, that gap is the lesson.</p>
-    <div class="panel"><label>Observed style</label><select id="obStyle">${styleOpts}</select>
-      <label>Note (optional)</label><textarea id="obNote" placeholder="What did it look like on the ground?">${esc(o.note||'')}</textarea>
-      <button class="btn" onclick="submitObserver()">Save observation</button></div>`;
+  const o=S.my_observer||{};
+  const recorded = !!(o && o.style);
+  // Once recorded, the observation is SEALED — never echoed back into the
+  // team's console during play; it only surfaces at the debrief.
+  if(recorded && !_obEdit){
+    return `<h1 class="h">Observer entry</h1>
+      <p class="lede">Your read of how the team actually led. It is private during play.</p>
+      <div class="panel"><div class="banner">✓ Observation recorded and <b>sealed until the debrief</b> — your teammates can’t read it while you play.</div>
+        <button class="btn ghost" style="width:auto" onclick="_obEdit=true;render()">Re-record observation</button></div>
+      ${styleReckoner()}`;
+  }
+  return `<h1 class="h">Observer entry</h1>
+    <p class="lede">If you hold the observer seat this quarter: which leadership style did you actually see your team use? Your entry is private — it surfaces only at the debrief, next to what the team declared. That gap is the lesson.</p>
+    <div class="panel"><label>Observed style</label><select id="obStyle">${styleOptionsHtml(o.style)}</select>
+      <label>Note (optional)</label><textarea id="obNote" placeholder="What did it look like on the ground?"></textarea>
+      <button class="btn" onclick="submitObserver()">Save &amp; seal observation</button></div>
+    ${styleReckoner()}`;
 }
-async function submitObserver(){ try{ await rpc('bp_submit_observer', auth({p_style:$('obStyle').value, p_note:$('obNote').value})); toast('Saved.'); refresh(); }catch(e){ toast(e.message,true); } }
+async function submitObserver(){ try{ await rpc('bp_submit_observer', auth({p_style:$('obStyle').value, p_note:$('obNote').value})); _obEdit=false; toast('Recorded & sealed.'); refresh(); }catch(e){ toast(e.message,true); } }
 
 function vDebrief(){
   const s=S.session;
@@ -659,8 +686,8 @@ function vDebrief(){
   const scs=(S.style_calls||[]).filter(x=>x.team_id===S.team_id);
   const ob=(S.observer_logs||[]).find(x=>x.team_id===S.team_id);
   let rows = scs.map(x=>{ const gap = ob && ob.observed_style!==x.style;
-    return `<tr><td>${esc(x.seat)}</td><td>${esc(x.style)}</td><td>${esc(x.rationale||'')}</td>
-      <td>${ob?esc(ob.observed_style):'—'}</td><td>${gap?'<span class="tag r">gap</span>':(ob?'<span class="tag g">match</span>':'—')}</td></tr>`;
+    return `<tr><td>${esc(x.seat)}</td><td>${esc(styleLabel(x.style))}</td><td>${esc(x.rationale||'')}</td>
+      <td>${ob?esc(styleLabel(ob.observed_style)):'—'}</td><td>${gap?'<span class="tag r">gap</span>':(ob?'<span class="tag g">match</span>':'—')}</td></tr>`;
   }).join('');
   return `<h1 class="h">Debrief — Q${s.quarter}</h1><p class="lede">What you declared, against what the room saw.</p>
     <div class="panel"><table><thead><tr><th>Seat</th><th>Declared</th><th>Why</th><th>Observed</th><th></th></tr></thead>
