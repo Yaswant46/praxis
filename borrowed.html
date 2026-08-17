@@ -97,6 +97,17 @@
   .banner{background:rgba(201,154,58,.12);border:1px solid rgba(201,154,58,.4);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:14px}
   .banner.red{background:rgba(194,74,63,.12);border-color:rgba(194,74,63,.4)}
   .empty{color:var(--faint);font-size:14px;padding:14px 0}
+  .ai-hint{color:var(--faint);font-size:12px;margin-left:12px}
+  .ai-panel{margin-top:14px}
+  .ai-meta{font-family:'DM Mono',monospace;font-size:11px;color:var(--faint);letter-spacing:.5px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .ai-body{font-size:14px;line-height:1.6}
+  .ai-body .ai-h2{font-family:var(--serif);font-size:16px;color:var(--amber);margin:18px 0 8px;letter-spacing:.3px}
+  .ai-body .ai-h2:first-child{margin-top:0}
+  .ai-body .ai-h3{font-size:14px;color:var(--text);margin:12px 0 6px;font-weight:700}
+  .ai-body p{margin:6px 0;color:var(--text)}
+  .ai-body ul.ai-ul,.ai-body ol.ai-ol{margin:6px 0 6px 20px}
+  .ai-body li{margin:4px 0}
+  .ai-body code{font-family:'DM Mono',monospace;background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12.5px}
   .radio-row{display:flex;gap:8px;margin-top:6px}
   .radio-row button{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px;font-size:14px}
   .radio-row button.on{background:var(--green);color:#06210f;border-color:var(--green);font-weight:700}
@@ -376,6 +387,7 @@ function navFor(role){
     {id:'headwind',icon:'🌀',label:'Headwind'},
     {id:'capacity',icon:'🎚',label:'Capacity'},
     {id:'playas',icon:'👥',label:'Play as'},
+    {id:'assist',icon:'✦',label:'AI assist'},
     {id:'enroll',icon:'✉',label:'Enrollments'},
     {id:'codes',icon:'🔑',label:'Codes'},
     {id:'fboards',icon:'▲',label:'Boards'},
@@ -458,7 +470,8 @@ function render(){
     observer:vObserver, boards:vBoards, debrief:vDebrief,
     incoming:vIncoming, brief:vBrief, select:vSelect, rate:vRate, judge:vJudge,
     control:vControl, monitor:vMonitor, drift:vDrift, curveball:vCurveball, headwind:vHeadwind,
-    capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll
+    capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll,
+    assist:vAssist
   }[VIEW];
   $('view').innerHTML = banner + (fn ? fn() : '<div class="empty">—</div>');
 }
@@ -1011,6 +1024,77 @@ async function vExportRun(){
 function vExport(){
   return `<h1 class="h">Session export</h1><p class="lede">Full JSON — every request, selection, rating, style call, commitment, judgement and the audit log. For the post-session debrief pack.</p>
     <div class="panel"><button class="btn" style="width:auto" onclick="vExportRun()">⬇ Download session JSON</button></div>`;
+}
+
+// =====================================================================
+//  AI FACILITATOR ASSISTANT (on-demand, facilitator-only)
+//  Never runs by itself. The facilitator presses "Analyze now" and the
+//  bp-assist edge function reads the sealed session state (through the
+//  facilitator-gated bp_export RPC) and returns three sections: key moves,
+//  contradictions & risks, debrief questions. The Anthropic key lives in
+//  the edge function, never in this page.
+// =====================================================================
+function mdToHtml(md){
+  // Minimal renderer for the assistant's Markdown (## / ### headings,
+  // **bold**, *italic*, `code`, - / * bullets, 1. lists, paragraphs).
+  const esch = (s)=>esc(s);
+  const inline = (s)=> esch(s)
+    .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<i>$2</i>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>');
+  const lines = String(md||'').replace(/\r/g,'').split('\n');
+  let html='', list=null;
+  const closeList=()=>{ if(list){ html+='</'+list+'>'; list=null; } };
+  for(const raw of lines){
+    const line=raw.trimEnd();
+    if(!line.trim()){ closeList(); continue; }
+    let m;
+    if((m=line.match(/^###\s+(.*)/))){ closeList(); html+='<h3 class="ai-h3">'+inline(m[1])+'</h3>'; continue; }
+    if((m=line.match(/^##\s+(.*)/))){ closeList(); html+='<h2 class="ai-h2">'+inline(m[1])+'</h2>'; continue; }
+    if((m=line.match(/^#\s+(.*)/))){ closeList(); html+='<h2 class="ai-h2">'+inline(m[1])+'</h2>'; continue; }
+    if((m=line.match(/^\s*[-*]\s+(.*)/))){ if(list!=='ul'){ closeList(); html+='<ul class="ai-ul">'; list='ul'; } html+='<li>'+inline(m[1])+'</li>'; continue; }
+    if((m=line.match(/^\s*\d+\.\s+(.*)/))){ if(list!=='ol'){ closeList(); html+='<ol class="ai-ol">'; list='ol'; } html+='<li>'+inline(m[1])+'</li>'; continue; }
+    closeList(); html+='<p>'+inline(line)+'</p>';
+  }
+  closeList();
+  return html;
+}
+async function vAssistRun(){
+  const out=$('ai_out'), btn=$('ai_btn');
+  if(!out) return;
+  if(btn){ btn.disabled=true; btn.textContent='Analyzing…'; }
+  out.innerHTML='<div class="empty">Reading the room… the assistant is looking at every request, selection, rating and Style Call so far. A few seconds.</div>';
+  try{
+    const res=await fetch(SUPA_URL+'/functions/v1/bp-assist',{
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', apikey:SUPA_KEY, Authorization:'Bearer '+SUPA_KEY },
+      body:JSON.stringify({ code:CODE })
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok || data.error){
+      const map={ assistant_not_configured:'The AI assistant is not configured yet — set the ANTHROPIC_API_KEY secret on the bp-assist edge function.',
+                  forbidden:'This view is facilitator-only.', missing_code:'No session code.',
+                  refusal:'The assistant declined to analyze this state.' };
+      out.innerHTML='<div class="banner red">'+esc(map[data.error]||data.detail||data.error||('Request failed ('+res.status+').'))+'</div>';
+      return;
+    }
+    const when=new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    out.innerHTML='<div class="ai-meta">Snapshot at '+esc(when)+' · phase '+esc(PHASE_LABEL[(S.session||{}).phase]||(S.session||{}).phase||'—')+' · '+esc(data.model||'')+'</div>'
+      + '<div class="ai-body">'+mdToHtml(data.analysis)+'</div>';
+  }catch(e){
+    out.innerHTML='<div class="banner red">'+esc(e.message||'Could not reach the assistant.')+'</div>';
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='✦ Analyze now'; }
+  }
+}
+function vAssist(){
+  return `<h1 class="h">AI facilitator assistant</h1>
+    <p class="lede">On demand only — it never runs on its own. Press <b>Analyze now</b> and it reads the current sealed state and hands you three things: the key moves you may have missed, contradictions &amp; risks (wrong-character requests, Style Calls that clash with the room, characters going soft), and pointed debrief questions. Run it between phases.</p>
+    <div class="panel">
+      <button class="btn amber" id="ai_btn" style="width:auto" onclick="vAssistRun()">✦ Analyze now</button>
+      <span class="ai-hint">Reads the live session; nothing is shown to participants.</span>
+    </div>
+    <div id="ai_out" class="panel ai-panel"><div class="empty">No analysis yet. Press <b>Analyze now</b> when you want a read on the room.</div></div>`;
 }
 
 // =====================================================================
