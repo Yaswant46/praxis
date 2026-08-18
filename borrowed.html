@@ -274,6 +274,7 @@ const BAND_PCT = {missed:0, partial:0.34, delivered:0.67, exceeded:1};
 // =====================================================================
 let CODE = null, S = null, chan = null, pollTimer = null, prevPhase = null;
 let VIEW = null;
+let _renderedView = null;   // last view rendered, for in-place form-value preservation
 // Admin override: when a facilitator "plays as" a team/character, ADMIN_CODE
 // holds their real facilitator code and ROSTER caches every login so they can
 // hop between identities (and back) without re-entering codes.
@@ -513,7 +514,27 @@ function render(){
     capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll,
     assist:vAssist, story:vStory, orgstory:vOrgStory, observerlog:vObserverLog
   }[VIEW];
-  $('view').innerHTML = banner + (fn ? fn() : '<div class="empty">—</div>');
+  // Re-rendering the SAME view (e.g. the 5s poll or a realtime tick) must not
+  // wipe what the user is mid-typing/selecting. Snapshot form-control values
+  // before replacing the DOM, and restore them after.
+  const viewEl = $('view');
+  const sameView = (_renderedView === VIEW);
+  const saved = {};
+  if(sameView){
+    viewEl.querySelectorAll('input[id],select[id],textarea[id]').forEach(el=>{
+      if(el.type!=='file') saved[el.id] = el.value;
+    });
+  }
+  viewEl.innerHTML = banner + (fn ? fn() : '<div class="empty">—</div>');
+  if(sameView){
+    Object.keys(saved).forEach(id=>{
+      const el = document.getElementById(id);
+      if(el && (el.tagName==='SELECT'||el.tagName==='INPUT'||el.tagName==='TEXTAREA') && el.type!=='file'){
+        el.value = saved[id];
+      }
+    });
+  }
+  _renderedView = VIEW;
 }
 
 function navBadge(id){
