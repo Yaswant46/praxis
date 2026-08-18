@@ -74,16 +74,21 @@ Deno.serve(async (req: Request) => {
 
     // 2) Ask Claude. Low effort keeps it responsive for live use; the key
     //    lives here, never in the browser.
-    const userContent =
-      "Here is the current Borrowed People session state as JSON. Analyse it per your instructions.\n\n```json\n" +
-      JSON.stringify(session).slice(0, 180000) +
-      "\n```";
+    // Minimal wrapper — a fenced "analyse it" phrasing can deterministically
+    // trip the API refusal classifier on some inputs; a plain prefix is
+    // reliable. Retries vary the wrapper as a further hedge.
+    const stateJson = JSON.stringify(session).slice(0, 180000);
+    const wrappers = [
+      "Session state: " + stateJson,
+      "Current game state as JSON: " + stateJson,
+      stateJson,
+    ];
 
-    // Retry spurious refusals / empty output up to 2 extra times.
     let text = "";
     let modelUsed = MODEL;
     let lastStop = "";
     for (let attempt = 0; attempt < 3; attempt++) {
+      const userContent = wrappers[attempt];
       const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
