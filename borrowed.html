@@ -275,6 +275,7 @@ const BAND_PCT = {missed:0, partial:0.34, delivered:0.67, exceeded:1};
 let CODE = null, S = null, chan = null, pollTimer = null, prevPhase = null;
 let VIEW = null;
 let _renderedView = null;   // last view rendered, for in-place form-value preservation
+let _lastSig = null;        // signature of the last rendered state (auto-refresh no-op guard)
 // Admin override: when a facilitator "plays as" a team/character, ADMIN_CODE
 // holds their real facilitator code and ROSTER caches every login so they can
 // hop between identities (and back) without re-entering codes.
@@ -345,9 +346,22 @@ function loadVariant(){
   }}catch(e){}
 }
 
+// A signature of everything the current view renders from. If it hasn't
+// changed since the last render, the background refresh does nothing — so it
+// never disturbs an in-progress selection or a typed field.
+function _viewSig(){
+  return CODE+'|'+VIEW+'|'+(VARIANT||'')+'|'+(ADMIN_CODE||'')
+    +'|'+JSON.stringify(S)
+    +'|'+JSON.stringify((ORG_STORIES||[]).map(x=>[x.quarter,x.published_at]));
+}
 async function refresh(){
   if(!CODE) return;
-  try{ S = await rpc('bp_state', auth()); await loadStories(); render(); }catch(e){ /* transient */ }
+  try{
+    S = await rpc('bp_state', auth());
+    await loadStories();
+    if(_viewSig() === _lastSig && _renderedView === VIEW) return;  // nothing changed — leave the view alone
+    render();
+  }catch(e){ /* transient */ }
 }
 // Published org chapters are a public table — every role reads them directly.
 async function loadStories(){
@@ -542,6 +556,7 @@ function render(){
     });
   }
   _renderedView = VIEW;
+  _lastSig = _viewSig();
 }
 
 function navBadge(id){
@@ -841,7 +856,9 @@ function vRate(){
   const ratings=S.my_ratings||{};
   if(!dealt.length) return '<h1 class="h">Rate</h1><p class="lede">Once you have selected teams, rate each one you dealt with against the fixed rubric. Rate honestly — compression is how a character quietly breaks the case.</p>';
   let cards = dealt.map(d=>{
-    const r=ratings[d.team_id]||{};
+    // Merge any unsaved clicks (RATE_BUF) over the saved rating so a re-render
+    // never drops a selection in progress.
+    const r=Object.assign({}, ratings[d.team_id]||{}, RATE_BUF[d.team_id]||{});
     let fields = RUBRIC.map(f=>`
       <div style="margin-top:10px"><div style="font-size:14px">${esc(f[1])}</div>
         <div class="ph-sub" style="margin:2px 0 4px">${esc(f[2])}</div>
@@ -868,7 +885,7 @@ function vJudge(){
   const dealt=S.teams||[];
   const j=S.my_judgements||{};
   if(s.quarter<4) return '<h1 class="h">Q4 judgement</h1><p class="lede">Your final verdict opens in Q4: for each team, would you work with them again — and why. It is read out to the room.</p>';
-  let cards=dealt.map(t=>{ const cur=j[t.id]||{};
+  let cards=dealt.map(t=>{ const cur=Object.assign({}, j[t.id]||{}, (t.id in JUDGE_BUF)?{again:JUDGE_BUF[t.id]}:{});
     return `<div class="panel"><h3>${esc(t.code)} · ${esc(t.name)}</h3>
       <div class="radio-row" style="max-width:280px">
         <button id="jy_${t.id}" class="${cur.again===true?'on':''}" onclick="setJudge('${t.id}',true)">Work with again</button>
