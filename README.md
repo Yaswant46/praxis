@@ -137,6 +137,7 @@ from the Manage panel at any time.
 | `supabase/functions/bp-assist/`               | Deno Edge Function — on-demand AI facilitator assistant (Anthropic key server-side) |
 | `supabase/functions/bp-narrative/`            | Deno Edge Function — org storyline narrator (deterministic spine + Claude prose) |
 | `migrations/007_org_story.sql`                | Org story table + `bp_org_spine` / `bp_publish_story` / `bp_set_observer` |
+| `migrations/008_short_variant.sql`            | Short Version — `bp_create_session(p_variant)` (3 characters, no observers) |
 | `404.html`                                    | GitHub Pages SPA fallback                   |
 
 ---
@@ -256,6 +257,15 @@ Setup: deploy `supabase/functions/bp-assist/`, then set the `ANTHROPIC_API_KEY`
 secret (Supabase → **Edge Functions → Secrets**, or
 `supabase secrets set ANTHROPIC_API_KEY=...`). Optional `BP_ASSIST_MODEL`
 overrides the model (default `claude-opus-5`).
+
+### Short Version (a session format)
+The same engine runs a smaller room: on the facilitator setup screen, choose
+**Short** to seed **3 playable characters** (Arjun, Neha, Farida) + the Sponsor
+and a reduced demand map — intended for **15 players on 5 teams of 3, no
+observers**. Same five objectives, couplings, ₹14,200 target, and org story.
+Implemented as `bp_sessions.variant` ('full' | 'short') via
+`bp_create_session(p_name, p_variant)`; the app reads `variant` and hides the
+Observer log + observed column for 'short'. See `migrations/008_short_variant.sql`.
 
 ### How it stays honest
 Every spoiler — the demand map, selections before results, Style Calls before
