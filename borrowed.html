@@ -514,11 +514,20 @@ function render(){
     capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll,
     assist:vAssist, story:vStory, orgstory:vOrgStory, observerlog:vObserverLog
   }[VIEW];
-  // Re-rendering the SAME view (e.g. the 5s poll or a realtime tick) must not
-  // wipe what the user is mid-typing/selecting. Snapshot form-control values
-  // before replacing the DOM, and restore them after.
+  // The background refresh (5s poll + realtime ticks) calls render(). Rebuilding
+  // #view under the user mid-edit steals focus and the cursor, and drops unsaved
+  // input. Two guards:
+  //  1. If the user is actively focused in a field IN this same view, don't touch
+  //     #view at all this cycle (the side nav / phase pill above still update).
+  //  2. Otherwise, if it's the same view, preserve any filled-but-unfocused
+  //     form values across the re-render.
   const viewEl = $('view');
   const sameView = (_renderedView === VIEW);
+  const isField = (el)=> el && (el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT') && el.type!=='file';
+  if(sameView && isField(document.activeElement) && viewEl.contains(document.activeElement)){
+    _renderedView = VIEW;
+    return;   // leave the live edit alone
+  }
   const saved = {};
   if(sameView){
     viewEl.querySelectorAll('input[id],select[id],textarea[id]').forEach(el=>{
@@ -529,9 +538,7 @@ function render(){
   if(sameView){
     Object.keys(saved).forEach(id=>{
       const el = document.getElementById(id);
-      if(el && (el.tagName==='SELECT'||el.tagName==='INPUT'||el.tagName==='TEXTAREA') && el.type!=='file'){
-        el.value = saved[id];
-      }
+      if(isField(el)) el.value = saved[id];
     });
   }
   _renderedView = VIEW;
