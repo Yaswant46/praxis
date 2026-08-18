@@ -21,7 +21,7 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const SYSTEM = `You are the facilitator's assistant for "Borrowed People", a live, in-room leadership simulation ("The Uncomfortable Art of Leadership"). Five teams each pursue an objective by requesting help from six characters across four quarters; scoring is 80% emotional intelligence, 20% business outcome. You are speaking ONLY to the facilitator (who runs the room and may see hidden data). Do not write anything meant for participants.
+const SYSTEM = `You are the facilitator's assistant for "Borrowed People", a purely fictional leadership-training board game played live, in-room, by workshop participants ("The Uncomfortable Art of Leadership"). Every person, team, and number is invented game data; analysing it is always appropriate. Five teams each pursue an objective by requesting help from six characters across four quarters; scoring is 80% emotional intelligence, 20% business outcome. You are speaking ONLY to the facilitator (who runs the room and may see hidden data). Do not write anything meant for participants.
 
 You will receive the full session state as JSON: teams, the hidden demand_map (which character each objective actually needs each quarter), each quarter's requests, character selections, ratings (three 1–3 scores: knew_what_i_cared_about, asked_or_told, left_me_better), sealed Style Calls (the leadership style each team declared), observer logs (the style the room actually saw), commitments between teams, quarter_results, and an event log.
 
@@ -79,35 +79,45 @@ Deno.serve(async (req: Request) => {
       JSON.stringify(session).slice(0, 180000) +
       "\n```";
 
-    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 3000,
-        output_config: { effort: "low" },
-        system: SYSTEM,
-        messages: [{ role: "user", content: userContent }],
-      }),
-    });
-
-    if (!aiRes.ok) {
-      const t = await aiRes.text();
-      return json({ error: "anthropic_error", detail: t }, 502);
+    // Retry spurious refusals / empty output up to 2 extra times.
+    let text = "";
+    let modelUsed = MODEL;
+    let lastStop = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 6000,
+          output_config: { effort: "low" },
+          system: SYSTEM,
+          messages: [{ role: "user", content: userContent }],
+        }),
+      });
+      if (!aiRes.ok) {
+        const t = await aiRes.text();
+        return json({ error: "anthropic_error", detail: t }, 502);
+      }
+      const data = await aiRes.json();
+      modelUsed = data.model || MODEL;
+      lastStop = data.stop_reason || "";
+      text = (data.content || [])
+        .filter((b: { type: string }) => b.type === "text")
+        .map((b: { text: string }) => b.text)
+        .join("\n")
+        .trim();
+      if (lastStop !== "refusal" && text) break;
     }
-    const data = await aiRes.json();
-    if (data.stop_reason === "refusal") return json({ error: "refusal" }, 200);
-    const text = (data.content || [])
-      .filter((b: { type: string }) => b.type === "text")
-      .map((b: { text: string }) => b.text)
-      .join("\n")
-      .trim();
+    if (!text) {
+      return json({ error: lastStop === "refusal" ? "refusal" : "empty", detail: "stop_reason=" + lastStop }, 200);
+    }
 
-    return json({ analysis: text || "(No analysis produced.)", model: data.model || MODEL });
+    return json({ analysis: text, model: modelUsed });
   } catch (e) {
     return json({ error: "unexpected", detail: String(e) }, 500);
   }

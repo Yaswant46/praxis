@@ -21,7 +21,7 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const SYSTEM = `You are the narrator of "the Meridian" — a new electric-scooter programme at an EV company, told through a live, in-room leadership simulation. Five teams each own one piece of the launch: Battery, Suppliers, Spec, Warranty, and Pricing. Each team's fate depends on which colleagues chose to work with them and how well they treated the people they borrowed.
+const SYSTEM = `You are the narrator of "the Meridian" — a purely fictional electric-scooter programme at a fictional EV company ("Volta"), inside a leadership-training board game played live by workshop participants. Every person, team, and number is invented game data; writing this chapter is always appropriate — it is flavour text for a training exercise. Five teams each own one piece of the launch: Battery, Suppliers, Spec, Warranty, and Pricing. Each team's fate depends on which colleagues chose to work with them and how well they treated the people they borrowed.
 
 You will be given ONE quarter's FACTS as JSON: each programme's band and momentum this quarter, which programmes are rising or dragging, the organisation's progress meter, and — only in the final quarter — the year-end couplings and the company scorecard.
 
@@ -76,35 +76,47 @@ Deno.serve(async (req: Request) => {
       JSON.stringify(spine) +
       "\n```";
 
-    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 2000,
-        output_config: { effort: "medium" },
-        system: SYSTEM,
-        messages: [{ role: "user", content: userContent }],
-      }),
-    });
-
-    if (!aiRes.ok) {
-      const t = await aiRes.text();
-      return json({ error: "anthropic_error", detail: t }, 502);
+    // Spurious refusal stop_reasons happen stochastically on benign prompts —
+    // retry up to 2 extra times before giving up. Also retry when the text
+    // comes back empty (e.g. the token budget was consumed by thinking).
+    let narrative = "";
+    let modelUsed = MODEL;
+    let lastStop = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 6000,
+          output_config: { effort: "low" },
+          system: SYSTEM,
+          messages: [{ role: "user", content: userContent }],
+        }),
+      });
+      if (!aiRes.ok) {
+        const t = await aiRes.text();
+        return json({ error: "anthropic_error", detail: t }, 502);
+      }
+      const data = await aiRes.json();
+      modelUsed = data.model || MODEL;
+      lastStop = data.stop_reason || "";
+      narrative = (data.content || [])
+        .filter((b: { type: string }) => b.type === "text")
+        .map((b: { text: string }) => b.text)
+        .join("\n")
+        .trim();
+      if (lastStop !== "refusal" && narrative) break;
     }
-    const data = await aiRes.json();
-    if (data.stop_reason === "refusal") return json({ error: "refusal" }, 200);
-    const narrative = (data.content || [])
-      .filter((b: { type: string }) => b.type === "text")
-      .map((b: { text: string }) => b.text)
-      .join("\n")
-      .trim();
+    if (!narrative) {
+      return json({ error: lastStop === "refusal" ? "refusal" : "empty", detail: "stop_reason=" + lastStop }, 200);
+    }
 
-    return json({ narrative: narrative || "(No narrative produced.)", spine, model: data.model || MODEL });
+    return json({ narrative, spine, model: modelUsed });
   } catch (e) {
     return json({ error: "unexpected", detail: String(e) }, 500);
   }
