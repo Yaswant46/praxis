@@ -180,6 +180,11 @@
       <summary>Facilitator — set up a new session</summary>
       <label>Session name</label>
       <input id="newSessionName" placeholder="e.g. Catalyst Cohort · Aug 2026">
+      <label>Format</label>
+      <div class="radio-row" id="newVariant">
+        <button type="button" class="on" data-v="full" onclick="pickVariant('full')">Full · ~30 people, 5 characters</button>
+        <button type="button" data-v="short" onclick="pickVariant('short')">Short · 15 people, 3 characters, no observers</button>
+      </div>
       <button class="btn amber" onclick="createSession()">Create session &amp; generate codes</button>
       <div id="setupErr" class="err"></div>
       <div id="setupOut"></div>
@@ -278,6 +283,13 @@ let ADMIN_CODE = null, ROSTER = null;
 let ORG_STORIES = [];
 let NARR = { quarter:null, body:'', spine:null, model:'' };
 let _narrSelQ = null;
+// Session format: 'full' (5 characters + observers) or 'short' (3 characters,
+// no observers). VARIANT is the live session's format; NEW_VARIANT is the
+// facilitator's choice on the setup form.
+let VARIANT = 'full';
+let NEW_VARIANT = 'full';
+function pickVariant(v){ NEW_VARIANT=v;
+  Array.from(document.querySelectorAll('#newVariant button')).forEach(b=>b.classList.toggle('on', b.getAttribute('data-v')===v)); }
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function $(id){return document.getElementById(id);}
@@ -319,8 +331,17 @@ function startSession(){
   VIEW = navFor(S.role)[0].id;
   subscribe();
   render();
+  loadVariant();
   if(pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(refresh, 5000);   // backup for RPC-fetched data
+}
+// The session format is immutable — read it once from the (anon-readable)
+// sessions row and re-render so observer UI can hide itself for 'short'.
+function loadVariant(){
+  try{ if(sb && S && S.session){
+    sb.from('bp_sessions').select('variant').eq('id', S.session.id).single()
+      .then(function(res){ if(res && res.data){ VARIANT = res.data.variant || 'full'; render(); } });
+  }}catch(e){}
 }
 
 async function refresh(){
@@ -359,8 +380,8 @@ async function createSession(){
   const name = $('newSessionName').value.trim() || 'Borrowed People session';
   $('setupErr').textContent='';
   try{
-    const out = await rpc('bp_create_session', {p_name:name});
-    let h = '<div class="banner">Session created. Hand out these codes — keep the facilitator code to yourself.</div>';
+    const out = await rpc('bp_create_session', {p_name:name, p_variant:NEW_VARIANT});
+    let h = '<div class="banner">Session created ('+esc(out.variant==='short'?'Short — 15 players, 3 characters':'Full')+'). Hand out these codes — keep the facilitator code to yourself.</div>';
     h += '<div class="kv"><span class="k">Facilitator</span><span class="codechip">'+esc(out.facilitator_code)+'</span></div>';
     h += '<div style="margin:12px 0 4px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint)">Teams</div>';
     Object.keys(out.teams).forEach(k=>{ const t=out.teams[k];
@@ -404,7 +425,8 @@ function navFor(role){
     {id:'capacity',icon:'🎚',label:'Capacity'},
     {id:'playas',icon:'👥',label:'Play as'},
     {id:'orgstory',icon:'📖',label:'Org story'},
-    {id:'observerlog',icon:'📝',label:'Observer log'},
+    // Observer log is hidden in the Short format (no observers).
+    ...(VARIANT==='short' ? [] : [{id:'observerlog',icon:'📝',label:'Observer log'}]),
     {id:'assist',icon:'✦',label:'AI assist'},
     {id:'enroll',icon:'✉',label:'Enrollments'},
     {id:'codes',icon:'🔑',label:'Codes'},
@@ -716,14 +738,18 @@ function vDebrief(){
   if(s.phase!=='DEBRIEF') return '<h1 class="h">Debrief</h1><p class="lede">Opens when the facilitator moves this quarter to debrief. Then your sealed Style Calls meet the observer log.</p>';
   const scs=(S.style_calls||[]).filter(x=>x.team_id===S.team_id);
   const ob=(S.observer_logs||[]).find(x=>x.team_id===S.team_id);
+  const noObs = VARIANT==='short';   // Short format: no observers
   let rows = scs.map(x=>{ const gap = ob && ob.observed_style!==x.style;
-    return `<tr><td>${esc(x.seat)}</td><td>${esc(styleLabel(x.style))}</td><td>${esc(x.rationale||'')}</td>
-      <td>${ob?esc(styleLabel(ob.observed_style)):'—'}</td><td>${gap?'<span class="tag r">gap</span>':(ob?'<span class="tag g">match</span>':'—')}</td></tr>`;
+    const obsCells = noObs ? '' : `<td>${ob?esc(styleLabel(ob.observed_style)):'—'}</td><td>${gap?'<span class="tag r">gap</span>':(ob?'<span class="tag g">match</span>':'—')}</td>`;
+    return `<tr><td>${esc(x.seat)}</td><td>${esc(styleLabel(x.style))}</td><td>${esc(x.rationale||'')}</td>${obsCells}</tr>`;
   }).join('');
-  return `<h1 class="h">Debrief — Q${s.quarter}</h1><p class="lede">What you declared, against what the room saw.</p>
-    <div class="panel"><table><thead><tr><th>Seat</th><th>Declared</th><th>Why</th><th>Observed</th><th></th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="5"><span class="empty">No Style Calls for this quarter.</span></td></tr>'}</tbody></table>
-      ${ob&&ob.note?'<div class="ph-sub" style="margin-top:12px">Observer note: '+esc(ob.note)+'</div>':''}</div>`;
+  const head = noObs ? '<tr><th>Seat</th><th>Declared</th><th>Why</th></tr>'
+                     : '<tr><th>Seat</th><th>Declared</th><th>Why</th><th>Observed</th><th></th></tr>';
+  const cols = noObs ? 3 : 5;
+  return `<h1 class="h">Debrief — Q${s.quarter}</h1><p class="lede">${noObs?'The leadership styles each seat declared this quarter.':'What you declared, against what the room saw.'}</p>
+    <div class="panel"><table><thead>${head}</thead>
+      <tbody>${rows||'<tr><td colspan="'+cols+'"><span class="empty">No Style Calls for this quarter.</span></td></tr>'}</tbody></table>
+      ${(!noObs && ob&&ob.note)?'<div class="ph-sub" style="margin-top:12px">Observer note: '+esc(ob.note)+'</div>':''}</div>`;
 }
 
 // =====================================================================
@@ -866,12 +892,13 @@ function openProjection(){ window.open('borrowed.html?projection='+S.session.id,
 
 function vMonitor(){
   const m=S.monitor||[];
+  const noObs = VARIANT==='short';   // Short format: no observer column
   let rows=m.map(x=>`<tr><td>${esc(x.code)}</td>
     <td>${x.has_request?'<span class="tag g">✓</span>':'<span class="tag r">missing</span>'}</td>
     <td>${x.style_calls>=2?'<span class="tag g">2/2</span>':'<span class="tag a">'+x.style_calls+'/2</span>'}</td>
-    <td>${x.has_observer?'<span class="tag g">✓</span>':'<span class="tag m">—</span>'}</td></tr>`).join('');
+    ${noObs?'':'<td>'+(x.has_observer?'<span class="tag g">✓</span>':'<span class="tag m">—</span>')+'</td>'}</tr>`).join('');
   return `<h1 class="h">Session monitor</h1><p class="lede">Who has submitted what this quarter. Chase the red before you advance.</p>
-    <div class="panel"><table><thead><tr><th>Team</th><th>Request</th><th>Style Calls</th><th>Observer</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div class="panel"><table><thead><tr><th>Team</th><th>Request</th><th>Style Calls</th>${noObs?'':'<th>Observer</th>'}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function vDrift(){

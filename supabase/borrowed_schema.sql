@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS bp_sessions (
                          'RUNNER_WINDOW','OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF')),
   headwind_revealed BOOLEAN NOT NULL DEFAULT FALSE,
   target_value      INT NOT NULL DEFAULT 14200,
+  variant           TEXT NOT NULL DEFAULT 'full',   -- 'full' | 'short' (see migrations/008)
   facilitator_code  TEXT UNIQUE NOT NULL,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -410,41 +411,59 @@ $$;
 -- =====================================================================
 --  SESSION PROVISIONING  (seeds a full playable case, §11)
 -- =====================================================================
-CREATE OR REPLACE FUNCTION bp_create_session(p_name TEXT)
+CREATE OR REPLACE FUNCTION bp_create_session(p_name TEXT, p_variant TEXT DEFAULT 'full')
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_sid UUID;
   v_fac TEXT;
   r RECORD;
+  v_variant TEXT := CASE WHEN lower(COALESCE(p_variant,'full'))='short' THEN 'short' ELSE 'full' END;
   v_team_codes JSONB := '{}'::jsonb;
   v_char_codes JSONB := '{}'::jsonb;
-  -- objective → team code, name
+  -- objective → team code, name  (SAME for both variants)
   objs TEXT[][] := ARRAY[
     ARRAY['battery','A','Battery','Cell cost, energy density, and thermal safety.'],
     ARRAY['suppliers','B','Suppliers','Second-source the critical bill of materials.'],
     ARRAY['spec','C','Spec','Lock the product specification without gold-plating.'],
     ARRAY['warranty','D','Warranty','Contain field-failure exposure and warranty reserve.'],
     ARRAY['pricing','E','Pricing','Hold margin against a price-led market.']];
-  chars TEXT[][] := ARRAY[
+  team_names TEXT[] := ARRAY['Ampere','Bastion','Crucible','Dynamo','Envoy'];
+  -- FULL: 5 playable + Sponsor
+  chars_full TEXT[][] := ARRAY[
     ARRAY['arjun','Arjun','Design lead'],
     ARRAY['neha','Neha','Supply chain — 14 months in'],
     ARRAY['raghav','Raghav','Manufacturing — 19 years'],
     ARRAY['farida','Farida','Quality'],
     ARRAY['devika','Devika','Regional Sales Head'],
     ARRAY['sponsor','Sponsor','COO — facilitator plays this']];
-  -- demand map: objective, q1p,q1s, q2p,q2s, q3p,q3s, q4p,q4s
-  dmap TEXT[][] := ARRAY[
+  dmap_full TEXT[][] := ARRAY[
     ARRAY['battery',  'arjun','neha',  'neha','farida', 'farida','raghav', 'arjun','neha'],
     ARRAY['suppliers','neha','raghav', 'neha','raghav', 'raghav','neha',   'sponsor','neha'],
     ARRAY['spec',     'arjun','devika','farida','devika','arjun','devika', 'sponsor','farida'],
     ARRAY['warranty', 'farida','raghav','raghav','farida','neha','raghav', 'farida','neha'],
     ARRAY['pricing',  'devika','farida','devika','arjun', 'devika','farida','sponsor','devika']];
-  team_names TEXT[] := ARRAY['Ampere','Bastion','Crucible','Dynamo','Envoy'];
+  -- SHORT: 3 playable (Arjun, Neha, Farida) + Sponsor; demand map only needs these four.
+  chars_short TEXT[][] := ARRAY[
+    ARRAY['arjun','Arjun','Design lead'],
+    ARRAY['neha','Neha','Supply chain — 14 months in'],
+    ARRAY['farida','Farida','Quality'],
+    ARRAY['sponsor','Sponsor','COO — facilitator plays this']];
+  dmap_short TEXT[][] := ARRAY[
+    ARRAY['battery',  'arjun','neha',   'neha','farida',  'farida','arjun', 'arjun','neha'],
+    ARRAY['suppliers','neha','farida',  'neha','arjun',   'arjun','neha',   'sponsor','neha'],
+    ARRAY['spec',     'arjun','farida', 'farida','arjun', 'arjun','farida', 'sponsor','farida'],
+    ARRAY['warranty', 'farida','neha',  'neha','farida',  'neha','farida',  'farida','neha'],
+    ARRAY['pricing',  'farida','arjun', 'arjun','farida', 'farida','neha',  'sponsor','farida']];
+  chars TEXT[][];
+  dmap  TEXT[][];
   i INT; q INT;
   v_char_id UUID;
 BEGIN
+  IF v_variant='short' THEN chars := chars_short; dmap := dmap_short;
+  ELSE                     chars := chars_full;  dmap := dmap_full;  END IF;
+
   v_fac := bp_gencode('FAC');
-  INSERT INTO bp_sessions(name, facilitator_code) VALUES (p_name, v_fac) RETURNING id INTO v_sid;
+  INSERT INTO bp_sessions(name, facilitator_code, variant) VALUES (p_name, v_fac, v_variant) RETURNING id INTO v_sid;
   INSERT INTO bp_headwind(session_id, value) VALUES (v_sid, 6000);
 
   -- Objectives + teams
@@ -500,10 +519,11 @@ BEGIN
     v_char_codes := v_char_codes || jsonb_build_object(r.key, jsonb_build_object('name',r.name,'code',r.access_code));
   END LOOP;
 
-  PERFORM bp_log(v_sid,'facilitator','create_session', jsonb_build_object('name',p_name));
+  PERFORM bp_log(v_sid,'facilitator','create_session', jsonb_build_object('name',p_name,'variant',v_variant));
 
   RETURN jsonb_build_object(
     'session_id', v_sid,
+    'variant', v_variant,
     'facilitator_code', v_fac,
     'teams', v_team_codes,
     'characters', v_char_codes);
