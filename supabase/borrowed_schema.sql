@@ -480,6 +480,9 @@ $$;
 -- =====================================================================
 --  SESSION PROVISIONING  (seeds a full playable case, §11)
 -- =====================================================================
+-- The pre-variant one-argument overload must not coexist with this one:
+-- PostgREST cannot choose between them (migration 017).
+DROP FUNCTION IF EXISTS bp_create_session(text);
 CREATE OR REPLACE FUNCTION bp_create_session(p_name TEXT, p_variant TEXT DEFAULT 'full')
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -1569,7 +1572,7 @@ DO $$
 DECLARE fn TEXT;
 BEGIN
   FOR fn IN SELECT unnest(ARRAY[
-    'bp_create_session(text)',
+    'bp_create_session(text,text)',
     'bp_auth(text,text)','bp_state(text,text)','bp_boards(uuid)',
     'bp_advance_phase(text,text)','bp_step_back(text,text)',
     'bp_trigger_curveball(text,text,text)','bp_set_headwind(text,text,int)',
