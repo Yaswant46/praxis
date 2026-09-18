@@ -434,6 +434,7 @@ function navFor(role){
   return [
     {id:'control',icon:'▶',label:'Phase control'},
     {id:'monitor',icon:'📊',label:'Session monitor'},
+    {id:'directives',icon:'📜',label:'Directives'},
     {id:'drift',icon:'🎚',label:'Drift check'},
     {id:'curveball',icon:'⚡',label:'Curveball'},
     {id:'headwind',icon:'🌀',label:'Headwind'},
@@ -524,7 +525,7 @@ function render(){
     dash:vDash, stake:vStake, request:vRequest, reveal:vReveal,
     observer:vObserver, boards:vBoards, debrief:vDebrief,
     incoming:vIncoming, brief:vBrief, select:vSelect, rate:vRate, judge:vJudge,
-    control:vControl, monitor:vMonitor, drift:vDrift, curveball:vCurveball, headwind:vHeadwind,
+    control:vControl, monitor:vMonitor, directives:vDirectives, drift:vDrift, curveball:vCurveball, headwind:vHeadwind,
     capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll,
     assist:vAssist, story:vStory, orgstory:vOrgStory, observerlog:vObserverLog
   }[VIEW];
@@ -586,6 +587,104 @@ function styleReckoner(){
 function myTeam(){ return (S.teams||[]).find(t=>t.id===S.team_id) || {}; }
 function myObjective(){ const t=myTeam(); return (S.objectives||[]).find(o=>o.key===t.objective_key)||{}; }
 
+// ---- The Sponsor's directive + your mandate (comply / voice / defy) ----
+// A minimal-writing control: one three-way choice, and a single dissent line
+// that is only required when the participant pushes back (voice/defy). Locks
+// at REQUESTS_LOCKED, after which the submitted choice shows read-only.
+const MANDATE_LABELS = { comply:'Comply', voice:'Voice', defy:'Defy' };
+let MANDATE_BUF = null;   // in-progress stance before submit (null = untouched)
+function pickMandate(st){
+  MANDATE_BUF = st;
+  const box=$('mnd_choice'); if(box) Array.from(box.children).forEach(b=>b.classList.toggle('on', b.getAttribute('data-st')===st));
+  const wrap=$('mnd_dissent_wrap'); if(wrap) wrap.style.display = (st==='voice'||st==='defy') ? '' : 'none';
+}
+function mandateCard(){
+  const d = S.my_directive;
+  if(!d || !d.text) return '';               // older sessions / no directive issued
+  const locked = phaseIdx(S.session.phase) >= phaseIdx('REQUESTS_LOCKED');
+  const m = S.my_mandate || null;
+  const head = `<h3>The Sponsor's directive</h3>
+    <div style="font-family:var(--serif);font-size:18px;line-height:1.55;margin:6px 0 8px">${esc(d.text)}</div>
+    <div class="ph-sub" style="margin-bottom:14px">Intended benefit: ${esc(d.intended_benefit||'—')}</div>`;
+  if(locked){
+    // Read-only: what the team committed to.
+    let choice = m && m.stance
+      ? `<span class="tag ${m.stance==='comply'?'g':(m.stance==='voice'?'a':'r')}">${esc(MANDATE_LABELS[m.stance]||m.stance)}</span>`
+      : '<span class="tag m">no mandate submitted</span>';
+    return `<div class="panel">${head}
+      <div class="kv"><span class="k">Your mandate</span><span>${choice}</span></div>
+      ${(m&&m.dissent_line)?'<div class="ph-sub" style="margin-top:10px">Dissent line: '+esc(m.dissent_line)+'</div>':''}</div>`;
+  }
+  // Editable: seed the buffer from any already-submitted mandate.
+  const cur = (MANDATE_BUF!=null) ? MANDATE_BUF : (m && m.stance) || null;
+  const btns = ['comply','voice','defy'].map(st=>
+    '<button data-st="'+st+'" class="'+(cur===st?'on':'')+'" onclick="pickMandate(\''+st+'\')">'+MANDATE_LABELS[st]+'</button>').join('');
+  const showDissent = (cur==='voice'||cur==='defy');
+  return `<div class="panel">${head}
+    <label>Your call</label>
+    <div class="radio-row" id="mnd_choice">${btns}</div>
+    <div id="mnd_dissent_wrap" style="margin-top:12px;display:${showDissent?'':'none'}">
+      <label>Dissent line — one sentence (required)</label>
+      <input id="mnd_dissent" placeholder="Say plainly what you'd change, and why." value="${esc((m&&m.dissent_line)||'')}">
+    </div>
+    <button class="btn" onclick="submitMandate()">Submit mandate</button></div>`;
+}
+async function submitMandate(){
+  const st = (MANDATE_BUF!=null) ? MANDATE_BUF : ((S.my_mandate||{}).stance||null);
+  if(!st){ toast('Pick comply, voice or defy.',true); return; }
+  let dissent = '';
+  if(st==='voice'||st==='defy'){
+    dissent = ($('mnd_dissent') ? $('mnd_dissent').value : '').trim();
+    if(!dissent){ toast('Voice and Defy need a one-line reason.',true); return; }
+  }
+  try{ await rpc('bp_submit_mandate', auth({p_stance:st, p_dissent_line:dissent}));
+    MANDATE_BUF=null; toast('Mandate submitted.'); refresh();
+  }catch(e){ toast(e.message,true); }
+}
+
+// ---- Adjusted-ideal reveal: what each team's objective actually needed ----
+// Facilitator sees it any phase; participants & characters see it at DEBRIEF.
+// A team's own row stands out if it is behind / at_risk.
+function demandRevealPanel(){
+  const dr = S.demand_reveal;
+  if(!Array.isArray(dr) || !dr.length) return '';
+  const stTag = { on_track:'g', behind:'a', at_risk:'r' };
+  const stLbl = { on_track:'on track', behind:'behind', at_risk:'at risk' };
+  const rows = dr.map(x=>{
+    const mine = (x.team_id===S.team_id);
+    const flag = mine && (x.state==='behind'||x.state==='at_risk');
+    const badge = '<span class="tag '+(stTag[x.state]||'m')+'">'+esc(stLbl[x.state]||x.state||'—')+'</span>';
+    return `<tr${flag?' style="background:rgba(194,74,63,.10)"':''}>
+      <td>${esc(teamName(x.team_id))}${mine?' <span class="tag m">you</span>':''}</td>
+      <td>${esc(x.primary_name||'—')}</td><td>${esc(x.secondary_name||'—')}</td>
+      <td>${badge}</td><td>${esc(x.business_reason||'')}</td></tr>`;
+  }).join('');
+  return `<div class="panel"><h3>The adjusted ideal</h3>
+    <div class="ph-sub">Who each team's objective actually depended on this quarter — and how the numbers really tracked.</div>
+    <table><thead><tr><th>Team</th><th>Primary</th><th>Secondary</th><th>State</th><th>Why</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+}
+
+// ---- Mandate reveal (DEBRIEF): the room's comply / voice / defy calls ----
+function mandateRevealPanel(){
+  const mr = S.mandate_reveal;
+  if(!Array.isArray(mr) || !mr.length) return '';
+  const stTag = { comply:'m', voice:'a', defy:'r' };
+  const rows = mr.map(x=>{
+    const mine = (x.team_id===S.team_id);
+    return `<tr${mine?' style="background:rgba(31,177,85,.08)"':''}>
+      <td>${esc(teamName(x.team_id))}${mine?' <span class="tag m">you</span>':''}</td>
+      <td><span class="tag ${stTag[x.stance]||'m'}">${esc(MANDATE_LABELS[x.stance]||x.stance||'—')}</span></td>
+      <td>${esc(x.leadership_cell||'—')}</td>
+      <td>${esc(x.alignment||'—')}</td>
+      <td>${esc(x.dissent_line||'')}</td></tr>`;
+  }).join('');
+  return `<div class="panel"><h3>The room's mandate</h3>
+    <div class="ph-sub">How each team answered the Sponsor — and where that lands on the leadership map.</div>
+    <table><thead><tr><th>Team</th><th>Stance</th><th>Leadership</th><th>Alignment</th><th>Dissent line</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+}
+
 function vDash(){
   const t=myTeam(), o=myObjective();
   const totalPts = (S.results||[]).filter(r=>r.team_id===S.team_id).reduce((a,r)=>a+(r.points||0),0);
@@ -596,6 +695,7 @@ function vDash(){
   return `
   <div class="topline"><span class="tag g">Team ${esc(t.code||'')}</span><h1 class="h">${esc(t.name||'')}</h1></div>
   <p class="lede">${esc(o.description||'')}</p>
+  ${mandateCard()}
   <div class="grid2">
     <div class="panel"><h3>Your objective</h3><div class="ph-sub">${esc(o.label||'')}</div>
       <div class="kv"><span class="k">Quarter</span><span>Q${S.session.quarter} of 4</span></div>
@@ -792,7 +892,9 @@ function vDebrief(){
   return `<h1 class="h">Debrief — Q${s.quarter}</h1><p class="lede">${noObs?'The leadership styles each seat declared this quarter.':'What you declared, against what the room saw.'}</p>
     <div class="panel"><table><thead>${head}</thead>
       <tbody>${rows||'<tr><td colspan="'+cols+'"><span class="empty">No Style Calls for this quarter.</span></td></tr>'}</tbody></table>
-      ${(!noObs && ob&&ob.note)?'<div class="ph-sub" style="margin-top:12px">Observer note: '+esc(ob.note)+'</div>':''}</div>`;
+      ${(!noObs && ob&&ob.note)?'<div class="ph-sub" style="margin-top:12px">Observer note: '+esc(ob.note)+'</div>':''}</div>
+    ${demandRevealPanel()}
+    ${mandateRevealPanel()}`;
 }
 
 // =====================================================================
@@ -806,7 +908,9 @@ function vIncoming(){
   let rows=inc.map(r=>`<tr><td>${esc(teamName(r.team_id))}</td><td>${r.as==='primary'?'<span class="tag g">primary</span>':'<span class="tag a">secondary</span>'}</td></tr>`).join('');
   return `<h1 class="h">Incoming</h1><p class="lede">Every team that named you this quarter. Some need you badly; some guessed wrong.</p>
     <div class="panel"><table><thead><tr><th>Team</th><th>Named you as</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="2"><span class="empty">No team named you this quarter.</span></td></tr>'}</tbody></table></div>`;
+      <tbody>${rows||'<tr><td colspan="2"><span class="empty">No team named you this quarter.</span></td></tr>'}</tbody></table></div>
+    ${demandRevealPanel()}
+    ${mandateRevealPanel()}`;
 }
 
 function vBrief(){
@@ -944,6 +1048,68 @@ function vMonitor(){
     ${noObs?'':'<td>'+(x.has_observer?'<span class="tag g">✓</span>':'<span class="tag m">—</span>')+'</td>'}</tr>`).join('');
   return `<h1 class="h">Session monitor</h1><p class="lede">Who has submitted what this quarter. Chase the red before you advance.</p>
     <div class="panel"><table><thead><tr><th>Team</th><th>Request</th><th>Style Calls</th>${noObs?'':'<th>Observer</th>'}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// ---- Facilitator: the Sponsor's directives + the Voice lever (re-issue) ----
+function vDirectives(){
+  const s=S.session;
+  const dirs = Array.isArray(S.directives) ? S.directives : null;
+  const stat = Array.isArray(S.mandate_status) ? S.mandate_status : [];
+  const submitted = {}; stat.forEach(x=>{ submitted[x.team_id]=x.submitted; });
+  // Current-quarter directives with alignment (facilitator-only), and who has
+  // answered with a mandate yet.
+  let dirRows;
+  if(dirs && dirs.length){
+    dirRows = dirs.map(d=>{
+      const sub = submitted[d.team_id];
+      return `<tr><td>${esc(teamName(d.team_id))}</td>
+        <td>${esc(d.directive_text||'—')}</td>
+        <td>${esc(d.intended_benefit||'—')}</td>
+        <td><span class="tag ${d.alignment?'g':'m'}">${esc(d.alignment||'—')}</span></td>
+        <td>${sub===true?'<span class="tag g">answered</span>':(sub===false?'<span class="tag a">waiting</span>':'<span class="tag m">—</span>')}</td></tr>`;
+    }).join('');
+  } else {
+    dirRows = '<tr><td colspan="5"><span class="empty">No directives for this quarter.</span></td></tr>';
+  }
+  const dirTable = `<div class="panel"><h3>Directives · Q${s.quarter}</h3>
+    <div class="ph-sub">What the Sponsor asked of each team this quarter, its intended benefit, and — for your eyes only — whether it is aligned. The right-hand column tracks who has answered with a mandate.</div>
+    <table><thead><tr><th>Team</th><th>Directive</th><th>Intended benefit</th><th>Alignment</th><th>Mandate</th></tr></thead>
+      <tbody>${dirRows}</tbody></table></div>`;
+
+  // Re-issue / override form — the Voice lever.
+  const teams = S.teams||[];
+  const teamOpts = teams.map(t=>'<option value="'+esc(t.code)+'">'+esc(t.code+' · '+t.name)+'</option>').join('');
+  const qOpts = [1,2,3,4].map(q=>'<option value="'+q+'"'+(q===s.quarter?' selected':'')+'>Q'+q+'</option>').join('');
+  const reissue = `<div class="panel"><h3>Re-issue a directive</h3>
+    <div class="ph-sub">The Voice lever: override a team's directive when the room pushes back. This replaces what that team sees for the chosen quarter.</div>
+    <div class="grid2">
+      <div><label>Team</label><select id="dirTeam">${teamOpts}</select></div>
+      <div><label>Quarter</label><select id="dirQ">${qOpts}</select></div>
+    </div>
+    <label>Directive</label><textarea id="dirText" placeholder="What the Sponsor now asks of this team."></textarea>
+    <label>Intended benefit</label><input id="dirBenefit" placeholder="Why the Sponsor wants it.">
+    <label>Alignment</label><select id="dirAlign">
+      <option value="sound">sound (fits ground truth)</option>
+      <option value="tension">tension (conflicts with ground truth)</option>
+    </select>
+    <button class="btn amber" onclick="setDirective()">Re-issue directive</button></div>`;
+
+  return `<h1 class="h">Directives &amp; mandates</h1>
+    <p class="lede">The Sponsor's ask, and how each team answered it. Re-issue below when a team's Voice earns a change.</p>
+    ${dirTable}
+    ${reissue}
+    ${demandRevealPanel()}
+    ${mandateRevealPanel()}`;
+}
+async function setDirective(){
+  const team=$('dirTeam').value, q=+$('dirQ').value;
+  const text=($('dirText').value||'').trim(), benefit=($('dirBenefit').value||'').trim();
+  const align=$('dirAlign').value;
+  if(!text){ toast('Write the directive.',true); return; }
+  try{
+    await rpc('bp_set_directive', {p_session_code:CODE, p_fac_code:CODE, p_team_code:team, p_quarter:q, p_text:text, p_benefit:benefit, p_alignment:align});
+    toast('Directive re-issued.'); refresh();
+  }catch(e){ toast(e.message,true); }
 }
 
 function vDrift(){
