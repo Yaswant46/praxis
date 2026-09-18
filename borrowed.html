@@ -1453,57 +1453,67 @@ function narrFacts(sp){
   }
   return '<div class="ai-meta">Momentum: '+esc(mo.tier||'—')+' ('+(mo.points||0)+' pts this quarter) · '+meter+'</div>'+ach;
 }
+function yearOpen(){ const s=S&&S.session; return !!s && (s.status==='closed' || (s.quarter>=4 && (s.phase==='RESULTS'||s.phase==='DEBRIEF'))); }
+function chapterLabel(q){ return +q===5 ? 'The year' : 'Quarter '+q; }
+function chapterHtml(q, body){ return +q===5 ? mdToHtml(body) : storyHtml(body); }
 function selQ(){ return _narrSelQ || (S && S.session ? S.session.quarter : 1); }
 function narrPick(q){ _narrSelQ=q; render(); }
 function vStory(){
   const list=(ORG_STORIES||[]).slice().sort((a,b)=>a.quarter-b.quarter);
   if(!list.length) return '<h1 class="h">The Meridian — the story so far</h1><p class="lede">Your facilitator publishes the organisation’s story here after each quarter. Nothing has been published yet.</p>';
-  const chapters=list.map(c=>'<div class="panel"><div class="ph-sub">Quarter '+esc(c.quarter)+'</div><div class="ai-body">'+storyHtml(c.body)+'</div></div>').join('');
+  const chapters=list.map(c=>'<div class="panel"><div class="ph-sub">'+esc(chapterLabel(c.quarter))+'</div><div class="ai-body">'+chapterHtml(c.quarter, c.body)+'</div></div>').join('');
   return '<h1 class="h">The Meridian — the story so far</h1><p class="lede">How the organisation moved, quarter by quarter — the sum of every team’s choices.</p>'+chapters;
 }
 function vOrgStory(){
   const sq=selQ();
   const published=(ORG_STORIES||[]).find(c=>+c.quarter===+sq);
   const draft=(NARR.body && +NARR.quarter===+sq)?NARR:null;
-  const qbtns=[1,2,3,4].map(q=>'<button class="btn sm '+((+sq===q)?'':'ghost')+'" style="width:auto" onclick="narrPick('+q+')">Q'+q+'</button>').join(' ');
+  const qbtns=[1,2,3,4].map(q=>'<button class="btn sm '+((+sq===q)?'':'ghost')+'" style="width:auto" onclick="narrPick('+q+')">Q'+q+'</button>').join(' ')
+    +' <button class="btn sm '+((+sq===5)?'':'ghost')+'" style="width:auto" '+(yearOpen()?'onclick="narrPick(5)"':'disabled title="Opens once Q4 results are in"')+'>Year</button>';
+  const isYear = (+sq===5);
+  const qlabel = isYear ? 'the year' : 'Q'+sq;
   let body;
   if(draft){
-    body=narrFacts(draft.spine)+'<div class="ai-body">'+storyHtml(draft.body)+'</div>'
+    body=narrFacts(draft.spine)+'<div class="ai-body">'+chapterHtml(sq, draft.body)+'</div>'
       +'<div class="mrow" style="margin-top:14px"><button class="btn" style="width:auto" onclick="narrPublish()">▲ Publish to every login</button>'
       +'<button class="btn ghost sm" style="width:auto" onclick="narrGenerate()">↻ Regenerate</button></div>'
-      +(published?'<div class="ai-hint" style="margin-top:8px">Publishing replaces the version already live for Q'+sq+'.</div>':'');
+      +(published?'<div class="ai-hint" style="margin-top:8px">Publishing replaces the version already live for '+qlabel+'.</div>':'');
   } else if(published){
-    body='<div class="ai-meta">Published and live for Q'+sq+'</div><div class="ai-body">'+storyHtml(published.body)+'</div>'
-      +'<div class="mrow" style="margin-top:14px"><button class="btn ghost sm" style="width:auto" onclick="narrGenerate()">↻ Regenerate this chapter</button></div>';
+    body='<div class="ai-meta">Published and live for '+qlabel+'</div><div class="ai-body">'+chapterHtml(sq, published.body)+'</div>'
+      +'<div class="mrow" style="margin-top:14px"><button class="btn ghost sm" style="width:auto" onclick="narrGenerate()">↻ Regenerate</button></div>';
+  } else if(isYear){
+    body='<div class="empty">No year summary yet. It is written from the whole year — every quarter’s bands, who asked for whom, who gave time and why, both Style Calls, observed styles, mandates and the Q4 judgements — once Q4 results are in. Takes a minute.</div>';
   } else {
     body='<div class="empty">No chapter yet for Q'+sq+'. Run this quarter’s results first, then press Generate.</div>';
   }
   return '<h1 class="h">Org story — the Meridian</h1>'
     +'<p class="lede">Generate the organisation’s chapter for a quarter from the live results, review it, then publish it to every team and character login. The facts — bands, meter, scorecard — are computed exactly; the AI only writes the words around them.</p>'
     +'<div class="panel"><div class="ph-sub">Quarter</div><div class="mrow" style="margin-top:4px">'+qbtns+'</div>'
-    +'<div class="mrow" style="margin-top:12px"><button class="btn amber" id="narr_btn" style="width:auto" onclick="narrGenerate()">✦ Generate chapter for Q'+sq+'</button>'
-    +'<span class="ai-hint">Uses your Anthropic key server-side; a few seconds.</span></div></div>'
+    +'<div class="mrow" style="margin-top:12px"><button class="btn amber" id="narr_btn" style="width:auto" onclick="narrGenerate()">'+(isYear?'✦ Generate the Year’s summary for the Meridian':'✦ Generate chapter for Q'+sq)+'</button>'
+    +'<span class="ai-hint">'+(isYear?'Uses your Anthropic key server-side; about a minute.':'Uses your Anthropic key server-side; a few seconds.')+'</span></div></div>'
     +'<div id="narr_out" class="panel ai-panel">'+body+'</div>';
 }
 async function narrGenerate(){
   const q=selQ(); const out=$('narr_out'), btn=$('narr_btn');
   if(btn){ btn.disabled=true; btn.textContent='Generating…'; }
-  if(out) out.innerHTML='<div class="empty">Writing the chapter for Q'+q+'… a few seconds.</div>';
+  const isYear=(+q===5);
+  if(out) out.innerHTML='<div class="empty">'+(isYear?'Writing the year’s summary… about a minute. Leave this tab open.':'Writing the chapter for Q'+q+'… a few seconds.')+'</div>';
   try{
-    const res=await fetch(SUPA_URL+'/functions/v1/bp-narrative',{
+    const res=await fetch(SUPA_URL+'/functions/v1/'+(isYear?'bp-year':'bp-narrative'),{
       method:'POST',
       headers:{ 'Content-Type':'application/json', apikey:SUPA_KEY, Authorization:'Bearer '+SUPA_KEY },
-      body:JSON.stringify({ code:CODE, quarter:q })
+      body:JSON.stringify(isYear ? { code:CODE } : { code:CODE, quarter:q })
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok || data.error){
       const map={ assistant_not_configured:'The narrator isn’t configured — set the ANTHROPIC_API_KEY secret on the bp-narrative edge function.',
                   forbidden:'This is facilitator-only.', bad_quarter:'Pick a quarter between 1 and 4.',
-                  refusal:'The narrator declined to write this chapter.' };
+                  year_not_over:'The year summary opens once Q4 has reached Results.',
+                  refusal:'The narrator declined to write this.' };
       if(out) out.innerHTML='<div class="banner red">'+esc(map[data.error]||data.detail||data.error||('Request failed ('+res.status+').'))+'</div>';
       return;
     }
-    NARR={ quarter:q, body:data.narrative, spine:data.spine, model:data.model };
+    NARR={ quarter:q, body:(isYear?data.summary:data.narrative), spine:(isYear?null:data.spine), model:data.model };
     render();
   }catch(e){ if(out) out.innerHTML='<div class="banner red">'+esc(e.message||'Could not reach the narrator.')+'</div>'; }
   finally{ if(btn){ btn.disabled=false; } }
@@ -1609,8 +1619,8 @@ async function projLoad(){
       if(el){
         if(data && data.length){
           el.style.display='block';
-          el.innerHTML='<div style="font-family:var(--serif);font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--green);margin-bottom:8px">The Meridian · Quarter '+esc(data[0].quarter)+'</div>'
-            +'<div style="font-family:var(--serif);font-size:19px;line-height:1.55;color:var(--text)">'+storyHtml(data[0].body)+'</div>';
+          el.innerHTML='<div style="font-family:var(--serif);font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--green);margin-bottom:8px">The Meridian · '+esc(chapterLabel(data[0].quarter))+'</div>'
+            +'<div style="font-family:var(--serif);font-size:19px;line-height:1.55;color:var(--text)">'+chapterHtml(data[0].quarter, data[0].body)+'</div>';
         } else { el.style.display='none'; }
       }
     }catch(e){}
