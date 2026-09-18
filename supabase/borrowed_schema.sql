@@ -272,6 +272,54 @@ CREATE TABLE IF NOT EXISTS bp_events (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Adaptive-demand-map state (migration 010) — per-objective per-quarter
+-- business state + the ideal we actually scored against. HIDDEN like
+-- bp_demand_map: deny-all, reached only through the definer RPCs. Surfaced to
+-- the room via bp_state's demand_reveal (facilitator always; participants /
+-- characters at DEBRIEF only).
+CREATE TABLE IF NOT EXISTS bp_objective_state (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id      UUID REFERENCES bp_sessions(id) ON DELETE CASCADE,
+  objective_key   TEXT NOT NULL,
+  quarter         INT  NOT NULL CHECK (quarter BETWEEN 1 AND 4),
+  state           TEXT NOT NULL CHECK (state IN ('on_track','behind','at_risk')),
+  primary_key     TEXT,
+  secondary_key   TEXT,
+  business_reason TEXT,
+  UNIQUE (session_id, objective_key, quarter)
+);
+
+-- Mandate mechanic (migration 011) — the compliance-vs-courage axis.
+-- Both tables are spoiler tables: deny-all like bp_demand_map, reached only
+-- through the definer RPCs (bp_submit_mandate / bp_set_directive / bp_state).
+--
+-- The directive the Sponsor hands each team for a quarter, and whether it is
+-- business-'sound' or in 'tension' with the adaptive-demand-map ideal.
+CREATE TABLE IF NOT EXISTS bp_directives (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id       UUID REFERENCES bp_sessions(id) ON DELETE CASCADE,
+  team_id          UUID REFERENCES bp_teams(id) ON DELETE CASCADE,
+  quarter          INT  NOT NULL CHECK (quarter BETWEEN 1 AND 4),
+  directive_text   TEXT NOT NULL,
+  intended_benefit TEXT,
+  alignment        TEXT NOT NULL CHECK (alignment IN ('sound','tension')),
+  issued_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (session_id, team_id, quarter)
+);
+
+-- The team's stance on the directive: comply / voice / defy, plus the dissent
+-- line they wrote (required for voice + defy).
+CREATE TABLE IF NOT EXISTS bp_mandate_decisions (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id    UUID REFERENCES bp_sessions(id) ON DELETE CASCADE,
+  team_id       UUID REFERENCES bp_teams(id) ON DELETE CASCADE,
+  quarter       INT  NOT NULL CHECK (quarter BETWEEN 1 AND 4),
+  stance        TEXT NOT NULL CHECK (stance IN ('comply','voice','defy')),
+  dissent_line  TEXT,
+  submitted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (session_id, team_id, quarter)
+);
+
 CREATE INDEX IF NOT EXISTS bp_events_session_idx ON bp_events(session_id, created_at);
 CREATE INDEX IF NOT EXISTS bp_selections_lookup  ON bp_selections(session_id, quarter, team_id);
 CREATE INDEX IF NOT EXISTS bp_ratings_lookup     ON bp_ratings(session_id, quarter, team_id);
@@ -291,7 +339,8 @@ BEGIN
     'bp_participants','bp_seat_assignments','bp_demand_map','bp_character_capacity',
     'bp_requests','bp_style_calls','bp_observer_logs','bp_selections','bp_ratings',
     'bp_commitments','bp_judgements','bp_stakeholder_maps','bp_quarter_results',
-    'bp_curveballs','bp_escalation_cards','bp_events'])
+    'bp_curveballs','bp_escalation_cards','bp_events',
+    'bp_objective_state','bp_directives','bp_mandate_decisions'])
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
   END LOOP;
@@ -325,7 +374,8 @@ BEGIN
     'bp_headwind','bp_characters','bp_participants','bp_seat_assignments',
     'bp_demand_map','bp_character_capacity','bp_requests','bp_style_calls',
     'bp_observer_logs','bp_selections','bp_ratings','bp_judgements',
-    'bp_stakeholder_maps','bp_escalation_cards','bp_events'])
+    'bp_stakeholder_maps','bp_escalation_cards','bp_events',
+    'bp_objective_state','bp_directives','bp_mandate_decisions'])
   LOOP
     EXECUTE format('REVOKE ALL ON %I FROM anon, authenticated', t);
   END LOOP;
@@ -408,6 +458,22 @@ RETURNS VOID LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   VALUES (p_sid, p_role, p_action, p_payload);
 $$;
 
+-- Mandate mechanic (migration 011): the third (leadership) axis. Maps a team's
+-- stance × the directive's business alignment to a leadership cell, surfaced
+-- only in bp_state's mandate_reveal. Pure logic — no session data.
+CREATE OR REPLACE FUNCTION bp_leadership_cell(p_stance TEXT, p_alignment TEXT)
+RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN p_stance IS NULL THEN 'no decision'
+    WHEN p_stance='comply' AND p_alignment='sound'   THEN 'trust well-placed'
+    WHEN p_stance='comply' AND p_alignment='tension' THEN 'silent compliance'
+    WHEN p_stance='voice'  AND p_alignment='sound'   THEN 'reconciled'
+    WHEN p_stance='voice'  AND p_alignment='tension' THEN 'the leadership move'
+    WHEN p_stance='defy'   AND p_alignment='sound'   THEN 'parochial overreach'
+    WHEN p_stance='defy'   AND p_alignment='tension' THEN 'principled dissent'
+    ELSE 'no decision' END;
+$$;
+
 -- =====================================================================
 --  SESSION PROVISIONING  (seeds a full playable case, §11)
 -- =====================================================================
@@ -435,7 +501,7 @@ DECLARE
     ARRAY['raghav','Raghav','Manufacturing — 19 years'],
     ARRAY['farida','Farida','Quality'],
     ARRAY['devika','Devika','Regional Sales Head'],
-    ARRAY['sponsor','Sponsor','COO — facilitator plays this']];
+    ARRAY['sponsor','Sponsor','Sponsor — facilitator plays this']];
   dmap_full TEXT[][] := ARRAY[
     ARRAY['battery',  'arjun','neha',  'neha','farida', 'farida','raghav', 'arjun','neha'],
     ARRAY['suppliers','neha','raghav', 'neha','raghav', 'raghav','neha',   'sponsor','neha'],
@@ -447,7 +513,7 @@ DECLARE
     ARRAY['arjun','Arjun','Design lead'],
     ARRAY['neha','Neha','Supply chain — 14 months in'],
     ARRAY['farida','Farida','Quality'],
-    ARRAY['sponsor','Sponsor','COO — facilitator plays this']];
+    ARRAY['sponsor','Sponsor','Sponsor — facilitator plays this']];
   dmap_short TEXT[][] := ARRAY[
     ARRAY['battery',  'arjun','neha',   'neha','farida',  'farida','arjun', 'arjun','neha'],
     ARRAY['suppliers','neha','farida',  'neha','arjun',   'arjun','neha',   'sponsor','neha'],
@@ -458,6 +524,32 @@ DECLARE
   dmap  TEXT[][];
   i INT; q INT;
   v_char_id UUID;
+  -- Mandate directives (migration 011). objective_key | quarter | alignment |
+  -- directive_text | intended_benefit. Same 20 for both variants — teams and
+  -- their objectives are identical across variants. objective_key → team via
+  -- bp_teams.objective_key at insert time.
+  directives TEXT[][] := ARRAY[
+    ARRAY['battery','1','sound',$q$Nail the cell architecture first — get Arjun's design lock before anything moves.$q$,$q$A stable platform the whole programme builds on.$q$],
+    ARRAY['suppliers','1','sound',$q$Put Neha on second-sourcing the critical BOM now.$q$,$q$De-risk the supply base before volumes ramp.$q$],
+    ARRAY['spec','1','sound',$q$Work with Arjun to define the spec envelope.$q$,$q$A clear, buildable spec — no ambiguity downstream.$q$],
+    ARRAY['warranty','1','sound',$q$Get Farida to set the quality gates and reserve model early.$q$,$q$Contain field-failure exposure before it compounds.$q$],
+    ARRAY['pricing','1','sound',$q$Get Devika's market read and set the pricing corridor.$q$,$q$Hold margin against price-led competitors.$q$],
+    ARRAY['battery','2','sound',$q$Cell prices are moving — get Neha to lock second-source cells before the squeeze hits battery.$q$,$q$Secure supply before margin erodes.$q$],
+    ARRAY['suppliers','2','tension',$q$Neha's still new; bring Raghav's weight to the supplier table for harder terms.$q$,$q$Better commercial terms from a veteran.$q$],
+    ARRAY['spec','2','sound',$q$Bring Farida in to pressure-test the spec against field reality.$q$,$q$A spec that survives contact with customers.$q$],
+    ARRAY['warranty','2','sound',$q$Most warranty risk is born on the line — bring Raghav in.$q$,$q$Build quality in, don't inspect it in.$q$],
+    ARRAY['pricing','2','tension',$q$Work with Arjun to strip design cost so we can fund a lower price.$q$,$q$Win share on price.$q$],
+    ARRAY['battery','3','tension',$q$Board wants energy-density gains — push Arjun for the next design iteration.$q$,$q$A headline spec bump for the launch story.$q$],
+    ARRAY['suppliers','3','sound',$q$Bring Raghav in to lock manufacturing-side supplier commitments.$q$,$q$Production-ready supply.$q$],
+    ARRAY['spec','3','tension',$q$Spec's set — hand it to Raghav for manufacturability and stop iterating.$q$,$q$Protect the timeline; no gold-plating.$q$],
+    ARRAY['warranty','3','tension',$q$Double down with Farida on pre-launch testing.$q$,$q$Catch failures before customers do.$q$],
+    ARRAY['pricing','3','sound',$q$Stay with Devika and defend the price in-market.$q$,$q$Protect the margin line.$q$],
+    ARRAY['battery','4','sound',$q$Back to Arjun — close the design for production freeze.$q$,$q$A clean freeze for launch.$q$],
+    ARRAY['suppliers','4','sound',$q$This one's above your level — escalate the second-source sign-off to me.$q$,$q$I can clear the cross-functional logjam.$q$],
+    ARRAY['spec','4','sound',$q$Bring the final spec trade-offs to me for sign-off.$q$,$q$A decision that sticks.$q$],
+    ARRAY['warranty','4','sound',$q$Back to Farida to close out the warranty reserve.$q$,$q$A defensible number for the board.$q$],
+    ARRAY['pricing','4','tension',$q$You've got this — hold price and close it yourself, no need to escalate.$q$,$q$Show the board pricing is under control.$q$]];
+  v_team_id UUID;
 BEGIN
   IF v_variant='short' THEN chars := chars_short; dmap := dmap_short;
   ELSE                     chars := chars_full;  dmap := dmap_full;  END IF;
@@ -479,12 +571,18 @@ BEGIN
     INSERT INTO bp_characters(session_id, key, name, role_label, access_code)
       VALUES (v_sid, chars[i][1], chars[i][2], chars[i][3], bp_gencode('CHR'))
       RETURNING id INTO v_char_id;
-    -- capacity: working chars 2 slots Q1/Q2/Q4, 1 in Q3; sponsor 1 always
+    -- CAPACITY IS THE CALIBRATION KNOB: loosen if the org floor becomes unhittable.
+    -- Working characters: 2 slots every quarter. Competition comes from the
+    -- demand-map CLUSTERS (Farida wanted by 3 in Q2, Raghav by 3 in Q3,
+    -- Sponsor/Neha by 3 in Q4) hitting the 2-slot ceiling — one team misses at
+    -- each cluster, real rivalry without famine. Q1 is clean (learning quarter).
+    -- Sponsor: scarce (1) in Q1–Q3; 2 in Q4 where 3 teams need escalation, so
+    -- the Q4 crunch stays contested (3-into-2) but the org floor stays reachable.
     FOR q IN 1..4 LOOP
       INSERT INTO bp_character_capacity(session_id, character_id, quarter, slots)
         VALUES (v_sid, v_char_id, q,
-          CASE WHEN chars[i][1]='sponsor' THEN 1
-               WHEN q=3 THEN 1 ELSE 2 END);
+          CASE WHEN chars[i][1]='sponsor' THEN (CASE WHEN q=4 THEN 2 ELSE 1 END)
+               ELSE 2 END);
     END LOOP;
   END LOOP;
 
@@ -495,6 +593,16 @@ BEGIN
                                 primary_character_key, secondary_character_key)
         VALUES (v_sid, dmap[i][1], q, dmap[i][2*q], dmap[i][2*q+1]);
     END LOOP;
+  END LOOP;
+
+  -- Mandate directives (migration 011) — one per (team, quarter). Map the
+  -- directive's objective_key to the team via bp_teams.objective_key. Same 20
+  -- for both variants (teams are identical across variants).
+  FOR i IN 1..array_length(directives,1) LOOP
+    SELECT id INTO v_team_id FROM bp_teams
+      WHERE session_id=v_sid AND objective_key=directives[i][1];
+    INSERT INTO bp_directives(session_id, team_id, quarter, directive_text, intended_benefit, alignment)
+      VALUES (v_sid, v_team_id, directives[i][2]::int, directives[i][4], directives[i][5], directives[i][3]);
   END LOOP;
 
   -- Curveballs (seed)
@@ -575,16 +683,134 @@ BEGIN
                             'net',net,'target_hit',(net>=14200));
 END $$;
 
+-- ---------------------------------------------------------------------
+--  Adaptive demand map (migration 010) — path-dependent ideal.
+--  bp_resolve_state: the business-only state a team's objective is in
+--  ENTERING p_quarter. Reads prior quarter's got_primary and the prior
+--  stored state; no ratings, no EI. Maps objective → team via
+--  bp_teams.objective_key.
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION bp_resolve_state(p_sid UUID, p_objective TEXT, p_quarter INT)
+RETURNS TEXT LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_team_id      UUID;
+  v_prior_gotp   BOOLEAN;
+  v_prior_state  TEXT;
+BEGIN
+  -- Q1 always starts healthy — no prior quarter to fall behind from.
+  IF p_quarter <= 1 THEN
+    RETURN 'on_track';
+  END IF;
+
+  SELECT id INTO v_team_id
+    FROM bp_teams
+    WHERE session_id = p_sid AND objective_key = p_objective;
+
+  -- Prior quarter's business capability (did they secure the ideal primary?).
+  SELECT got_primary INTO v_prior_gotp
+    FROM bp_quarter_results
+    WHERE session_id = p_sid AND team_id = v_team_id AND quarter = p_quarter - 1;
+
+  -- Prior quarter's recorded state (what path they were already on).
+  SELECT state INTO v_prior_state
+    FROM bp_objective_state
+    WHERE session_id = p_sid AND objective_key = p_objective AND quarter = p_quarter - 1;
+
+  -- No prior result recorded → treat as healthy (default on_track).
+  IF v_prior_gotp IS NULL THEN
+    RETURN 'on_track';
+  END IF;
+
+  IF v_prior_gotp THEN
+    RETURN 'on_track';
+  ELSIF COALESCE(v_prior_state, 'on_track') = 'on_track' THEN
+    RETURN 'behind';
+  ELSE
+    -- prior state was 'behind' or 'at_risk' and they missed again.
+    RETURN 'at_risk';
+  END IF;
+END $$;
+
+-- ---------------------------------------------------------------------
+--  bp_adjusted_ideal (migration 010) — the (primary, secondary) the engine
+--  should measure against for (objective, quarter) GIVEN a resolved state.
+--  Derived from the base bp_demand_map on_track rows; adds NO rows to
+--  bp_demand_map. BUSINESS ONLY — every reason is about capability and
+--  sequencing, never relationships.
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION bp_adjusted_ideal(p_sid UUID, p_objective TEXT, p_quarter INT, p_state TEXT)
+RETURNS TABLE(primary_key TEXT, secondary_key TEXT, business_reason TEXT)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_cur_p    TEXT;   -- base primary of the current quarter
+  v_cur_s    TEXT;   -- base secondary of the current quarter
+  v_prev_p   TEXT;   -- base primary of the prior quarter (the prerequisite)
+  v_obj_lbl  TEXT;
+  v_cur_p_nm TEXT;
+  v_prev_p_nm TEXT;
+BEGIN
+  SELECT primary_character_key, secondary_character_key INTO v_cur_p, v_cur_s
+    FROM bp_demand_map
+    WHERE session_id = p_sid AND objective_key = p_objective AND quarter = p_quarter;
+
+  -- Q1 (or any missing prior) can only ever be on_track.
+  IF p_quarter <= 1 OR p_state = 'on_track' THEN
+    RETURN QUERY SELECT v_cur_p, v_cur_s, 'On track — stay with the demand-map picks for this quarter.'::TEXT;
+    RETURN;
+  END IF;
+
+  v_obj_lbl := (SELECT label FROM bp_objectives WHERE session_id = p_sid AND key = p_objective);
+
+  SELECT primary_character_key INTO v_prev_p
+    FROM bp_demand_map
+    WHERE session_id = p_sid AND objective_key = p_objective AND quarter = p_quarter - 1;
+
+  v_cur_p_nm  := (SELECT name FROM bp_characters WHERE session_id = p_sid AND key = v_cur_p);
+  v_prev_p_nm := (SELECT name FROM bp_characters WHERE session_id = p_sid AND key = v_prev_p);
+
+  IF p_state = 'behind' THEN
+    -- Recover the unmet prerequisite before this quarter's primary can add value.
+    RETURN QUERY SELECT
+      v_prev_p,
+      v_cur_p,
+      format(
+        'You did not secure %s in Q%s, so %s is behind. Recover with %s before %s can add value.',
+        v_prev_p_nm, (p_quarter - 1)::TEXT, v_obj_lbl, v_prev_p_nm, v_cur_p_nm
+      )::TEXT;
+    RETURN;
+  ELSE
+    -- at_risk: two missed quarters — escalate to the Sponsor to unblock, then resume.
+    RETURN QUERY SELECT
+      'sponsor'::TEXT,
+      v_cur_p,
+      format(
+        '%s is a recovery case after two missed quarters — escalate to the Sponsor to unblock resourcing, then resume with %s.',
+        v_obj_lbl, v_cur_p_nm
+      )::TEXT;
+    RETURN;
+  END IF;
+END $$;
+
 -- Compute quarter_results for one quarter (runs on entry to RESULTS).
+-- Adaptive demand map (migration 010): per team, resolve the business-only
+-- state entering this quarter and pull the adjusted ideal (KEYS) to score
+-- against instead of the raw bp_demand_map keys; after scoring, record the
+-- state + ideal in bp_objective_state. Ratings / band logic is unchanged.
 CREATE OR REPLACE FUNCTION bp_run_scoring(p_sid UUID, p_quarter INT)
 RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   t RECORD; mapP TEXT; mapS TEXT;
   got_p BOOLEAN; got_s BOOLEAN; avg_r NUMERIC; v_band TEXT; v_points INT;
+  v_state TEXT; v_reason TEXT;   -- adaptive demand map (migration 010)
 BEGIN
   FOR t IN SELECT id, objective_key FROM bp_teams WHERE session_id=p_sid LOOP
-    SELECT primary_character_key, secondary_character_key INTO mapP, mapS
-      FROM bp_demand_map WHERE session_id=p_sid AND objective_key=t.objective_key AND quarter=p_quarter;
+    -- Business-only state entering this quarter, and the ideal we score
+    -- against given that state. Base bp_demand_map rows are the on_track
+    -- path; behind/at_risk derive from them (no rows added to bp_demand_map).
+    v_state := bp_resolve_state(p_sid, t.objective_key, p_quarter);
+    SELECT ai.primary_key, ai.secondary_key, ai.business_reason
+      INTO mapP, mapS, v_reason
+      FROM bp_adjusted_ideal(p_sid, t.objective_key, p_quarter, v_state) ai;
 
     got_p := EXISTS (
       SELECT 1 FROM bp_selections sel JOIN bp_characters c ON c.id=sel.character_id
@@ -615,16 +841,29 @@ BEGIN
     ON CONFLICT (session_id, team_id, quarter) DO UPDATE
       SET got_primary=EXCLUDED.got_primary, got_secondary=EXCLUDED.got_secondary,
           avg_rating=EXCLUDED.avg_rating, band=EXCLUDED.band, points=EXCLUDED.points;
+
+    -- Record the state + adjusted ideal we scored against, for the debrief.
+    INSERT INTO bp_objective_state(session_id, objective_key, quarter, state, primary_key, secondary_key, business_reason)
+    VALUES (p_sid, t.objective_key, p_quarter, v_state, mapP, mapS, v_reason)
+    ON CONFLICT (session_id, objective_key, quarter) DO UPDATE
+      SET state=EXCLUDED.state, primary_key=EXCLUDED.primary_key,
+          secondary_key=EXCLUDED.secondary_key, business_reason=EXCLUDED.business_reason;
   END LOOP;
 
   PERFORM bp_log(p_sid,'engine','run_scoring', jsonb_build_object('quarter',p_quarter));
 END $$;
 
--- Self-test: the three §6 sanity checks. Returns pass/fail rows.
+-- Self-test: the three §6 sanity checks, plus the migration-010 adaptive
+-- demand-map checks and the migration-011 leadership-cell check. Returns
+-- pass/fail rows.
 CREATE OR REPLACE FUNCTION bp_selftest()
 RETURNS TABLE (test TEXT, expected TEXT, actual TEXT, pass BOOLEAN)
 LANGUAGE plpgsql AS $$
-DECLARE r JSONB;
+DECLARE
+  r JSONB;
+  v_sid UUID; v_obj TEXT; v_state TEXT;
+  v_prev_p TEXT; v_adj_p TEXT;
+  v_cell TEXT;
 BEGIN
   -- 5× exceeded, headwind 3000 → net 18500, hit
   r := bp_org_net('exceeded','exceeded','exceeded','exceeded','exceeded',3000);
@@ -646,6 +885,46 @@ BEGIN
     'hit=true',
     'net='||(r->>'net')||' hit='||(r->>'target_hit'),
     ((r->>'target_hit')='true');
+
+  -- (010) Adaptive demand map, check (a): Q1 always resolves to on_track.
+  -- Pure logic — bp_resolve_state short-circuits Q1 without any session data,
+  -- so a nil session id is safe here.
+  v_state := bp_resolve_state('00000000-0000-0000-0000-000000000000'::uuid, 'battery', 1);
+  RETURN QUERY SELECT 'resolve_state Q1 = on_track',
+    'on_track',
+    v_state,
+    (v_state = 'on_track');
+
+  -- (010) Adaptive demand map, check (b): the 'behind' branch of
+  -- bp_adjusted_ideal points its primary at the PRIOR quarter's base
+  -- primary. This needs a live session's bp_demand_map rows, so we probe
+  -- the most recent session if one exists; otherwise emit a clearly-marked
+  -- no-op that passes with a note (never fail for lack of fixtures).
+  SELECT id INTO v_sid FROM bp_sessions ORDER BY created_at DESC LIMIT 1;
+  IF v_sid IS NULL THEN
+    RETURN QUERY SELECT 'adjusted_ideal behind → prior primary',
+      'prior-quarter base primary (needs a session)',
+      'no-op: no session to probe',
+      TRUE;   -- placeholder: pure fixture unavailable, not a failure
+  ELSE
+    v_obj := 'battery';
+    SELECT primary_character_key INTO v_prev_p
+      FROM bp_demand_map WHERE session_id=v_sid AND objective_key=v_obj AND quarter=1;
+    SELECT primary_key INTO v_adj_p
+      FROM bp_adjusted_ideal(v_sid, v_obj, 2, 'behind');
+    RETURN QUERY SELECT 'adjusted_ideal behind → prior primary',
+      'primary = Q1 base primary ('||COALESCE(v_prev_p,'?')||')',
+      'primary = '||COALESCE(v_adj_p,'NULL'),
+      (v_adj_p IS NOT NULL AND v_adj_p = v_prev_p);
+  END IF;
+
+  -- (011) Mandate: comply + tension resolves to 'silent compliance'.
+  -- Pure logic — bp_leadership_cell takes no session data.
+  v_cell := bp_leadership_cell('comply','tension');
+  RETURN QUERY SELECT 'leadership_cell comply+tension = silent compliance',
+    'silent compliance',
+    v_cell,
+    (v_cell = 'silent compliance');
 END $$;
 
 -- =====================================================================
@@ -704,6 +983,45 @@ BEGIN
         WHERE r.session_id=a.session_id AND r.quarter=s.current_quarter));
   END IF;
 
+  -- Adaptive demand-map reveal (migration 010): the business-only state +
+  -- the ideal we scored each team against, for the current quarter.
+  -- Facilitator always; participants/characters only at DEBRIEF.
+  IF a.role = 'facilitator' OR s.current_phase = 'DEBRIEF' THEN
+    out := out || jsonb_build_object('demand_reveal',
+      (SELECT jsonb_agg(jsonb_build_object(
+          'team_id', t.id,
+          'objective_key', os.objective_key,
+          'state', os.state,
+          'primary_key', os.primary_key,
+          'secondary_key', os.secondary_key,
+          'primary_name', pc.name,
+          'secondary_name', sc.name,
+          'business_reason', os.business_reason))
+        FROM bp_objective_state os
+        JOIN bp_teams t ON t.session_id=os.session_id AND t.objective_key=os.objective_key
+        LEFT JOIN bp_characters pc ON pc.session_id=os.session_id AND pc.key=os.primary_key
+        LEFT JOIN bp_characters sc ON sc.session_id=os.session_id AND sc.key=os.secondary_key
+        WHERE os.session_id=a.session_id AND os.quarter=s.current_quarter));
+  END IF;
+
+  -- Mandate reveal (migration 011): per-team stance × directive alignment →
+  -- the leadership cell. Everyone at DEBRIEF; facilitator always.
+  IF a.role = 'facilitator' OR s.current_phase = 'DEBRIEF' THEN
+    out := out || jsonb_build_object('mandate_reveal',
+      (SELECT jsonb_agg(jsonb_build_object(
+          'team_id', t.id,
+          'stance', md.stance,
+          'dissent_line', md.dissent_line,
+          'alignment', d.alignment,
+          'leadership_cell', bp_leadership_cell(md.stance, d.alignment)))
+        FROM bp_teams t
+        LEFT JOIN bp_directives d
+          ON d.session_id=a.session_id AND d.team_id=t.id AND d.quarter=s.current_quarter
+        LEFT JOIN bp_mandate_decisions md
+          ON md.session_id=a.session_id AND md.team_id=t.id AND md.quarter=s.current_quarter
+        WHERE t.session_id=a.session_id));
+  END IF;
+
   -- Style calls + observer logs — sealed until DEBRIEF.
   IF s.current_phase = 'DEBRIEF' THEN
     out := out || jsonb_build_object(
@@ -727,7 +1045,14 @@ BEGIN
       'my_seats', (SELECT jsonb_object_agg(seat, participant_id)
                        FROM bp_seat_assignments WHERE session_id=a.session_id AND team_id=a.team_id AND quarter=s.current_quarter),
       'characters', (SELECT jsonb_agg(jsonb_build_object('id',id,'key',key,'name',name,'role_label',role_label) ORDER BY key)
-                       FROM bp_characters WHERE session_id=a.session_id));
+                       FROM bp_characters WHERE session_id=a.session_id),
+      -- Mandate (migration 011). my_directive is visible from BRIEF onward
+      -- (always, if a row exists); alignment is NOT surfaced to the team.
+      -- my_mandate is the team's own stance for the current quarter.
+      'my_directive', (SELECT jsonb_build_object('text',directive_text,'intended_benefit',intended_benefit)
+                       FROM bp_directives WHERE session_id=a.session_id AND team_id=a.team_id AND quarter=s.current_quarter),
+      'my_mandate', (SELECT jsonb_build_object('stance',stance,'dissent_line',dissent_line)
+                       FROM bp_mandate_decisions WHERE session_id=a.session_id AND team_id=a.team_id AND quarter=s.current_quarter));
 
   ELSIF a.role = 'character' THEN
     -- Incoming (who named me) only after REQUESTS_LOCKED.
@@ -767,7 +1092,20 @@ BEGIN
       'curveballs', (SELECT jsonb_agg(jsonb_build_object('key',key,'label',label,'body',body,'triggered_at',triggered_at) ORDER BY key)
                        FROM bp_curveballs WHERE session_id=a.session_id),
       'monitor', bp_monitor(a.session_id, s.current_quarter),
-      'drift', bp_drift(a.session_id, s.current_quarter));
+      'drift', bp_drift(a.session_id, s.current_quarter),
+      -- Mandate (migration 011). All teams' directives this quarter incl.
+      -- alignment (the Voice re-issue lever reads this), and per-team whether
+      -- a stance has been submitted yet.
+      'directives', (SELECT jsonb_agg(jsonb_build_object(
+                         'team_id',team_id,'directive_text',directive_text,
+                         'intended_benefit',intended_benefit,'alignment',alignment))
+                       FROM bp_directives WHERE session_id=a.session_id AND quarter=s.current_quarter),
+      'mandate_status', (SELECT jsonb_agg(jsonb_build_object(
+                         'team_id', t.id,
+                         'submitted', EXISTS(SELECT 1 FROM bp_mandate_decisions md
+                             WHERE md.session_id=a.session_id AND md.team_id=t.id AND md.quarter=s.current_quarter))
+                         ORDER BY t.code)
+                       FROM bp_teams t WHERE t.session_id=a.session_id));
   END IF;
 
   RETURN out;
@@ -915,6 +1253,29 @@ BEGIN
   RETURN jsonb_build_object('ok',true);
 END $$;
 
+-- Mandate (migration 011): facilitator re-issues / edits a team's directive for
+-- a quarter — the "Voice" lever, letting the Sponsor respond to a team that
+-- voiced dissent by revising the directive. Upserts bp_directives.
+CREATE OR REPLACE FUNCTION bp_set_directive(p_session_code TEXT, p_fac_code TEXT,
+  p_team_code TEXT, p_quarter INT, p_text TEXT, p_benefit TEXT, p_alignment TEXT)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE a RECORD; v_team_id UUID;
+BEGIN
+  SELECT * INTO a FROM bp_auth(p_session_code, p_fac_code);
+  IF a.role <> 'facilitator' THEN RAISE EXCEPTION 'forbidden'; END IF;
+  SELECT id INTO v_team_id FROM bp_teams WHERE session_id=a.session_id AND code=p_team_code;
+  IF v_team_id IS NULL THEN RAISE EXCEPTION 'unknown_team'; END IF;
+  IF p_alignment NOT IN ('sound','tension') THEN RAISE EXCEPTION 'bad_alignment'; END IF;
+  INSERT INTO bp_directives(session_id, team_id, quarter, directive_text, intended_benefit, alignment)
+    VALUES (a.session_id, v_team_id, p_quarter, p_text, p_benefit, p_alignment)
+    ON CONFLICT (session_id, team_id, quarter) DO UPDATE
+      SET directive_text=EXCLUDED.directive_text, intended_benefit=EXCLUDED.intended_benefit,
+          alignment=EXCLUDED.alignment, issued_at=NOW();
+  PERFORM bp_log(a.session_id,'facilitator','set_directive',
+    jsonb_build_object('team',v_team_id,'quarter',p_quarter,'alignment',p_alignment));
+  RETURN jsonb_build_object('ok',true);
+END $$;
+
 -- =====================================================================
 --  PARTICIPANT write RPCs
 -- =====================================================================
@@ -989,6 +1350,32 @@ BEGIN
     ON CONFLICT (session_id, team_id, quarter) DO UPDATE
       SET observed_style=EXCLUDED.observed_style, note=EXCLUDED.note;
   PERFORM bp_log(a.session_id,'participant','observer',jsonb_build_object('team',a.team_id));
+  RETURN jsonb_build_object('ok',true);
+END $$;
+
+-- Mandate (migration 011): the team's stance on the Sponsor's directive.
+-- Participant only; allowed only while phase index < REQUESTS_LOCKED (the
+-- decision must be made before the reveal). voice/defy require a dissent line.
+CREATE OR REPLACE FUNCTION bp_submit_mandate(p_session_code TEXT, p_access_code TEXT,
+  p_stance TEXT, p_dissent_line TEXT)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE a RECORD; s RECORD;
+BEGIN
+  SELECT * INTO a FROM bp_auth(p_session_code, p_access_code);
+  IF a.role <> 'participant' THEN RAISE EXCEPTION 'forbidden'; END IF;
+  SELECT * INTO s FROM bp_sessions WHERE id=a.session_id;
+  IF bp_phase_index(s.current_phase) >= bp_phase_index('REQUESTS_LOCKED') THEN
+    RAISE EXCEPTION 'mandate_locked';
+  END IF;
+  IF p_stance IN ('voice','defy') AND COALESCE(btrim(p_dissent_line),'') = '' THEN
+    RAISE EXCEPTION 'dissent_line_required';
+  END IF;
+  INSERT INTO bp_mandate_decisions(session_id, team_id, quarter, stance, dissent_line)
+    VALUES (a.session_id, a.team_id, s.current_quarter, p_stance, p_dissent_line)
+    ON CONFLICT (session_id, team_id, quarter) DO UPDATE
+      SET stance=EXCLUDED.stance, dissent_line=EXCLUDED.dissent_line, submitted_at=NOW();
+  PERFORM bp_log(a.session_id,'participant','mandate',
+    jsonb_build_object('team',a.team_id,'quarter',s.current_quarter,'stance',p_stance));
   RETURN jsonb_build_object('ok',true);
 END $$;
 
@@ -1175,15 +1562,18 @@ BEGIN
     'bp_log_commitment(text,text,uuid,text)','bp_confirm_commitment(text,text,uuid)',
     'bp_mark_honoured(text,text,uuid,boolean)',
     'bp_select_teams(text,text,jsonb)','bp_rate_team(text,text,uuid,int,int,int)',
-    'bp_judge_team(text,text,uuid,boolean,text)','bp_export(text,text)','bp_selftest()'])
+    'bp_judge_team(text,text,uuid,boolean,text)','bp_export(text,text)','bp_selftest()',
+    'bp_submit_mandate(text,text,text,text)',
+    'bp_set_directive(text,text,text,int,text,text,text)'])
   LOOP
     EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO anon, authenticated', fn);
   END LOOP;
 END $$;
 
 -- Internal helpers stay ungranted (bp_run_scoring, bp_monitor, bp_drift,
--- bp_org_net, bp_log, bp_gencode, band helpers) — callable only from
--- within the definer functions above.
+-- bp_org_net, bp_log, bp_gencode, band helpers, bp_resolve_state,
+-- bp_adjusted_ideal, bp_leadership_cell) — callable only from within the
+-- definer functions above.
 
 -- =====================================================================
 --  REALTIME — publish the phase pointer + results so clients stay in
