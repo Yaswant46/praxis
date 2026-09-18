@@ -436,6 +436,7 @@ function navFor(role){
     {id:'monitor',icon:'📊',label:'Session monitor'},
     {id:'directives',icon:'📜',label:'Directives'},
     {id:'drift',icon:'🎚',label:'Drift check'},
+    {id:'stakeholders',icon:'🗺',label:'Stakeholder maps'},
     {id:'curveball',icon:'⚡',label:'Curveball'},
     {id:'headwind',icon:'🌀',label:'Headwind'},
     {id:'capacity',icon:'🎚',label:'Capacity'},
@@ -526,7 +527,7 @@ function render(){
     observer:vObserver, boards:vBoards, debrief:vDebrief,
     incoming:vIncoming, brief:vBrief, select:vSelect, rate:vRate, judge:vJudge,
     control:vControl, monitor:vMonitor, directives:vDirectives, drift:vDrift, curveball:vCurveball, headwind:vHeadwind,
-    capacity:vCapacity, codes:vCodes, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll,
+    capacity:vCapacity, codes:vCodes, stakeholders:vStakeholders, fboards:vBoards, export:vExport, playas:vPlayas, enroll:vEnroll,
     assist:vAssist, story:vStory, orgstory:vOrgStory, observerlog:vObserverLog
   }[VIEW];
   // The background refresh (5s poll + realtime ticks) calls render(). Rebuilding
@@ -685,6 +686,17 @@ function mandateRevealPanel(){
       <tbody>${rows}</tbody></table></div>`;
 }
 
+// ---- Who gave this team their time (migration 018) — names only, per quarter ----
+function backersPanel(){
+  const b=S.my_backers; if(!Array.isArray(b)||!b.length) return '';
+  const rows=b.map(x=>{ let v;
+    if(!x.visible) v='<span class="tag m">sealed until results</span>';
+    else if(!x.characters||!x.characters.length) v='<span class="tag r">nobody gave you time</span>';
+    else v=x.characters.map(c=>'<span class="tag '+(c.requested==='primary'?'g':(c.requested==='secondary'?'a':'m'))+'" style="margin-right:6px">'+esc(c.name)+(c.requested?' · your '+c.requested:' · unasked')+'</span>').join(' ');
+    return '<div class="kv"><span class="k">Q'+x.quarter+'</span><span>'+v+'</span></div>'; }).join('');
+  return '<div class="panel"><h3>Who gave you time</h3><div class="ph-sub">The characters who chose your team, quarter by quarter. Green — the person you named as primary. Amber — your secondary. Grey — someone you did not ask.</div>'+rows+'</div>';
+}
+
 function vDash(){
   const t=myTeam(), o=myObjective();
   const totalPts = (S.results||[]).filter(r=>r.team_id===S.team_id).reduce((a,r)=>a+(r.points||0),0);
@@ -696,6 +708,7 @@ function vDash(){
   <div class="topline"><span class="tag g">Team ${esc(t.code||'')}</span><h1 class="h">${esc(t.name||'')}</h1></div>
   <p class="lede">${esc(o.description||'')}</p>
   ${mandateCard()}
+  ${backersPanel()}
   <div class="grid2">
     <div class="panel"><h3>Your objective</h3><div class="ph-sub">${esc(o.label||'')}</div>
       <div class="kv"><span class="k">Quarter</span><span>Q${S.session.quarter} of 4</span></div>
@@ -893,6 +906,7 @@ function vDebrief(){
     <div class="panel"><table><thead>${head}</thead>
       <tbody>${rows||'<tr><td colspan="'+cols+'"><span class="empty">No Style Calls for this quarter.</span></td></tr>'}</tbody></table>
       ${(!noObs && ob&&ob.note)?'<div class="ph-sub" style="margin-top:12px">Observer note: '+esc(ob.note)+'</div>':''}</div>
+    ${backersPanel()}
     ${demandRevealPanel()}
     ${mandateRevealPanel()}`;
 }
@@ -1040,14 +1054,55 @@ async function stepBack(){ try{ const r=await rpc('bp_step_back', auth()); toast
 function openProjection(){ window.open('borrowed.html?projection='+S.session.id,'_blank'); }
 
 function vMonitor(){
-  const m=S.monitor||[];
+  const s=S.session; const m=S.monitor||[]; const d=S.drift||[];
   const noObs = VARIANT==='short';   // Short format: no observer column
+  const ok=(b)=> b?'<span class="tag g">✓</span>':'<span class="tag r">missing</span>';
+  const q4 = s.quarter===4;
   let rows=m.map(x=>`<tr><td>${esc(x.code)}</td>
-    <td>${x.has_request?'<span class="tag g">✓</span>':'<span class="tag r">missing</span>'}</td>
+    <td>${s.quarter===1 ? ok(x.has_premap) : (x.has_premap?'<span class="tag g">✓</span>':'<span class="tag m">—</span>')}</td>
+    <td>${x.has_mandate?'<span class="tag g">✓</span>':'<span class="tag a">waiting</span>'}</td>
+    <td>${ok(x.has_request)}</td>
     <td>${x.style_calls>=2?'<span class="tag g">2/2</span>':'<span class="tag a">'+x.style_calls+'/2</span>'}</td>
-    ${noObs?'':'<td>'+(x.has_observer?'<span class="tag g">✓</span>':'<span class="tag m">—</span>')+'</td>'}</tr>`).join('');
+    ${noObs?'':'<td>'+(x.has_observer?'<span class="tag g">✓</span>':'<span class="tag m">—</span>')+'</td>'}
+    ${q4?'<td>'+(x.has_postmap?'<span class="tag g">✓</span>':'<span class="tag a">waiting</span>')+'</td>':''}</tr>`).join('');
+  // Characters: picks against capacity, lock pressed, ratings done — this quarter.
+  let crow=d.map(c=>{ const cap=c.capacity==null?'—':c.capacity;
+    const pick = c.locked ? (c.selected>=(c.capacity||0) ? '<span class="tag g">'+c.selected+'/'+cap+'</span>' : '<span class="tag a">'+c.selected+'/'+cap+' (under)</span>')
+                          : '<span class="tag r">not locked</span>';
+    const rated = c.selected ? (c.rated>=c.selected ? '<span class="tag g">'+c.rated+'/'+c.selected+'</span>' : '<span class="tag a">'+c.rated+'/'+c.selected+'</span>') : '<span class="tag m">—</span>';
+    return `<tr><td>${esc(c.name)}</td><td>${cap}</td><td>${pick}</td><td>${rated}</td></tr>`; }).join('');
+  // Selection history: every pick so far, grouped by quarter; the current quarter is live.
+  const hist=S.selection_history||[]; const byQ={}; hist.forEach(x=>{ (byQ[x.quarter]=byQ[x.quarter]||[]).push(x); });
+  const reqTag=(r)=> r==='primary'?'<span class="tag g">asked · primary</span>':(r==='secondary'?'<span class="tag a">asked · secondary</span>':'<span class="tag m">unasked</span>');
+  let hrows='';
+  for(let q=s.quarter; q>=1; q--){ const list=byQ[q]||[];
+    const label = q===s.quarter ? 'Q'+q+' · live' : 'Q'+q;
+    const body = list.length
+      ? list.map(x=>`<tr><td>${esc(x.character_name)}</td><td>${esc(x.team_code)}</td><td>${reqTag(x.requested)}</td><td>${esc(x.reason||'')}</td></tr>`).join('')
+      : `<tr><td colspan="4"><span class="empty">No selections ${q===s.quarter?'yet':''} in Q${q}.</span></td></tr>`;
+    hrows += `<div class="panel"><h3>${label}</h3><table><thead><tr><th>Character</th><th>Gave time to</th><th>Requested?</th><th>Their reason</th></tr></thead><tbody>${body}</tbody></table></div>`; }
   return `<h1 class="h">Session monitor</h1><p class="lede">Who has submitted what this quarter. Chase the red before you advance.</p>
-    <div class="panel"><table><thead><tr><th>Team</th><th>Request</th><th>Style Calls</th>${noObs?'':'<th>Observer</th>'}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div class="panel"><h3>Teams · Q${s.quarter}</h3>
+      <table><thead><tr><th>Team</th><th>Pre-map</th><th>Mandate</th><th>Request</th><th>Style Calls</th>${noObs?'':'<th>Observer</th>'}${q4?'<th>Post-map</th>':''}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="panel"><h3>Characters · Q${s.quarter}</h3><div class="ph-sub">Picks against capacity, whether they have pressed Lock, and ratings saved. Do not run Results until every character is locked.</div>
+      <table><thead><tr><th>Character</th><th>Capacity</th><th>Picked</th><th>Rated</th></tr></thead><tbody>${crow||'<tr><td colspan="4"><span class="empty">—</span></td></tr>'}</tbody></table></div>
+    <h2 style="font-size:20px;margin:22px 0 8px">Who gave time to whom</h2>
+    <div class="ph-sub" style="margin-bottom:10px">Every selection so far, with the character's own reason. Teams see the names only, once a quarter reaches Results.</div>
+    ${hrows}`;
+}
+
+// ---- Facilitator: every team's stakeholder map, pre and post, side by side ----
+function vStakeholders(){
+  const all=S.stakeholder_all||[]; const chars=S.characters||[];
+  const fmt=(v)=> v==null?'—':v;
+  const delta=(a,b)=> (a==null||b==null)?'—':((b-a)>0?'+':'')+(b-a);
+  const cards=all.map(t=>{
+    if(!t.pre && !t.post) return `<div class="panel"><h3>${esc(t.code)} · ${esc(t.name)}</h3><div class="empty">No map submitted yet.</div></div>`;
+    const rows=chars.map(c=>{ const a=(t.pre||{})[c.key]||{}, b=(t.post||{})[c.key]||{};
+      return `<tr><td>${esc(c.name)}</td><td>${fmt(a.power)} / ${fmt(a.interest)}</td><td>${t.post?fmt(b.power)+' / '+fmt(b.interest):'—'}</td><td>${t.post?delta(a.power,b.power)+' / '+delta(a.interest,b.interest):'—'}</td></tr>`; }).join('');
+    return `<div class="panel"><h3>${esc(t.code)} · ${esc(t.name)} ${t.pre?'<span class="tag g">pre</span>':'<span class="tag r">no pre</span>'} ${t.post?'<span class="tag g">post</span>':'<span class="tag m">post pending</span>'}</h3>
+      <table><thead><tr><th>Character</th><th>Pre · power / interest</th><th>Post · power / interest</th><th>Shift</th></tr></thead><tbody>${rows}</tbody></table></div>`; }).join('');
+  return `<h1 class="h">Stakeholder maps</h1><p class="lede">Every team's read of the room: the pre-map from Q1 and, after Q4, the post-map and the shift. Teams only ever see their own.</p>${cards||'<div class="empty">No teams.</div>'}`;
 }
 
 // ---- Facilitator: the Sponsor's directives + the Voice lever (re-issue) ----
