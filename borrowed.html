@@ -546,14 +546,14 @@ function render(){
   const saved = {};
   if(sameView){
     viewEl.querySelectorAll('input[id],select[id],textarea[id]').forEach(el=>{
-      if(el.type!=='file') saved[el.id] = el.value;
+      if(el.type!=='file') saved[el.id] = (el.type==='checkbox'||el.type==='radio') ? el.checked : el.value;
     });
   }
   viewEl.innerHTML = banner + (fn ? fn() : '<div class="empty">—</div>');
   if(sameView){
     Object.keys(saved).forEach(id=>{
       const el = document.getElementById(id);
-      if(isField(el)) el.value = saved[id];
+      if(isField(el)){ if(el.type==='checkbox'||el.type==='radio') el.checked = !!saved[id]; else el.value = saved[id]; }
     });
   }
   _renderedView = VIEW;
