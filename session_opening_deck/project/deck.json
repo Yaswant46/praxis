@@ -2,12 +2,13 @@
   "v": 4,
   "createdOnFiles": {"v": 1, "at": "2026-09-18T10:05:00Z"},
   "title": "Borrowed People — Session Opening",
-  "order": ["cover", "compound-1", "compound-2", "leaders-1", "leaders-2", "leaders-3", "case-1", "case-2", "people", "teams", "target-team", "target-org", "asks", "close"],
+  "order": ["s01-title", "s02-question", "s03-nadella", "s04-holmes", "s05-boeing", "s06-turn", "s07-dark", "s08-walkaway", "s09-round", "s10-request", "s11-artefacts", "s12-room", "s13-ruling", "s14-teams", "s15-questions", "s16-start"],
   "sections": {
-    "opening": {"description": "Decisions compound — three leaders, one Monday, four quarters later.", "start": "cover"},
-    "case": {"description": "The case: what Borrowed People is, how a quarter runs, who you will borrow.", "start": "case-1"},
-    "objectives": {"description": "Five teams, five objectives, your target and the organisation's number.", "start": "teams"},
-    "ask": {"description": "What the room needs from you every quarter, and where Q1 starts.", "start": "asks"}
+    "open": {"description": "Decisions Compound — the title, and the question.", "start": "s01-title"},
+    "leaders": {"description": "Three leaders who read the room correctly: Nadella, Holmes, Boeing — same skill, three directions.", "start": "s03-nadella"},
+    "case": {"description": "The dark slide and the case opening script; what you walk away with.", "start": "s07-dark"},
+    "mechanics": {"description": "The shape of a round, how to ask for a character, the three artefacts, who's in the room, the only ruling.", "start": "s09-round"},
+    "start": {"description": "Teams and target, logistics questions, and Q1 starts now.", "start": "s14-teams"}
   },
   "faces": {
     "libre-baskerville": {"family": "Libre Baskerville", "href": "https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap"},
