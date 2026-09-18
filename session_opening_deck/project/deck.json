@@ -1,0 +1,18 @@
+{
+  "v": 4,
+  "createdOnFiles": {"v": 1, "at": "2026-09-18T10:05:00Z"},
+  "title": "Borrowed People — Session Opening",
+  "order": ["cover", "compound-1", "compound-2", "leaders-1", "leaders-2", "leaders-3", "case-1", "case-2", "people", "teams", "target-team", "target-org", "asks", "close"],
+  "sections": {
+    "opening": {"description": "Decisions compound — three leaders, one Monday, four quarters later.", "start": "cover"},
+    "case": {"description": "The case: what Borrowed People is, how a quarter runs, who you will borrow.", "start": "case-1"},
+    "objectives": {"description": "Five teams, five objectives, your target and the organisation's number.", "start": "teams"},
+    "ask": {"description": "What the room needs from you every quarter, and where Q1 starts.", "start": "asks"}
+  },
+  "faces": {
+    "libre-baskerville": {"family": "Libre Baskerville", "href": "https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap"},
+    "public-sans": {"family": "Public Sans", "href": "https://fonts.googleapis.com/css2?family=Public+Sans:wght@300..700&display=swap"},
+    "jetbrains-mono": {"family": "JetBrains Mono", "href": "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap"}
+  },
+  "designSystems": []
+}
