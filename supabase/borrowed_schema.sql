@@ -23,7 +23,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 --  Phase state machine (§5) — ordered so we can compute next / prev.
 -- ---------------------------------------------------------------------
 --  BRIEF → TEAM_DISCUSSION → REQUESTS_OPEN → REQUESTS_LOCKED (THE REVEAL)
---  → RUNNER_WINDOW → OPEN_NEGOTIATION → SELECTION → RESULTS → DEBRIEF
+--  → OPEN_NEGOTIATION → SELECTION → RESULTS → DEBRIEF
 
 -- =====================================================================
 --  TABLES
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS bp_sessions (
   current_phase     TEXT NOT NULL DEFAULT 'BRIEF'
                        CHECK (current_phase IN (
                          'BRIEF','TEAM_DISCUSSION','REQUESTS_OPEN','REQUESTS_LOCKED',
-                         'RUNNER_WINDOW','OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF')),
+                         'OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF')),
   headwind_revealed BOOLEAN NOT NULL DEFAULT FALSE,
   target_value      INT NOT NULL DEFAULT 14200,
   variant           TEXT NOT NULL DEFAULT 'full',   -- 'full' | 'short' (see migrations/008)
@@ -412,14 +412,14 @@ CREATE OR REPLACE FUNCTION bp_phase_index(p TEXT)
 RETURNS INT LANGUAGE sql IMMUTABLE AS $$
   SELECT array_position(ARRAY[
     'BRIEF','TEAM_DISCUSSION','REQUESTS_OPEN','REQUESTS_LOCKED',
-    'RUNNER_WINDOW','OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF'], p);
+    'OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF'], p);
 $$;
 
 CREATE OR REPLACE FUNCTION bp_phase_at(i INT)
 RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
   SELECT (ARRAY[
     'BRIEF','TEAM_DISCUSSION','REQUESTS_OPEN','REQUESTS_LOCKED',
-    'RUNNER_WINDOW','OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF'])[i];
+    'OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF'])[i];
 $$;
 
 -- Auth: resolve a (session_code, access_code) pair to an identity.
@@ -556,7 +556,9 @@ BEGIN
 
   v_fac := bp_gencode('FAC');
   INSERT INTO bp_sessions(name, facilitator_code, variant) VALUES (p_name, v_fac, v_variant) RETURNING id INTO v_sid;
-  INSERT INTO bp_headwind(session_id, value) VALUES (v_sid, 6000);
+  -- Headwind default calibrated to 3500 (migration 012): solid play (2 exceeded +
+  -- 3 delivered) clears the ~14,200 floor; adjust per session as needed.
+  INSERT INTO bp_headwind(session_id, value) VALUES (v_sid, 3500);
 
   -- Objectives + teams
   FOR i IN 1..array_length(objs,1) LOOP

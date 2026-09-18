@@ -246,10 +246,10 @@ const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 let sb = null;
 try { if (window.supabase && window.supabase.createClient) sb = window.supabase.createClient(SUPA_URL, SUPA_KEY); } catch(e){}
 
-const PHASES = ['BRIEF','TEAM_DISCUSSION','REQUESTS_OPEN','REQUESTS_LOCKED','RUNNER_WINDOW','OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF'];
+const PHASES = ['BRIEF','TEAM_DISCUSSION','REQUESTS_OPEN','REQUESTS_LOCKED','OPEN_NEGOTIATION','SELECTION','RESULTS','DEBRIEF'];
 const PHASE_LABEL = {
   BRIEF:'Brief', TEAM_DISCUSSION:'Team discussion', REQUESTS_OPEN:'Requests open',
-  REQUESTS_LOCKED:'Requests locked — the reveal', RUNNER_WINDOW:'Runner window',
+  REQUESTS_LOCKED:'Requests locked — the reveal',
   OPEN_NEGOTIATION:'Open negotiation', SELECTION:'Selection', RESULTS:'Results', DEBRIEF:'Debrief'
 };
 const STYLES = ['commanding','visionary','affiliative','democratic','pacesetting','coaching'];
