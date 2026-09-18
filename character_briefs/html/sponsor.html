@@ -1,0 +1,188 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>Praxis · Borrowed People · The Sponsor — operator brief</title><style>
+@page { size: A4; margin: 14mm 16mm 14mm; }
+:root{
+  --bg:#0A0F0A; --panel:#131A14; --panel2:#182219;
+  --green:#1FB155; --amber:#C99A3A; --red:#C24A3F;
+  --text:#F4F5F0; --muted:rgba(244,245,240,.60); --faint:rgba(244,245,240,.38);
+  --line:rgba(244,245,240,.12);
+  --serif:Georgia,'Times New Roman',serif;
+  --body:Calibri,'Segoe UI',system-ui,-apple-system,'Helvetica Neue',sans-serif;
+  --mono:'DM Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);
+  font-size:11.2pt;line-height:1.48;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+h1,h2,h3,h4{font-family:var(--serif);font-weight:600;margin:0}
+b{font-weight:700}
+.page{padding:0}
+.bleed{position:fixed;top:-14mm;left:-16mm;width:210mm;height:297mm;background:var(--bg);z-index:-1}
+.runfoot{position:fixed;top:271.5mm;left:0;right:0;display:flex;justify-content:space-between;color:var(--faint);font-size:7.5pt;font-family:var(--mono);letter-spacing:.5px}
+.brand{font-family:var(--serif);font-size:9.5pt;letter-spacing:3px;text-transform:uppercase;color:var(--green)}
+.mast{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px}
+.mast .sub{color:var(--muted);font-size:9.5pt;margin-top:3px}
+.name{font-family:var(--serif);font-size:34pt;line-height:1.05;margin-top:10px}
+.role{font-size:12pt;color:var(--amber);margin-top:4px;font-family:var(--serif)}
+.tagline{font-family:var(--serif);font-size:14pt;color:var(--muted);font-style:italic;margin-top:10px}
+.sealed{display:inline-block;font-size:8pt;letter-spacing:2px;text-transform:uppercase;padding:5px 10px;border-radius:5px;font-weight:700;
+  background:rgba(201,154,58,.16);color:var(--amber);border:1px solid rgba(201,154,58,.45)}
+.sealed.red{background:rgba(194,74,63,.16);color:var(--red);border-color:rgba(194,74,63,.45)}
+.tag{display:inline-block;font-size:7.5pt;letter-spacing:1.5px;text-transform:uppercase;padding:2px 7px;border-radius:4px;font-weight:700;vertical-align:middle}
+.tag.g{background:rgba(31,177,85,.16);color:var(--green)}
+.tag.a{background:rgba(201,154,58,.16);color:var(--amber)}
+.tag.r{background:rgba(194,74,63,.16);color:var(--red)}
+.tag.m{background:rgba(244,245,240,.08);color:var(--muted)}
+.tag.b{background:rgba(143,214,166,.14);color:#8fd6a6}
+.banner{background:rgba(201,154,58,.10);border:1px solid rgba(201,154,58,.40);border-radius:10px;padding:10px 14px;margin:0 0 16px;font-size:10.5pt}
+.banner.red{background:rgba(194,74,63,.10);border-color:rgba(194,74,63,.40)}
+.banner.green{background:rgba(31,177,85,.10);border-color:rgba(31,177,85,.40)}
+.sec{margin-top:22px}
+.sec > h2{break-after:avoid}
+.sec > .lede{break-after:avoid}
+.sec > h2{font-size:17pt;margin-bottom:4px}
+.sec > .lede{color:var(--muted);font-size:10pt;margin:0 0 12px;max-width:80ch}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px;break-inside:avoid}
+.panel.flow{break-inside:auto}
+tr{break-inside:avoid}
+.panel h3{break-after:avoid}
+.panel h3{font-size:13.5pt;margin-bottom:4px}
+.panel .ph-sub{color:var(--muted);font-size:9.5pt;margin-bottom:10px}
+p{margin:0 0 10px}
+.persona p{font-size:11.2pt;max-width:82ch}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stake{padding:8px 0;border-bottom:1px solid var(--line)}
+.stake:last-child{border:none}
+.stake b{display:block;font-family:var(--serif);font-size:11.5pt}
+.stake span{color:var(--muted);font-size:10.3pt}
+ul{margin:0;padding-left:18px}
+li{margin:4px 0;font-size:10.5pt}
+.do h3{color:var(--green)} .dont h3{color:var(--red)}
+.glance{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.glance .q{font-family:var(--serif);font-size:18pt;color:var(--green);line-height:1}
+.glance .post{font-size:9.5pt;color:var(--text);margin-top:4px;min-height:2.6em}
+.glance .n{font-family:var(--mono);font-size:9pt;color:var(--muted);margin-top:6px}
+.glance .n b{color:var(--text)}
+.qpanel{break-inside:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:0;margin-bottom:12px}
+.qhead{display:flex;align-items:flex-start;gap:14px;padding:12px 18px;background:var(--panel2);border-bottom:1px solid var(--line);border-radius:12px 12px 0 0;break-after:avoid}
+.qhead .mid{flex:1}
+.need,.show,.trap,.recov{break-inside:avoid}
+.qbody h4{break-after:avoid}
+.qhead .q{font-family:var(--serif);font-size:22pt;color:var(--green);line-height:1}
+.qhead .posture{font-family:var(--serif);font-size:13.5pt}
+.qhead .line{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:10.5pt;margin-top:2px}
+.qhead .cap{font-family:var(--mono);font-size:8.5pt;color:var(--amber);white-space:nowrap;margin-left:auto;padding-top:6px}
+.qbody{padding:12px 18px 14px}
+.qbody h4{font-size:8.5pt;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);font-family:var(--body);font-weight:700;margin:10px 0 5px}
+.qbody h4:first-child{margin-top:0}
+.need{display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:10.5pt}
+.need .t{font-weight:700;min-width:15ch}
+.need .w{color:var(--muted)}
+.show{display:flex;gap:10px;align-items:baseline;padding:3px 0;font-size:10.3pt}
+.show .t{font-weight:700;min-width:15ch}
+.show .w{color:var(--muted)}
+.trap{margin-top:10px;background:rgba(194,74,63,.09);border-left:3px solid var(--red);padding:8px 12px;border-radius:0 8px 8px 0;font-size:10.3pt}
+.trap b{color:var(--red);font-family:var(--serif);letter-spacing:.3px}
+.recov{margin-top:8px;background:rgba(31,177,85,.08);border-left:3px solid var(--green);padding:8px 12px;border-radius:0 8px 8px 0;font-size:10.3pt}
+.recov b{color:var(--green);font-family:var(--serif)}
+table{width:100%;border-collapse:collapse;font-size:10pt}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:8pt;letter-spacing:1px;text-transform:uppercase;color:var(--faint);font-weight:700}
+td.mono{font-family:var(--mono);font-size:9.5pt}
+.rub .score{font-family:var(--serif);font-size:15pt;color:var(--green);width:3ch}
+.rub .s2{color:var(--amber)} .rub .s1{color:var(--red)}
+.judge{font-family:var(--serif);font-size:12pt;line-height:1.5;padding:16px 18px;border:1px solid rgba(31,177,85,.4);border-radius:12px;background:rgba(31,177,85,.06)}
+.rules li{font-size:10.5pt}
+.foot{margin-top:26px;padding-top:10px;border-top:1px solid var(--line);display:flex;justify-content:space-between;color:var(--faint);font-size:8.5pt;font-family:var(--mono)}
+.pb{break-before:page}
+.dir-t td:first-child{white-space:nowrap}
+.dir-t .tx{font-family:var(--serif);font-size:10.5pt}
+.dir-t .ben{color:var(--muted);font-size:9.5pt}
+.callout{font-family:var(--serif);font-size:12pt;color:var(--text);padding:12px 16px;border-left:3px solid var(--amber);background:rgba(201,154,58,.07);border-radius:0 8px 8px 0;margin:8px 0 12px}
+.beat{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.beat:last-child{border:none}
+.beat .n{font-family:var(--serif);font-size:16pt;color:var(--green);width:2ch;line-height:1.1}
+.beat .b b{font-family:var(--serif);font-size:11.5pt;display:block}
+.beat .b span{color:var(--muted);font-size:10.3pt}
+</style></head>
+<body>
+<div class="bleed"></div>
+<div class="page">
+
+<div class="mast">
+  <div>
+    <div class="brand">Praxis · Case 03 · Borrowed People</div>
+    <div class="sub">The Uncomfortable Art of Leadership · Leadership-Comp</div>
+    <div class="name">The Sponsor</div>
+    <div class="role">Facilitator plays this</div>
+    <div class="tagline">Sincere. Senior. Sometimes wrong. Never winking.</div>
+  </div>
+  <div style="text-align:right">
+    <span class="sealed red">Operator brief · facilitator only</span>
+    <div class="sub" style="margin-top:10px">v1 · 18 Sep 2026</div>
+  </div>
+</div>
+<div class="banner red"><b>Facilitator only.</b> This document contains the full directive schedule, the alignment of every directive against the hidden demand map, the curveball map and the debrief card. It never leaves the Sponsor screen.</div>
+
+<div class="sec"><h2>Who you are</h2><div class="persona"><p>You are the programme sponsor for the Meridian — the executive every team reports up to, the person whose sentence at the start of each quarter becomes a team’s marching orders. You are not a villain and you are not a puzzle. Every directive you issue is <b>sincere</b>: management’s honest, org-level call, with a real intended benefit. Some of those calls are right. Some conflict with what a team’s objective actually needs this quarter. You never signal which is which.</p><p>The whole case depends on that. If the room can read a wink, the Mandate mechanic collapses into “guess what the facilitator wants.” Play the Sponsor as someone who means it — proud of the veteran, impatient with iteration, keen on a headline for the board, confident that a capable team can hold a price alone. Then let the engine, the reveal and the debrief do the judging.</p><p>You also hold the levers no one else has: your own scarce capacity (one slot Q1–Q3, two in Q4 against three teams who need you), the four curveballs, praise, the Voice lever that lets you re-issue a directive live, and the between-round debrief. This brief is your control document for all of them.</p></div></div>
+
+<div class="sec"><h2>What you actually care about</h2><div class="panel"><div class="stake"><b>Sincerity</b><span>Every directive has a benefit you believe in. Deliver it as a leader, not a game-master.</span></div><div class="stake"><b>The org number</b><span>₹14,200 floor. You want the organisation to clear it; you also want it to learn something on the way.</span></div><div class="stake"><b>Escalation as a skill</b><span>Q4 is built so three teams need you and one is told not to come. Whether they ask for help is the final lesson.</span></div><div class="stake"><b>Scarcity you own</b><span>One slot in Q1–Q3. Anyone who reaches you early has spent something; make it feel that way.</span></div><div class="stake"><b>Business in the reveal, EI in the room</b><span>The adjusted map says the smart move. You bring whether they could get that person to help — and how.</span></div></div></div>
+
+<div class="sec"><h2>How to play it</h2>
+<div class="grid2">
+  <div class="panel do"><h3>Do</h3><ul><li>Issue the quarter’s directive to each team at BRIEF, in your own voice, with its intended benefit. Read it as a call you’ve made.</li><li>When a team Voices, listen as a leader would — and, if they’ve surfaced a genuine gap, re-issue a recovery directive live.</li><li>Drop each curveball at the BRIEF where it amplifies a live tension directive (map below).</li><li>Run the same five debrief beats every round; rotate the theme. Spotlight one or two contrasts, not five teams.</li></ul></div>
+  <div class="panel dont"><h3>Don’t</h3><ul><li>Don’t confirm or deny that a directive is a “trap.” Not by tone, not by pause.</li><li>Don’t rescue a team that complied with a tension directive before the results. Let the reveal do it.</li><li>Don’t give a second slot in Q1–Q3. Your scarcity is the calibration.</li><li>Don’t be relieved when Envoy doesn’t escalate in Q4 — that absence is the failure the quarter is designed to surface.</li></ul></div>
+</div></div>
+
+<div class="sec"><h2>Your posture and capacity, by quarter</h2>
+<div class="lede">The same escalation cards the working characters hold — you play them too, as the most senior person in the building. Your capacity is the tightest in the room.</div>
+<div class="panel"><table><thead><tr><th>Quarter</th><th>Posture</th><th>Sample line</th><th>Your slots</th></tr></thead><tbody><tr><td class="mono">Q1</td><td><b>Polite, vague, non-committal.</b></td><td style="font-family:var(--serif);font-style:italic;color:var(--muted)">“Send me something and I’ll take a look.”</td><td class="mono">1</td></tr><tr><td class="mono">Q2</td><td><b>Competing claims, named out loud.</b></td><td style="font-family:var(--serif);font-style:italic;color:var(--muted)">“Team C already asked me for the same week.”</td><td class="mono">1</td></tr><tr><td class="mono">Q3</td><td><b>Push back, refuse.</b></td><td style="font-family:var(--serif);font-style:italic;color:var(--muted)">“I’ve heard this before. It died. Why is this different?”</td><td class="mono">1</td></tr><tr><td class="mono">Q4</td><td><b>Judge.</b></td><td style="font-family:var(--serif);font-style:italic;color:var(--muted)">“I’d work with A again. I would not work with B.”</td><td class="mono">2</td></tr></tbody></table></div>
+<div class="callout">Q4 is your crunch: Bastion, Crucible and Envoy all need you as primary; you have two slots; Envoy has been told not to come. If only two show, you are not relieved — Envoy’s absence is the failure of not asking for help, and it is the last thing the room should hear before the final debrief.</div></div>
+<div class="sec" style="margin-top:8px"><h2>The directive schedule</h2>
+<div class="lede">Issued at <b>BRIEF</b> each quarter, one per team, in your voice. Every directive is sincere. <span class="tag g">aligned</span> points at the quarter’s ideal primary. <span class="tag r">tension</span> conflicts with it: complying misses <code>got_primary</code>, the team goes <b>behind</b>, and the adaptive map hands them a recovery pick next quarter. Design rule: no team has two consecutive primary-miss directives.</div>
+<div class="panel flow"><h3>Q1 — All aligned</h3><div class="ph-sub">Teach the mechanic. Build trust — every directive points at the ideal.</div>
+        <table class="dir-t"><thead><tr><th>Team</th><th>Call</th><th>Say this at BRIEF</th><th>Intended benefit</th></tr></thead><tbody><tr><td><b>A · Ampere (Battery)</b><div class="ben">ideal: Arjun / Neha</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Nail the cell architecture first — get Arjun’s design lock before anything moves.”</td><td class="ben">A stable platform the whole programme builds on.</td></tr><tr><td><b>B · Bastion (Suppliers)</b><div class="ben">ideal: Neha / Raghav</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Put Neha on second-sourcing the critical BOM now.”</td><td class="ben">De-risk the supply base before volumes ramp.</td></tr><tr><td><b>C · Crucible (Spec)</b><div class="ben">ideal: Arjun / Devika</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Work with Arjun to define the spec envelope.”</td><td class="ben">A clear, buildable spec — no ambiguity downstream.</td></tr><tr><td><b>D · Dynamo (Warranty)</b><div class="ben">ideal: Farida / Raghav</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Get Farida to set the quality gates and reserve model early.”</td><td class="ben">Contain field-failure exposure before it compounds.</td></tr><tr><td><b>E · Envoy (Pricing)</b><div class="ben">ideal: Devika / Farida</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Get Devika’s market read and set the pricing corridor.”</td><td class="ben">Hold margin against price-led competitors.</td></tr></tbody></table></div><div class="panel flow"><h3>Q2 — Warm-up · 2 tension</h3><div class="ph-sub">Bastion → Raghav (partial). Envoy → Arjun (partial). Cell-price curveball lands here.</div>
+        <table class="dir-t"><thead><tr><th>Team</th><th>Call</th><th>Say this at BRIEF</th><th>Intended benefit</th></tr></thead><tbody><tr><td><b>A · Ampere (Battery)</b><div class="ben">ideal: Neha / Farida</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Cell prices are moving — get Neha to lock second-source cells before the squeeze hits battery.”</td><td class="ben">Secure supply before margin erodes.</td></tr><tr><td><b>B · Bastion (Suppliers)</b><div class="ben">ideal: Neha / Raghav</div></td><td><span class="tag r">tension</span><div class="ben">→ Raghav · partial (secondary)</div></td><td class="tx">“Neha’s still new; bring Raghav’s weight to the supplier table for harder terms.”</td><td class="ben">Better commercial terms from a veteran.</td></tr><tr><td><b>C · Crucible (Spec)</b><div class="ben">ideal: Farida / Devika</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Bring Farida in to pressure-test the spec against field reality.”</td><td class="ben">A spec that survives contact with customers.</td></tr><tr><td><b>D · Dynamo (Warranty)</b><div class="ben">ideal: Raghav / Farida</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Most warranty risk is born on the line — bring Raghav in.”</td><td class="ben">Build quality in, don’t inspect it in.</td></tr><tr><td><b>E · Envoy (Pricing)</b><div class="ben">ideal: Devika / Arjun</div></td><td><span class="tag r">tension</span><div class="ben">→ Arjun · partial (secondary)</div></td><td class="tx">“Work with Arjun to strip design cost so we can fund a lower price.”</td><td class="ben">Win share on price.</td></tr></tbody></table></div><div class="panel flow"><h3>Q3 — Peak · 3 tension</h3><div class="ph-sub">Ampere → Arjun, Crucible → Raghav, Dynamo → Farida — all hard misses. Capacity crunch on Raghav. Quality-escape curveball lands here.</div>
+        <table class="dir-t"><thead><tr><th>Team</th><th>Call</th><th>Say this at BRIEF</th><th>Intended benefit</th></tr></thead><tbody><tr><td><b>A · Ampere (Battery)</b><div class="ben">ideal: Farida / Raghav</div></td><td><span class="tag r">tension</span><div class="ben">→ Arjun · hard miss</div></td><td class="tx">“Board wants energy-density gains — push Arjun for the next design iteration.”</td><td class="ben">A headline spec bump for the launch story.</td></tr><tr><td><b>B · Bastion (Suppliers)</b><div class="ben">ideal: Raghav / Neha</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Bring Raghav in to lock manufacturing-side supplier commitments.”</td><td class="ben">Production-ready supply.</td></tr><tr><td><b>C · Crucible (Spec)</b><div class="ben">ideal: Arjun / Devika</div></td><td><span class="tag r">tension</span><div class="ben">→ Raghav · hard miss</div></td><td class="tx">“Spec’s set — hand it to Raghav for manufacturability and stop iterating.”</td><td class="ben">Protect the timeline; no gold-plating.</td></tr><tr><td><b>D · Dynamo (Warranty)</b><div class="ben">ideal: Neha / Raghav</div></td><td><span class="tag r">tension</span><div class="ben">→ Farida · hard miss</div></td><td class="tx">“Double down with Farida on pre-launch testing.”</td><td class="ben">Catch failures before customers do.</td></tr><tr><td><b>E · Envoy (Pricing)</b><div class="ben">ideal: Devika / Farida</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Stay with Devika and defend the price in-market.”</td><td class="ben">Protect the margin line.</td></tr></tbody></table></div><div class="panel flow"><h3>Q4 — Resolution · 1 tension</h3><div class="ph-sub">Envoy told not to escalate — the false self-sufficiency trap. You have 2 slots against 3 who need you.</div>
+        <table class="dir-t"><thead><tr><th>Team</th><th>Call</th><th>Say this at BRIEF</th><th>Intended benefit</th></tr></thead><tbody><tr><td><b>A · Ampere (Battery)</b><div class="ben">ideal: Arjun / Neha</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Back to Arjun — close the design for production freeze.”</td><td class="ben">A clean freeze for launch.</td></tr><tr><td><b>B · Bastion (Suppliers)</b><div class="ben">ideal: Sponsor / Neha</div></td><td><span class="tag g">aligned · escalate</span></td><td class="tx">“This one’s above your level — escalate the second-source sign-off to me.”</td><td class="ben">I can clear the cross-functional logjam.</td></tr><tr><td><b>C · Crucible (Spec)</b><div class="ben">ideal: Sponsor / Farida</div></td><td><span class="tag g">aligned · escalate</span></td><td class="tx">“Bring the final spec trade-offs to me for sign-off.”</td><td class="ben">A decision that sticks.</td></tr><tr><td><b>D · Dynamo (Warranty)</b><div class="ben">ideal: Farida / Neha</div></td><td><span class="tag g">aligned</span></td><td class="tx">“Back to Farida to close out the warranty reserve.”</td><td class="ben">A defensible number for the board.</td></tr><tr><td><b>E · Envoy (Pricing)</b><div class="ben">ideal: Sponsor / Devika</div></td><td><span class="tag r">tension</span><div class="ben">→ hold alone · partial (false self-sufficiency)</div></td><td class="tx">“You’ve got this — hold price and close it yourself, no need to escalate.”</td><td class="ben">Show the board pricing is under control.</td></tr></tbody></table></div>
+</div>
+<div class="sec" style="margin-top:8px"><h2>The Voice lever and the leadership cell</h2>
+<div class="lede">Each team declares a stance on your directive before requests lock: <b>Comply</b>, <b>Voice</b> (push back, then act), or <b>Defy</b>. Stance × the directive’s real alignment gives the leadership cell the reveal shows. Directives are written against the base plan — once a team is behind, the ideal shifts to the recovery pick, so a base directive can read as off-target for that team. That is the moment to use Voice: when a behind team surfaces its situation, re-issue a recovery directive live. Don’t static-proof every path; let facilitation heal it.</div>
+<div class="grid2">
+<div class="panel"><h3>Leadership cell</h3><table><thead><tr><th>Stance</th><th>Directive was</th><th>Cell</th></tr></thead><tbody><tr><td class="mono">comply</td><td class="mono">sound</td><td><b>trust well-placed</b></td></tr><tr><td class="mono">comply</td><td class="mono">tension</td><td><b>silent compliance</b></td></tr><tr><td class="mono">voice</td><td class="mono">sound</td><td><b>reconciled</b></td></tr><tr><td class="mono">voice</td><td class="mono">tension</td><td><b>the leadership move</b></td></tr><tr><td class="mono">defy</td><td class="mono">sound</td><td><b>parochial overreach</b></td></tr><tr><td class="mono">defy</td><td class="mono">tension</td><td><b>principled dissent</b></td></tr></tbody></table></div>
+<div class="panel"><h3>Re-issuing live</h3><ul>
+<li>Listen as the executive would: “What are you seeing that I’m not?”</li>
+<li>If the team has surfaced a real gap (the missed prerequisite, a curveball they read correctly), re-issue: “Fine — recover with Neha first, then bring Raghav.” In your voice. Sincere.</li>
+<li>If the team is pushing back on a sound directive with nothing behind it, hold. That is “parochial overreach,” and the reveal will say so.</li>
+<li>Never reward the pushback itself. Reward the reasoning.</li>
+</ul></div></div></div>
+
+<div class="sec"><h2>Curveball map</h2>
+<div class="lede">Four are seeded. Drop each at the BRIEF of the quarter where it amplifies a live tension directive. The escalation posture already tracks this: Q2 competing claims pairs with cell-price scarcity, Q3 refusal pairs with the escape + the pulled character, Q4 judges.</div>
+<div class="panel"><table><thead><tr><th>Curveball</th><th>Best quarter</th><th>Amplifies</th><th>Why it bites</th></tr></thead><tbody><tr><td><b>Cell prices +6%</b></td><td class="mono">Q2</td><td>Bastion Q2 (→Raghav trap); validates Ampere’s aligned supply pick</td><td class="ben">Makes Bastion’s “harder terms via Raghav” directive feel right, when the shock actually screams secure-supply / Neha. For Ampere it confirms the correct call — reward the team that reads it.</td></tr><tr><td><b>Field quality escape</b></td><td class="mono">Q3</td><td>Crucible Q3 (→Raghav, stop iterating) + Dynamo Q3 (→Farida testing)</td><td class="ben">Puts Spec and Warranty in direct conflict exactly when both have tension directives pulling them the wrong way.</td></tr><tr><td><b>Character pulled</b></td><td class="mono">Q3 or Q4</td><td>whichever character the herd over-concentrated on</td><td class="ben">Fires AFTER requests lock. Pull the character the tension directives + herd funnelled everyone toward (watch the drift / monitor tab). Punishes teams that didn’t diversify — the scarcity lesson made physical.</td></tr><tr><td><b>Sponsor praise</b></td><td class="mono">Q2 or Q3, post-results</td><td>the political / social lever</td><td class="ben">(a) Praise a team that Voiced or defied correctly, to reinforce principled leadership publicly; or (b) praise a team that complied with a tension directive and watch others copy the wrong behaviour — a devastating debrief reveal: “you followed them because I blessed them.”</td></tr></tbody></table></div></div>
+<div class="sec" style="margin-top:8px"><h2>Between-round debrief card</h2>
+<div class="lede">Prep in the RESULTS window (~2 min, while the engine scores). You get three things for free: the <b>scoreboard</b> (org net vs floor, ranks), the <b>adjusted reveal</b> (each team’s state-adjusted ideal + one-line business reason — path-dependent), and <b>bp-assist → Analyze now</b> (key moves, contradictions & risks, pointed questions). Walk in with a plan.</div>
+<div class="grid2">
+<div class="panel"><h3>The five beats · 8–10 min</h3><div class="beat"><div class="n">1</div><div class="b"><b>The number <span class="tag m">1 min</span></b><span>Org net vs floor + ranks. Set the stakes, fast.</span></div></div><div class="beat"><div class="n">2</div><div class="b"><b>The reveal <span class="tag m">2 min</span></b><span>Unhide each team’s adjusted ideal + business reason. Let got_p / got_s land. Business only here.</span></div></div><div class="beat"><div class="n">3</div><div class="b"><b>One sharp contrast <span class="tag m">3–4 min</span></b><span>Data picks the 1–2 teams with the biggest gap. Hand the mic to a character or the observer, not yourself: “Neha, how did that ask feel?” This is where EI enters.</span></div></div><div class="beat"><div class="n">4</div><div class="b"><b>Relitigate the Mandate <span class="tag m">2 min</span></b><span>Show the Comply / Voice / Defy split now results are visible; read one dissent line. “Knowing what you know now — right call?”</span></div></div><div class="beat"><div class="n">5</div><div class="b"><b>Forward challenge <span class="tag m">30 s</span></b><span>One sentence that seeds the next round’s tension.</span></div></div></div>
+<div>
+<div class="panel"><h3>Rotate the theme</h3><table><thead><tr><th></th><th>Foreground</th><th>Anchor</th></tr></thead><tbody><tr><td class="mono">Q1</td><td><b>Did you find the right people?</b></td><td class="ben">got_p / got_s + ratings</td></tr><tr><td class="mono">Q2</td><td><b>Follow or lead?</b></td><td class="ben">Mandate split + style gap</td></tr><tr><td class="mono">Q3</td><td><b>Scarcity &amp; the cost of the herd</b></td><td class="ben">capacity squeeze + collaboration tax</td></tr><tr><td class="mono">Q4</td><td><b>Judgement</b></td><td class="ben">characters’ “work with you again?” + couplings</td></tr></tbody></table></div>
+<div class="panel"><h3>Two rules</h3><ul>
+<li><b>Business in the reveal; EI in the room.</b> The adjusted map says the smart business move. You bring whether they could get that person to help — and how.</li>
+<li><b>Can’t debrief five teams every round.</b> Spotlight the 1–2 sharpest contrasts; rotate so everyone gets a turn by Q4. Full per-team synthesis waits for the final debrief.</li>
+</ul></div></div></div></div>
+
+<div class="sec"><h2>Data → the question it authorises</h2>
+<div class="panel"><table><thead><tr><th>Signal</th><th>Ask</th></tr></thead><tbody><tr><td><b>Request vs demand map</b></td><td style="font-family:var(--serif);font-style:italic">“You went to Raghav; the work needed Farida. What made you pick him?”</td></tr><tr><td><b>Ratings — left me better</b></td><td style="font-family:var(--serif);font-style:italic">“You got what you needed — did she?”</td></tr><tr><td><b>Mandate stance</b></td><td style="font-family:var(--serif);font-style:italic">“You defied and were right — but never told the Sponsor. What did the silence cost?”</td></tr><tr><td><b>Style call vs observed</b></td><td style="font-family:var(--serif);font-style:italic">“You called ‘coaching.’ The room saw ‘commanding.’ Where’s the gap?”</td></tr><tr><td><b>Commitments broken</b></td><td style="font-family:var(--serif);font-style:italic">“You promised Envoy support and didn’t deliver — Envoy, how did that land?”</td></tr></tbody></table></div></div>
+
+<div class="sec"><h2>Sealed rules for the Sponsor</h2>
+<div class="panel rules"><ul>
+<li>Never confirm a directive is a trap — not in tone, not in a pause, not in a smile at the character who knows.</li>
+<li>Never reveal the demand map before the RESULTS reveal, and never reveal a team’s state (behind / at risk) before the engine does.</li>
+<li>Your one slot in Q1–Q3 is real. A team that reaches you early has spent political capital; make it feel that way in character.</li>
+<li>Praise is a lever, not a courtesy. Decide before you use it whether you are reinforcing or baiting.</li>
+<li>When a behind team Voices, that is the lever working. Re-issue, and log it.</li>
+</ul></div></div>
+<div class="foot"><span>PRAXIS · BORROWED PEOPLE · THE SPONSOR · SEALED</span><span>v1 · 18 Sep 2026</span></div>
+</div>
+</body></html>

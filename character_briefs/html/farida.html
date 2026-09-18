@@ -1,0 +1,231 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>Praxis · Borrowed People · Farida — character brief</title><style>
+@page { size: A4; margin: 14mm 16mm 14mm; }
+:root{
+  --bg:#0A0F0A; --panel:#131A14; --panel2:#182219;
+  --green:#1FB155; --amber:#C99A3A; --red:#C24A3F;
+  --text:#F4F5F0; --muted:rgba(244,245,240,.60); --faint:rgba(244,245,240,.38);
+  --line:rgba(244,245,240,.12);
+  --serif:Georgia,'Times New Roman',serif;
+  --body:Calibri,'Segoe UI',system-ui,-apple-system,'Helvetica Neue',sans-serif;
+  --mono:'DM Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);
+  font-size:11.2pt;line-height:1.48;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+h1,h2,h3,h4{font-family:var(--serif);font-weight:600;margin:0}
+b{font-weight:700}
+.page{padding:0}
+.bleed{position:fixed;top:-14mm;left:-16mm;width:210mm;height:297mm;background:var(--bg);z-index:-1}
+.runfoot{position:fixed;top:271.5mm;left:0;right:0;display:flex;justify-content:space-between;color:var(--faint);font-size:7.5pt;font-family:var(--mono);letter-spacing:.5px}
+.brand{font-family:var(--serif);font-size:9.5pt;letter-spacing:3px;text-transform:uppercase;color:var(--green)}
+.mast{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px}
+.mast .sub{color:var(--muted);font-size:9.5pt;margin-top:3px}
+.name{font-family:var(--serif);font-size:34pt;line-height:1.05;margin-top:10px}
+.role{font-size:12pt;color:var(--amber);margin-top:4px;font-family:var(--serif)}
+.tagline{font-family:var(--serif);font-size:14pt;color:var(--muted);font-style:italic;margin-top:10px}
+.sealed{display:inline-block;font-size:8pt;letter-spacing:2px;text-transform:uppercase;padding:5px 10px;border-radius:5px;font-weight:700;
+  background:rgba(201,154,58,.16);color:var(--amber);border:1px solid rgba(201,154,58,.45)}
+.sealed.red{background:rgba(194,74,63,.16);color:var(--red);border-color:rgba(194,74,63,.45)}
+.tag{display:inline-block;font-size:7.5pt;letter-spacing:1.5px;text-transform:uppercase;padding:2px 7px;border-radius:4px;font-weight:700;vertical-align:middle}
+.tag.g{background:rgba(31,177,85,.16);color:var(--green)}
+.tag.a{background:rgba(201,154,58,.16);color:var(--amber)}
+.tag.r{background:rgba(194,74,63,.16);color:var(--red)}
+.tag.m{background:rgba(244,245,240,.08);color:var(--muted)}
+.tag.b{background:rgba(143,214,166,.14);color:#8fd6a6}
+.banner{background:rgba(201,154,58,.10);border:1px solid rgba(201,154,58,.40);border-radius:10px;padding:10px 14px;margin:0 0 16px;font-size:10.5pt}
+.banner.red{background:rgba(194,74,63,.10);border-color:rgba(194,74,63,.40)}
+.banner.green{background:rgba(31,177,85,.10);border-color:rgba(31,177,85,.40)}
+.sec{margin-top:22px}
+.sec > h2{break-after:avoid}
+.sec > .lede{break-after:avoid}
+.sec > h2{font-size:17pt;margin-bottom:4px}
+.sec > .lede{color:var(--muted);font-size:10pt;margin:0 0 12px;max-width:80ch}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px;break-inside:avoid}
+.panel.flow{break-inside:auto}
+tr{break-inside:avoid}
+.panel h3{break-after:avoid}
+.panel h3{font-size:13.5pt;margin-bottom:4px}
+.panel .ph-sub{color:var(--muted);font-size:9.5pt;margin-bottom:10px}
+p{margin:0 0 10px}
+.persona p{font-size:11.2pt;max-width:82ch}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stake{padding:8px 0;border-bottom:1px solid var(--line)}
+.stake:last-child{border:none}
+.stake b{display:block;font-family:var(--serif);font-size:11.5pt}
+.stake span{color:var(--muted);font-size:10.3pt}
+ul{margin:0;padding-left:18px}
+li{margin:4px 0;font-size:10.5pt}
+.do h3{color:var(--green)} .dont h3{color:var(--red)}
+.glance{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.glance .q{font-family:var(--serif);font-size:18pt;color:var(--green);line-height:1}
+.glance .post{font-size:9.5pt;color:var(--text);margin-top:4px;min-height:2.6em}
+.glance .n{font-family:var(--mono);font-size:9pt;color:var(--muted);margin-top:6px}
+.glance .n b{color:var(--text)}
+.qpanel{break-inside:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:0;margin-bottom:12px}
+.qhead{display:flex;align-items:flex-start;gap:14px;padding:12px 18px;background:var(--panel2);border-bottom:1px solid var(--line);border-radius:12px 12px 0 0;break-after:avoid}
+.qhead .mid{flex:1}
+.need,.show,.trap,.recov{break-inside:avoid}
+.qbody h4{break-after:avoid}
+.qhead .q{font-family:var(--serif);font-size:22pt;color:var(--green);line-height:1}
+.qhead .posture{font-family:var(--serif);font-size:13.5pt}
+.qhead .line{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:10.5pt;margin-top:2px}
+.qhead .cap{font-family:var(--mono);font-size:8.5pt;color:var(--amber);white-space:nowrap;margin-left:auto;padding-top:6px}
+.qbody{padding:12px 18px 14px}
+.qbody h4{font-size:8.5pt;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);font-family:var(--body);font-weight:700;margin:10px 0 5px}
+.qbody h4:first-child{margin-top:0}
+.need{display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:10.5pt}
+.need .t{font-weight:700;min-width:15ch}
+.need .w{color:var(--muted)}
+.show{display:flex;gap:10px;align-items:baseline;padding:3px 0;font-size:10.3pt}
+.show .t{font-weight:700;min-width:15ch}
+.show .w{color:var(--muted)}
+.trap{margin-top:10px;background:rgba(194,74,63,.09);border-left:3px solid var(--red);padding:8px 12px;border-radius:0 8px 8px 0;font-size:10.3pt}
+.trap b{color:var(--red);font-family:var(--serif);letter-spacing:.3px}
+.recov{margin-top:8px;background:rgba(31,177,85,.08);border-left:3px solid var(--green);padding:8px 12px;border-radius:0 8px 8px 0;font-size:10.3pt}
+.recov b{color:var(--green);font-family:var(--serif)}
+table{width:100%;border-collapse:collapse;font-size:10pt}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:8pt;letter-spacing:1px;text-transform:uppercase;color:var(--faint);font-weight:700}
+td.mono{font-family:var(--mono);font-size:9.5pt}
+.rub .score{font-family:var(--serif);font-size:15pt;color:var(--green);width:3ch}
+.rub .s2{color:var(--amber)} .rub .s1{color:var(--red)}
+.judge{font-family:var(--serif);font-size:12pt;line-height:1.5;padding:16px 18px;border:1px solid rgba(31,177,85,.4);border-radius:12px;background:rgba(31,177,85,.06)}
+.rules li{font-size:10.5pt}
+.foot{margin-top:26px;padding-top:10px;border-top:1px solid var(--line);display:flex;justify-content:space-between;color:var(--faint);font-size:8.5pt;font-family:var(--mono)}
+.pb{break-before:page}
+.dir-t td:first-child{white-space:nowrap}
+.dir-t .tx{font-family:var(--serif);font-size:10.5pt}
+.dir-t .ben{color:var(--muted);font-size:9.5pt}
+.callout{font-family:var(--serif);font-size:12pt;color:var(--text);padding:12px 16px;border-left:3px solid var(--amber);background:rgba(201,154,58,.07);border-radius:0 8px 8px 0;margin:8px 0 12px}
+.beat{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.beat:last-child{border:none}
+.beat .n{font-family:var(--serif);font-size:16pt;color:var(--green);width:2ch;line-height:1.1}
+.beat .b b{font-family:var(--serif);font-size:11.5pt;display:block}
+.beat .b span{color:var(--muted);font-size:10.3pt}
+</style></head>
+<body>
+<div class="bleed"></div>
+<div class="page">
+
+<div class="mast">
+  <div>
+    <div class="brand">Praxis · Case 03 · Borrowed People</div>
+    <div class="sub">The Uncomfortable Art of Leadership · Leadership-Comp</div>
+    <div class="name">Farida</div>
+    <div class="role">Quality</div>
+    <div class="tagline">The expensive truth, early.</div>
+  </div>
+  <div style="text-align:right">
+    <span class="sealed ">Character brief · sealed</span>
+    <div class="sub" style="margin-top:10px">v1 · 18 Sep 2026</div>
+  </div>
+</div>
+<div class="banner red"><b>Sealed.</b> This brief is yours alone. Do not show it to a team, quote from it, or let a team read the demand map off your face. Everything marked <span class="tag r">sealed</span> is something you <i>feel</i> as instinct in the room — never something you cite.</div>
+
+<div class="sec"><h2>Who you are</h2><div class="persona"><p>You run quality — the gates, the reserve model, the field-return data, the pre-launch test plan and the argument about what it costs. You are the person who says the expensive thing early, and you have the receipts: three years of field data that nobody reads until a customer does. You are calm, specific, and slightly tired of being invited to sign things.</p><p>The map needs you in <b>nine team-quarters</b> — tied for the most with Neha. <b>Q2 is your crunch</b>: three teams need you (Crucible as primary, Ampere and Dynamo as secondary) and you have two slots. <b>Q3 is your inversion</b>: Ampere genuinely needs you as primary for thermal safety, but their directive sends them to Arjun for energy density — while Dynamo is told to “double down with Farida on testing,” which is the wrong room this quarter (their exposure right now is supplier-born; that’s Neha’s). So in Q3 you will likely be asked by the team that shouldn’t, and not by the team that should. A field quality escape lands the same quarter.</p><p>You do not rubber-stamp. Play her as someone whose “yes” means something because her “no” is real. Teams that bring field data get everything you have. Teams that bring a plan and want your name on it get the posture card.</p></div></div>
+
+<div class="sec"><h2>Your year at a glance</h2>
+<div class="lede">The work needs you in <b>9</b> team-quarters across the year. The Sponsor sends a team to you in <b>4</b> of the 20 directives. The gap between those two numbers is your story.</div>
+<div class="grid4"><div class="glance"><div class="q">Q1</div><div class="post">Polite, vague, non-committal.</div>
+          <div class="n">slots <b>2</b> · needs <b>2</b> <span style="color:var(--faint)">(1P/1S)</span></div></div><div class="glance"><div class="q">Q2</div><div class="post">Competing claims, named out loud.</div>
+          <div class="n">slots <b>2</b> · needs <b>3</b> <span style="color:var(--faint)">(1P/2S)</span></div></div><div class="glance"><div class="q">Q3</div><div class="post">Push back, refuse.</div>
+          <div class="n">slots <b>2</b> · needs <b>2</b> <span style="color:var(--faint)">(1P/1S)</span></div></div><div class="glance"><div class="q">Q4</div><div class="post">Judge.</div>
+          <div class="n">slots <b>2</b> · needs <b>2</b> <span style="color:var(--faint)">(1P/1S)</span></div></div></div></div>
+
+<div class="sec"><h2>What you actually care about</h2>
+<div class="lede">This is what “knew what I cared about” means when a team sits down with you. If they can’t touch one of these, they don’t know you.</div>
+<div class="panel"><div class="stake"><b>Data before opinion</b><span>“Customers are complaining” is noise. “1.8% return rate on the 48V pack, 70% of it thermal” is a conversation.</span></div><div class="stake"><b>Gates that hold</b><span>A gate you set in Q1 and are “asked to be pragmatic about” in Q3 is not a gate.</span></div><div class="stake"><b>Not being the test department</b><span>Pre-launch testing is what you do when the spec and the supplier are right. It isn’t a substitute for either.</span></div><div class="stake"><b>The reserve number</b><span>The warranty reserve is your credibility with the board. You’ll close it in Q4 for whoever earned it.</span></div><div class="stake"><b>Spec and Warranty in one room</b><span>The Q3 escape puts them at war. You’re the only one who sees both sides’ data.</span></div></div></div>
+
+<div class="sec"><h2>How to play it</h2>
+<div class="grid2">
+  <div class="panel do"><h3>Do</h3><ul><li>Ask for the failure mode before agreeing to anything: “what fails, how often, and what does it cost?”</li><li>Give one real field number when someone asks properly — teach the room what evidence looks like.</li><li>Name competing claims out loud in Q2; you’ll have three and two slots.</li><li>Refuse “testing” as a request in Q3 unless someone can say what the test would decide.</li></ul></div>
+  <div class="panel dont"><h3>Don’t</h3><ul><li>Don’t say “that’s a supply problem” and name Neha. You may say “that’s not a test problem.”</li><li>Don’t take Dynamo in Q3 just because the Sponsor said so. The directive is sincere and wrong.</li><li>Don’t soften a rating because the team was under pressure. Everyone is.</li><li>Don’t reveal the map, or that Q2 is a squeeze, before selection.</li></ul></div>
+</div></div>
+
+<div class="sec"><h2>How the engine uses you</h2>
+<div class="panel"><ul>
+<li>A team only gets credit for you if <b>you select them</b> at SELECTION. Being asked is not enough; your two slots decide objectives.</li>
+<li>Your three 1–3 ratings are averaged with the other characters who picked that team and feed their annual band. Rate honestly — the facilitator runs a <b>drift check</b> for rating compression, and a character who goes soft quietly breaks the case.</li>
+<li>Each quarter has a posture card. Play it straight even when a team is likeable; the escalation is the arc: <i>vague → competing claims → refuse → judge</i>.</li>
+<li>If a team missed the person they needed last quarter, the engine marks them <b>behind</b> and rewrites their ideal: last quarter’s primary first, this quarter’s second. Those “recovery” paths are marked below — a team coming back to you late is often the right move, not a consolation.</li>
+</ul></div></div>
+
+<div class="sec" style="margin-top:8px"><h2>The year, quarter by quarter</h2>
+<div class="lede">Posture and sample line are from your console card. “Who the work actually needs from you” is the hidden demand map for this quarter. “Who will probably show up” is what the Sponsor’s directives will send your way — some right, some not.</div>
+
+<div class="qpanel">
+  <div class="qhead"><div class="q">Q1</div><div class="mid"><div class="posture">Polite, vague, non-committal.</div>
+    <div class="line">“Send me something and I’ll take a look.”</div></div><div class="cap">capacity · 2 team(s)</div></div>
+  <div class="qbody">
+    <h4>Who the work actually needs from you <span class="tag r" style="margin-left:6px">sealed</span></h4><div class="need"><span class="t">D · Dynamo (Warranty)</span><span class="tag g">primary</span><span class="w">set the quality gates and the reserve model early</span></div><div class="need"><span class="t">E · Envoy (Pricing)</span><span class="tag a">secondary</span><span class="w">the cost of quality is a margin input to the pricing corridor</span></div>
+    <h4>Who will probably show up — and why</h4><div class="show"><span class="t">D · Dynamo (Warranty)</span><span class="tag g">aligned directive</span><span class="w">sent by “get Farida to set the quality gates and reserve model early.”</span></div><div class="show"><span class="t">E · Envoy (Pricing)</span><span class="tag b">unprompted</span><span class="w">their directive says Devika; the sharp ones ask you what quality costs per unit.</span></div>
+    <div class="trap"><b>The trap.</b> None serious. Set the gates. Remember them — you will be asked to bend them.</div>
+    
+  </div>
+</div>
+<div class="qpanel">
+  <div class="qhead"><div class="q">Q2</div><div class="mid"><div class="posture">Competing claims, named out loud.</div>
+    <div class="line">“Team C already asked me for the same week.”</div></div><div class="cap">capacity · 2 team(s)</div></div>
+  <div class="qbody">
+    <h4>Who the work actually needs from you <span class="tag r" style="margin-left:6px">sealed</span></h4><div class="need"><span class="t">C · Crucible (Spec)</span><span class="tag g">primary</span><span class="w">pressure-test the spec against field reality</span></div><div class="need"><span class="t">A · Ampere (Battery)</span><span class="tag a">secondary</span><span class="w">thermal margin behind Neha’s supply lock</span></div><div class="need"><span class="t">D · Dynamo (Warranty)</span><span class="tag a">secondary</span><span class="w">behind Raghav’s line work</span></div>
+    <h4>Who will probably show up — and why</h4><div class="show"><span class="t">C · Crucible (Spec)</span><span class="tag g">aligned directive</span><span class="w">sent by “bring Farida in to pressure-test the spec against field reality.”</span></div><div class="show"><span class="t">A · Ampere (Battery)</span><span class="tag b">unprompted</span><span class="w">directive says Neha; good teams bring both.</span></div><div class="show"><span class="t">D · Dynamo (Warranty)</span><span class="tag b">unprompted</span><span class="w">directive says Raghav; loyal teams come back to you anyway.</span></div>
+    <div class="trap"><b>The trap.</b> Choosing by loyalty — Dynamo is “your” team from Q1. Crucible’s spec needs you most this quarter. Say the competing claims out loud; that is the posture. Whoever you turn away, tell them plainly why.</div>
+    
+  </div>
+</div>
+<div class="qpanel">
+  <div class="qhead"><div class="q">Q3</div><div class="mid"><div class="posture">Push back, refuse.</div>
+    <div class="line">“I’ve heard this before. It died. Why is this different?”</div></div><div class="cap">capacity · 2 team(s)</div></div>
+  <div class="qbody">
+    <h4>Who the work actually needs from you <span class="tag r" style="margin-left:6px">sealed</span></h4><div class="need"><span class="t">A · Ampere (Battery)</span><span class="tag g">primary</span><span class="w">thermal safety for the cell architecture — the field escape makes this urgent</span></div><div class="need"><span class="t">E · Envoy (Pricing)</span><span class="tag a">secondary</span><span class="w">the cost of quality inside the price defence</span></div>
+    <h4>Who will probably show up — and why</h4><div class="show"><span class="t">D · Dynamo (Warranty)</span><span class="tag r">tension directive</span><span class="w">sent by “double down with Farida on pre-launch testing.” A hard miss for them: their exposure this quarter is supplier-born and line-born; more testing finds it later, not never.</span></div><div class="show"><span class="t">A · Ampere (Battery)</span><span class="tag m">probably not</span><span class="w">the board wants energy density and they’ve been sent to Arjun. If Ampere comes to you anyway, they read the escape right — take them.</span></div>
+    <div class="trap"><b>The trap.</b> Dynamo’s ask is your favourite kind: testing, rigour, catching failures early. Refuse it in character with the Q3 line. Make them say what the test would change. If they can’t, you’ve shown them they’re in the wrong room. Keep a slot open for Ampere in case they arrive late in negotiation.</div>
+    <div class="recov"><b>Recovery path.</b> If Ampere chased energy density in Q3 and missed you, they enter Q4 behind — and you become their recovery primary.</div>
+  </div>
+</div>
+<div class="qpanel">
+  <div class="qhead"><div class="q">Q4</div><div class="mid"><div class="posture">Judge.</div>
+    <div class="line">“I’d work with A again. I would not work with B.”</div></div><div class="cap">capacity · 2 team(s)</div></div>
+  <div class="qbody">
+    <h4>Who the work actually needs from you <span class="tag r" style="margin-left:6px">sealed</span></h4><div class="need"><span class="t">D · Dynamo (Warranty)</span><span class="tag g">primary</span><span class="w">close out the warranty reserve — a defensible number for the board</span></div><div class="need"><span class="t">C · Crucible (Spec)</span><span class="tag a">secondary</span><span class="w">behind the Sponsor’s sign-off on the final trade-offs</span></div>
+    <h4>Who will probably show up — and why</h4><div class="show"><span class="t">D · Dynamo (Warranty)</span><span class="tag g">aligned directive</span><span class="w">sent by “back to Farida to close out the warranty reserve.”</span></div><div class="show"><span class="t">C · Crucible (Spec)</span><span class="tag b">unprompted</span><span class="w">directive says escalate to the Sponsor; the complete ones bring you too.</span></div><div class="show"><span class="t">A · Ampere (Battery)</span><span class="tag a">recovery path</span><span class="w">only if they are behind from Q3 — they’ll be sent to Arjun, but a behind team that thinks will bring you.</span></div>
+    <div class="trap"><b>The trap.</b> Three possible needs, two slots — again. Give the recovering team a slot only if the Q3 lesson is visible in the ask.</div>
+    
+  </div>
+</div>
+</div>
+<div class="sec" style="margin-top:8px"><h2>Capacity and the squeeze</h2>
+<div class="lede">Two slots every quarter. Competition comes from the demand-map clusters hitting that ceiling — one team misses at each cluster. That’s real rivalry without famine.</div>
+<div class="panel"><table><thead><tr><th>Quarter</th><th>Slots</th><th>Genuine need</th><th>Likely asks</th><th>Read</th></tr></thead><tbody><tr><td class="mono">Q1</td><td class="mono">2</td><td class="mono">1 primary · 1 secondary</td><td class="mono">≈1</td><td>clean</td></tr><tr><td class="mono">Q2</td><td class="mono">2</td><td class="mono">1 primary · 2 secondary</td><td class="mono">≈1</td><td>squeeze — someone misses</td></tr><tr><td class="mono">Q3</td><td class="mono">2</td><td class="mono">1 primary · 1 secondary</td><td class="mono">≈1</td><td>1 misdirected ask</td></tr><tr><td class="mono">Q4</td><td class="mono">2</td><td class="mono">1 primary · 1 secondary</td><td class="mono">≈2</td><td>clean</td></tr></tbody></table></div></div>
+
+<div class="sec"><h2>How you rate</h2>
+<div class="lede">Three scores, 1–3, for every team you selected. Fixed rubric, your anchors. 1 = poor, 3 = strong. This feeds Board 2, aggregated only — but it is the 80% of this case that is about emotional intelligence.</div>
+<div class="panel rub"><h3>Knew what I cared about</h3><div class="ph-sub">Did they understand my actual stake — or guess?</div>
+          <table><tr><td class="score">3</td><td>They brought a failure mode and a number.</td></tr>
+                 <tr><td class="score s2">2</td><td>They knew quality mattered, in general.</td></tr>
+                 <tr><td class="score s1">1</td><td>They wanted a sign-off.</td></tr></table></div><div class="panel rub"><h3>Asked, or told</h3><div class="ph-sub">Did they draw me out, or push their agenda at me?</div>
+          <table><tr><td class="score">3</td><td>They asked what the data said before proposing.</td></tr>
+                 <tr><td class="score s2">2</td><td>They proposed, then took the pushback seriously.</td></tr>
+                 <tr><td class="score s1">1</td><td>“The Sponsor said to double down with you.”</td></tr></table></div><div class="panel rub"><h3>Left me better than they found me</h3><div class="ph-sub">Did I walk away more able, or more drained?</div>
+          <table><tr><td class="score">3</td><td>A gate got set or held; you are less exposed.</td></tr>
+                 <tr><td class="score s2">2</td><td>Neutral.</td></tr>
+                 <tr><td class="score s1">1</td><td>You now own a test plan that won’t change the outcome.</td></tr></table></div></div>
+
+<div class="sec"><h2>Q4 — your judgement</h2>
+<div class="lede">In Q4 the console opens a verdict for every team: <b>work with again</b>, or <b>would not</b> — and why. It is read out to the room. Say it plainly.</div>
+<div class="judge">“Again” for teams that held a gate you set, and for any team that came to you in Q3 against instructions. “Would not” for anyone who used “testing” to avoid a decision. One sentence each; business first.</div></div>
+
+<div class="sec"><h2>Sealed rules</h2>
+<div class="panel rules"><ul>
+<li>Never name who the “right” person is for a team’s problem. You may say what kind of problem it isn’t.</li>
+<li>Never reference quarters as if you know the plan (“you’ll need me in Q4”). You don’t — officially.</li>
+<li>Never disclose your capacity to a team before selection, and never promise a slot in negotiation.</li>
+<li>Never confirm or deny that a Sponsor directive was right. That is the reveal’s job, not yours.</li>
+<li>When in doubt: hold the posture card, ask for the constraint, and let silence work.</li>
+</ul></div></div>
+<div class="foot"><span>PRAXIS · BORROWED PEOPLE · FARIDA · SEALED</span><span>v1 · 18 Sep 2026</span></div>
+</div>
+</body></html>
