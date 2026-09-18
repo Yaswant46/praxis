@@ -1066,6 +1066,25 @@ BEGIN
                        FROM bp_directives WHERE session_id=a.session_id AND team_id=a.team_id AND quarter=s.current_quarter),
       'my_mandate', (SELECT jsonb_build_object('stance',stance,'dissent_line',dissent_line)
                        FROM bp_mandate_decisions WHERE session_id=a.session_id AND team_id=a.team_id AND quarter=s.current_quarter));
+    -- migration 018: who gave this team their time, per quarter. A quarter is
+    -- visible once it is past, or once the current one has reached RESULTS.
+    -- Names only — the character's written reason never reaches the team.
+    out := out || jsonb_build_object('my_backers',
+      (SELECT COALESCE(jsonb_agg(jsonb_build_object('quarter', g.q, 'visible', g.vis, 'characters', g.chars) ORDER BY g.q), '[]'::jsonb)
+       FROM (
+         SELECT q,
+           (q < s.current_quarter OR s.current_phase IN ('RESULTS','DEBRIEF') OR s.status='closed') AS vis,
+           CASE WHEN (q < s.current_quarter OR s.current_phase IN ('RESULTS','DEBRIEF') OR s.status='closed') THEN
+             COALESCE((SELECT jsonb_agg(jsonb_build_object('key', c.key, 'name', c.name,
+                 'requested', CASE WHEN r.primary_character_id=c.id THEN 'primary'
+                                   WHEN r.secondary_character_id=c.id THEN 'secondary' ELSE NULL END) ORDER BY c.key)
+               FROM bp_selections sel
+               JOIN bp_characters c ON c.id=sel.character_id
+               LEFT JOIN bp_requests r ON r.session_id=sel.session_id AND r.team_id=sel.team_id AND r.quarter=sel.quarter
+               WHERE sel.session_id=a.session_id AND sel.team_id=a.team_id AND sel.quarter=q), '[]'::jsonb)
+           ELSE NULL END AS chars
+         FROM generate_series(1, GREATEST(s.current_quarter,1)) AS q
+       ) g));
 
   ELSIF a.role = 'character' THEN
     -- Incoming (who named me) only after REQUESTS_LOCKED.
@@ -1106,6 +1125,24 @@ BEGIN
                        FROM bp_curveballs WHERE session_id=a.session_id),
       'monitor', bp_monitor(a.session_id, s.current_quarter),
       'drift', bp_drift(a.session_id, s.current_quarter),
+      -- migration 018: every selection so far (all quarters, current one live)
+      -- and every team's stakeholder maps, for the facilitator only.
+      'selection_history', (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+            'quarter', sel.quarter, 'character_key', c.key, 'character_name', c.name,
+            'team_id', t.id, 'team_code', t.code, 'reason', sel.reason,
+            'requested', CASE WHEN r.primary_character_id=c.id THEN 'primary'
+                              WHEN r.secondary_character_id=c.id THEN 'secondary' ELSE NULL END)
+          ORDER BY sel.quarter, c.key, t.code), '[]'::jsonb)
+        FROM bp_selections sel
+        JOIN bp_characters c ON c.id=sel.character_id
+        JOIN bp_teams t ON t.id=sel.team_id
+        LEFT JOIN bp_requests r ON r.session_id=sel.session_id AND r.team_id=sel.team_id AND r.quarter=sel.quarter
+        WHERE sel.session_id=a.session_id),
+      'stakeholder_all', (SELECT COALESCE(jsonb_agg(jsonb_build_object('team_id', t.id, 'code', t.code, 'name', t.name,
+            'pre',  (SELECT payload FROM bp_stakeholder_maps m WHERE m.session_id=a.session_id AND m.team_id=t.id AND m.phase='pre'  LIMIT 1),
+            'post', (SELECT payload FROM bp_stakeholder_maps m WHERE m.session_id=a.session_id AND m.team_id=t.id AND m.phase='post' LIMIT 1))
+          ORDER BY t.code), '[]'::jsonb)
+        FROM bp_teams t WHERE t.session_id=a.session_id),
       -- Mandate (migration 011). All teams' directives this quarter incl.
       -- alignment (the Voice re-issue lever reads this), and per-team whether
       -- a stance has been submitted yet.
@@ -1133,7 +1170,11 @@ RETURNS JSONB LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
     'team_id', t.id, 'code', t.code,
     'has_request',   EXISTS(SELECT 1 FROM bp_requests    r WHERE r.session_id=p_sid AND r.team_id=t.id AND r.quarter=p_quarter),
     'style_calls',   (SELECT COUNT(*) FROM bp_style_calls sc WHERE sc.session_id=p_sid AND sc.team_id=t.id AND sc.quarter=p_quarter),
-    'has_observer',  EXISTS(SELECT 1 FROM bp_observer_logs o WHERE o.session_id=p_sid AND o.team_id=t.id AND o.quarter=p_quarter)
+    'has_observer',  EXISTS(SELECT 1 FROM bp_observer_logs o WHERE o.session_id=p_sid AND o.team_id=t.id AND o.quarter=p_quarter),
+    -- migration 018: readiness the facilitator could not see before
+    'has_premap',    EXISTS(SELECT 1 FROM bp_stakeholder_maps m WHERE m.session_id=p_sid AND m.team_id=t.id AND m.phase='pre'),
+    'has_postmap',   EXISTS(SELECT 1 FROM bp_stakeholder_maps m WHERE m.session_id=p_sid AND m.team_id=t.id AND m.phase='post'),
+    'has_mandate',   EXISTS(SELECT 1 FROM bp_mandate_decisions md WHERE md.session_id=p_sid AND md.team_id=t.id AND md.quarter=p_quarter)
   ) ORDER BY t.code)
   FROM bp_teams t WHERE t.session_id=p_sid;
 $$;
@@ -1144,6 +1185,10 @@ RETURNS JSONB LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   SELECT jsonb_agg(x ORDER BY x->>'key') FROM (
     SELECT jsonb_build_object(
       'character_id', c.id, 'key', c.key, 'name', c.name,
+      -- migration 018: capacity this quarter, and whether the character has pressed Lock (event log)
+      'capacity', (SELECT slots FROM bp_character_capacity cc WHERE cc.session_id=p_sid AND cc.character_id=c.id AND cc.quarter=p_quarter),
+      'locked',   EXISTS(SELECT 1 FROM bp_events e WHERE e.session_id=p_sid AND e.action='select'
+                         AND e.payload->>'character'=c.id::text AND (e.payload->>'quarter')::int=p_quarter),
       'selected', (SELECT COUNT(*) FROM bp_selections s WHERE s.session_id=p_sid AND s.character_id=c.id AND s.quarter=p_quarter),
       'rated',    (SELECT COUNT(*) FROM bp_ratings r WHERE r.session_id=p_sid AND r.character_id=c.id AND r.quarter=p_quarter),
       'spread',   COALESCE((SELECT MAX(tot)-MIN(tot) FROM (
@@ -1455,7 +1500,7 @@ BEGIN
     INSERT INTO bp_selections(session_id, character_id, quarter, team_id, reason)
       VALUES (a.session_id, a.character_id, s.current_quarter, (pick->>'team_id')::uuid, pick->>'reason');
   END LOOP;
-  PERFORM bp_log(a.session_id,'character','select',jsonb_build_object('character',a.character_id,'n',jsonb_array_length(p_picks)));
+  PERFORM bp_log(a.session_id,'character','select',jsonb_build_object('character',a.character_id,'n',jsonb_array_length(p_picks),'quarter',s.current_quarter));
   RETURN jsonb_build_object('ok',true);
 END $$;
 
