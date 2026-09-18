@@ -1187,7 +1187,7 @@ function vEnroll(){
       <input id="enCohort" value="${esc(cohort)}" placeholder="CATALYST-AUG" oninput="ENROLL_COHORT=this.value" style="max-width:320px">
     </div>
     <div class="panel"><h3>Upload roster (CSV)</h3>
-      <div class="ph-sub">Columns: <b>email, name, assignment</b>. Assignment = a team (<b>Team A</b>…<b>Team E</b> or A–E), a character (<b>Arjun, Neha, Raghav, Farida, Devika, Sponsor</b>), or <b>Facilitator</b>.</div>
+      <div class="ph-sub">Columns: <b>email, name, assignment</b> in any order — comma, tab, or semicolon separated, header optional (a spreadsheet paste works). Assignment = a team (<b>Team A</b>…<b>Team E</b> or A–E), a character (<b>Arjun, Neha, Raghav, Farida, Devika, Sponsor</b>), or <b>Facilitator</b>.</div>
       <div class="row">
         <button class="btn ghost sm" style="width:auto" onclick="downloadTemplate()">⬇ Download CSV template</button>
         <label class="btn amber sm" style="width:auto;display:inline-block">Choose CSV…
@@ -1208,14 +1208,21 @@ function downloadTemplate(){
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download='praxis-roster-template.csv'; a.click();
 }
-// Minimal CSV parse: header row + email,name,assignment. Handles quoted fields.
+// Roster parse. Accepts comma, semicolon, tab, or 2+ space separated rows,
+// with or without a header. Column order is detected per row: the field
+// with "@" is the email, a field that looks like a team/character/facilitator
+// label is the assignment, and what remains is the name. Handles quoted fields.
+const ASSIGN_RE = /^(team[ _-]*)?[a-e]$|^(ampere|bastion|crucible|dynamo|envoy|arjun|neha|raghav|farida|devika|sponsor|facilitator|admin|gm|fac)$/i;
 function parseCSV(text){
   const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim().length);
   if(!lines.length) return [];
-  const split=(l)=>{ const out=[]; let cur='',q=false;
+  const sepFor=(l)=> l.includes('\t') ? '\t' : (l.includes(',') ? ',' : (l.includes(';') ? ';' : null));
+  const split=(l)=>{ const sep=sepFor(l);
+    if(!sep) return l.trim().split(/\s{2,}/).map(s=>s.trim());
+    const out=[]; let cur='',q=false;
     for(let i=0;i<l.length;i++){ const c=l[i];
       if(q){ if(c==='"'){ if(l[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
-      else { if(c==='"') q=true; else if(c===','){ out.push(cur); cur=''; } else cur+=c; } }
+      else { if(c==='"') q=true; else if(c===sep){ out.push(cur); cur=''; } else cur+=c; } }
     out.push(cur); return out.map(s=>s.trim()); };
   let start=0; const head=split(lines[0]).map(h=>h.toLowerCase());
   const hasHeader = head.includes('email') || head.includes('assignment');
@@ -1223,10 +1230,16 @@ function parseCSV(text){
   if(hasHeader) start=1;
   const rows=[];
   for(let i=start;i<lines.length;i++){ const c=split(lines[i]); if(!c.length) continue;
-    const email = hasHeader && idx.email>=0 ? c[idx.email] : c[0];
-    const name  = hasHeader && idx.name>=0 ? c[idx.name]  : c[1];
-    const assign= hasHeader && idx.assignment>=0 ? c[idx.assignment] : c[2];
-    if((email||'').trim()) rows.push({email:email||'', name:name||'', assignment:assign||''});
+    let email, name, assign;
+    if(hasHeader && idx.email>=0){
+      email = c[idx.email]; name = idx.name>=0 ? c[idx.name] : ''; assign = idx.assignment>=0 ? c[idx.assignment] : '';
+    } else {
+      const rest=c.slice();
+      const ei=rest.findIndex(x=>x.includes('@')); email = ei>=0 ? rest.splice(ei,1)[0] : (rest.shift()||'');
+      const ai=rest.findIndex(x=>ASSIGN_RE.test(x.trim())); assign = ai>=0 ? rest.splice(ai,1)[0] : (rest.pop()||'');
+      name = rest.join(' ').trim();
+    }
+    if((email||'').trim()) rows.push({email:(email||'').trim(), name:(name||'').trim(), assignment:(assign||'').trim()});
   }
   return rows;
 }
