@@ -1156,7 +1156,7 @@ function vCapacity(){
     let cells=[1,2,3,4].map(q=>`<td><input style="width:56px" type="number" min="0" max="5" id="cap_${c.id}_${q}" value="${slots(c.id,q)}"></td>`).join('');
     return `<tr><td>${esc(c.name)}</td>${cells}<td><button class="btn sm" style="width:auto" onclick="saveCap('${c.id}')">Save</button></td></tr>`;
   }).join('');
-  return `<h1 class="h">Capacity override</h1><p class="lede">Slots each character can give per quarter. Q3 is preloaded to 1 — the squeeze. Edit if the room needs it.</p>
+  return `<h1 class="h">Capacity override</h1><p class="lede">Slots each character can give per quarter. Q1 is the squeeze — every character has one slot, so ten asks meet five. Q2–Q4 open to two. Sponsor 1/1/1/2. Edit any cell if the room needs it.</p>
     <div class="panel"><table><thead><tr><th>Character</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 async function saveCap(cid){
@@ -1490,7 +1490,7 @@ function renderBoardsInto(elId, b){
   if(b.headwind_revealed){ const net=org.net||0; const pct=Math.max(0,Math.min(100,Math.round(net/ (b.target_value||14200) *100)));
     orgHtml=`<div class="row" style="justify-content:space-between;margin:14px 0 6px"><b>Organisation (net)</b><span class="mono">₹${net.toLocaleString('en-IN')} ${org.target_hit?'· <span class="band-exceeded">target hit</span>':'· <span class="band-missed">short</span>'}</span></div><div class="bar"><i style="width:${pct}%"></i></div>`;
   } else { const gross=org.gross||0; const pct=Math.max(0,Math.min(100,Math.round(gross/(b.target_value||14200)*100)));
-    orgHtml=`<div class="row" style="justify-content:space-between;margin:14px 0 6px"><b>Organisation (before headwind)</b><span class="mono">₹${gross.toLocaleString('en-IN')}</span></div><div class="bar"><i style="width:${pct}%"></i></div>`; }
+    orgHtml=`<div class="row" style="justify-content:space-between;margin:14px 0 6px"><b>Organisation (${org.projected?'projected year-end after Q'+org.quarters_played+', ':''}before headwind)</b><span class="mono">₹${gross.toLocaleString('en-IN')}</span></div><div class="bar"><i style="width:${pct}%"></i></div>`; }
 
   let b2 = teams.map(t=>{ const qs=t.quarters||{}; const vals=[1,2,3,4].map(q=>qs[q]?qs[q].avg_rating:null);
     const present=vals.filter(v=>v!=null); const cum = present.length? (present.reduce((a,v)=>a+ (+v),0)/present.length):null;
@@ -1524,8 +1524,8 @@ async function projLoad(){
       $('orgNote').textContent='Net of ₹'+(org.headwind||0).toLocaleString('en-IN')+' headwind · target ₹'+target.toLocaleString('en-IN');
       $('orgTarget').style.left='100%';
     } else { const gross=org.gross||0; const pct=Math.max(0,Math.min(100,Math.round(gross/target*100)));
-      $('orgFill').style.width=pct+'%'; $('orgVal').textContent='₹'+gross.toLocaleString('en-IN')+' (before headwind)';
-      $('orgNote').textContent='Headwind still hidden · target ₹'+target.toLocaleString('en-IN');
+      $('orgFill').style.width=pct+'%'; $('orgVal').textContent='₹'+gross.toLocaleString('en-IN')+(org.projected?' (projected, before headwind)':' (before headwind)');
+      $('orgNote').textContent=(org.projected?'Year-end run-rate after Q'+org.quarters_played+' · ':'')+'Headwind still hidden · target ₹'+target.toLocaleString('en-IN');
       $('orgTarget').style.left='100%';
     }
     // Board 2

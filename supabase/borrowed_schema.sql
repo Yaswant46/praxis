@@ -353,8 +353,8 @@ DROP POLICY IF EXISTS bp_pub_teams           ON bp_teams;
 DROP POLICY IF EXISTS bp_pub_quarter_results ON bp_quarter_results;
 DROP POLICY IF EXISTS bp_pub_commitments     ON bp_commitments;
 
--- bp_sessions carries no secret (headwind is elsewhere) — needed for
--- the Realtime phase pointer.
+-- bp_sessions is readable for the Realtime phase pointer; its
+-- facilitator_code column is withheld by the column grants below.
 CREATE POLICY bp_pub_sessions        ON bp_sessions        FOR SELECT USING (true);
 CREATE POLICY bp_pub_objectives      ON bp_objectives      FOR SELECT USING (true);
 CREATE POLICY bp_pub_teams           ON bp_teams           FOR SELECT USING (true);
@@ -383,16 +383,19 @@ END $$;
 
 -- Safe tables: explicit SELECT for the API roles (subject to the
 -- permissive policies above).
-GRANT SELECT ON bp_sessions, bp_objectives, bp_teams, bp_quarter_results, bp_commitments
-  TO anon, authenticated;
+-- bp_sessions.facilitator_code and bp_teams.access_code are secrets: a
+-- participant with DevTools could otherwise pull the facilitator console
+-- (migration 014). Column-level SELECT keeps the Realtime phase pointer
+-- and the client's `select('variant')` working; the code columns are
+-- simply never served to the API roles.
+REVOKE ALL ON bp_sessions, bp_teams FROM anon, authenticated;
+GRANT SELECT (id, name, status, current_quarter, current_phase, headwind_revealed,
+              target_value, variant, created_at) ON bp_sessions TO anon, authenticated;
+GRANT SELECT (id, session_id, code, name, objective_key) ON bp_teams TO anon, authenticated;
+GRANT SELECT ON bp_objectives, bp_quarter_results, bp_commitments TO anon, authenticated;
 
--- NOTE: bp_teams.access_code is a column on a publicly-readable table.
--- Anon can therefore read team codes. That is acceptable for a live
--- in-room game (codes are handed out anyway) and the console spoiler
--- surfaces (demand_map, selections, requests, style_calls, characters,
--- ratings, headwind) are all on deny-all tables. If you want to hide
--- team codes too, drop the column from this policy via a view. Every
--- other sensitive table has NO anon policy → deny-all.
+-- Every sensitive table has NO anon policy → deny-all; the two public
+-- tables that carry a code expose it to nobody (column grants above).
 
 -- =====================================================================
 --  HELPERS
@@ -574,16 +577,21 @@ BEGIN
       VALUES (v_sid, chars[i][1], chars[i][2], chars[i][3], bp_gencode('CHR'))
       RETURNING id INTO v_char_id;
     -- CAPACITY IS THE CALIBRATION KNOB: loosen if the org floor becomes unhittable.
-    -- Working characters: 2 slots every quarter. Competition comes from the
-    -- demand-map CLUSTERS (Farida wanted by 3 in Q2, Raghav by 3 in Q3,
-    -- Sponsor/Neha by 3 in Q4) hitting the 2-slot ceiling — one team misses at
-    -- each cluster, real rivalry without famine. Q1 is clean (learning quarter).
+    -- Q1 IS THE SQUEEZE (migration 015): every working character has ONE slot,
+    -- so 10 asks meet 5 slots and half the room misses its primary in the
+    -- first quarter. Those misses seed the adaptive demand map (behind /
+    -- at_risk from Q2) — Q1 produces real output instead of a warm-up.
+    -- Q2–Q4: 2 slots; competition comes from the demand-map CLUSTERS (Farida
+    -- wanted by 3 in Q2, Raghav by 3 in Q3, Sponsor/Neha by 3 in Q4) hitting
+    -- the 2-slot ceiling — one team misses at each cluster.
     -- Sponsor: scarce (1) in Q1–Q3; 2 in Q4 where 3 teams need escalation, so
     -- the Q4 crunch stays contested (3-into-2) but the org floor stays reachable.
+    -- Facilitator can override any cell live from the Capacity tab.
     FOR q IN 1..4 LOOP
       INSERT INTO bp_character_capacity(session_id, character_id, quarter, slots)
         VALUES (v_sid, v_char_id, q,
           CASE WHEN chars[i][1]='sponsor' THEN (CASE WHEN q=4 THEN 2 ELSE 1 END)
+               WHEN q=1 THEN 1
                ELSE 2 END);
     END LOOP;
   END LOOP;
@@ -1488,7 +1496,7 @@ END $$;
 CREATE OR REPLACE FUNCTION bp_boards(p_session_id UUID)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE s RECORD; b JSONB; teams JSONB; org JSONB; hw INT; rev BOOLEAN;
-  bands JSONB := '{}'::jsonb; trow RECORD; tot INT; ab TEXT;
+  bands JSONB := '{}'::jsonb; trow RECORD; tot INT; ab TEXT; qp INT;
 BEGIN
   SELECT * INTO s FROM bp_sessions WHERE id=p_session_id;
   SELECT headwind_revealed INTO rev FROM bp_sessions WHERE id=p_session_id;
@@ -1502,9 +1510,15 @@ BEGIN
     ) ORDER BY t.code)
     FROM bp_teams t WHERE t.session_id=p_session_id);
 
-  -- annual bands per objective for org couplings
+  -- annual bands per objective for org couplings.
+  -- Before Q4 the org number is a PROJECTED year-end (migration 016): points so
+  -- far are scaled to four quarters, so the wall shows a real figure from the
+  -- Q1 results onward instead of ₹0 until the year closes. Converges to the
+  -- true annual bands at Q4.
+  SELECT COALESCE(MAX(quarter),0) INTO qp FROM bp_quarter_results WHERE session_id=p_session_id;
   FOR trow IN SELECT id, objective_key FROM bp_teams WHERE session_id=p_session_id LOOP
     SELECT COALESCE(SUM(points),0) INTO tot FROM bp_quarter_results WHERE session_id=p_session_id AND team_id=trow.id;
+    IF qp BETWEEN 1 AND 3 THEN tot := LEAST(12, ROUND(tot * 4.0 / qp)::INT); END IF;
     bands := bands || jsonb_build_object(trow.objective_key, bp_annual_band(tot));
   END LOOP;
 
@@ -1518,6 +1532,7 @@ BEGIN
     org := org || jsonb_build_object('before_headwind', true);
   END IF;
 
+  org := org || jsonb_build_object('projected', (qp BETWEEN 1 AND 3), 'quarters_played', qp);
   RETURN jsonb_build_object(
     'quarter', s.current_quarter, 'phase', s.current_phase, 'status', s.status,
     'target_value', s.target_value, 'headwind_revealed', rev,
